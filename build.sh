@@ -30,8 +30,10 @@ rm -Rf $BUILD_DIR/*
                         -DBUILD_EXAMPLES=ON \
                         -DBUILD_TESTS=ON \
                         -DBUILD_DOCS=ON \
+			\
+			-DENABLE_QUDA=ON \
                         ../ && \
  await_confirm && \
- make -j 4) && \
+ make -j ) && \
 exit_message
 

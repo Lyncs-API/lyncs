@@ -46,9 +46,12 @@ option(BUILD_EXAMPLES
        "Specify whether to build examples" on)
 option(BUILD_SHARED_LIBS
        "Specify whether libraries should be built as shared objects" off)
+option(ENABLE_QUDA
+       "Specify whether to enable quda library" on)
 
 include(${CMAKE_SOURCE_DIR}/CMakeExt/MessageColor.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/GTest.cmake)
+include(${CMAKE_SOURCE_DIR}/CMakeExt/quda.cmake)
 
 message(EMPH "LinCs version ${LINCS_VERSION}")
 message(EMPH "-----------------------------------------------------------")
@@ -73,3 +76,14 @@ if (BUILD_TESTS)
 else()
   message(INFO "googletest                disabled")
 endif()
+
+if (ENABLE_QUDA)
+  if (QUDA_FOUND)
+    message(INFO "quda                      enabled")
+  else()
+    message(NOTE "quda                      to install")
+  endif()
+else()
+  message(INFO "quda                      disabled")
+endif()
+
