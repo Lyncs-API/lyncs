@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+
+# Default build directory
+build/
+
+# Edited files
+*~
