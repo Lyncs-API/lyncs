@@ -48,6 +48,7 @@ option(BUILD_SHARED_LIBS
        "Specify whether libraries should be built as shared objects" off)
 
 include(${CMAKE_SOURCE_DIR}/CMakeExt/MessageColor.cmake)
+include(${CMAKE_SOURCE_DIR}/CMakeExt/GTest.cmake)
 
 message(EMPH "LinCs version ${LINCS_VERSION}")
 message(EMPH "-----------------------------------------------------------")
@@ -62,3 +63,13 @@ message(INFO "Build tests:              (BUILD_TESTS)                    "
         ${BUILD_TESTS})
 message(INFO "C   compiler id:          ${CMAKE_C_COMPILER_ID}")
 message(INFO "C++ compiler id:          ${CMAKE_CXX_COMPILER_ID}")
+
+if (BUILD_TESTS)
+  if (GTEST_FOUND)
+    message(INFO "googletest                enabled")
+  else()
+    message(NOTE "googletest                to install")
+  endif()
+else()
+  message(INFO "googletest                disabled")
+endif()
