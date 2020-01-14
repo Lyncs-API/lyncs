@@ -13,15 +13,15 @@ enable_language(CXX)
 
 project(LinCs)
 
-set(LINCS_VERSION_MAJOR 0 CACHE STRING "LINCS major version number.")
-set(LINCS_VERSION_MINOR 0 CACHE STRING "LINCS minor version number.")
-set(LINCS_VERSION_PATCH 0 CACHE STRING "LINCS patch version number.")
+set(LYNCS_VERSION_MAJOR 0 CACHE STRING "LYNCS major version number.")
+set(LYNCS_VERSION_MINOR 0 CACHE STRING "LYNCS minor version number.")
+set(LYNCS_VERSION_PATCH 0 CACHE STRING "LYNCS patch version number.")
 mark_as_advanced(
-  LINCS_VERSION_MAJOR
-  LINCS_VERSION_MINOR
-  LINCS_VERSION_PATCH)
-set(LINCS_VERSION
-    "${LINCS_VERSION_MAJOR}.${LINCS_VERSION_MINOR}.${LINCS_VERSION_PATCH}"
+  LYNCS_VERSION_MAJOR
+  LYNCS_VERSION_MINOR
+  LYNCS_VERSION_PATCH)
+set(LYNCS_VERSION
+    "${LYNCS_VERSION_MAJOR}.${LYNCS_VERSION_MINOR}.${LYNCS_VERSION_PATCH}"
     CACHE STRING INTERNAL FORCE)
 
 ## Install path
@@ -53,7 +53,7 @@ include(${CMAKE_SOURCE_DIR}/CMakeExt/MessageColor.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/GTest.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/quda.cmake)
 
-message(EMPH "LinCs version ${LINCS_VERSION}")
+message(EMPH "Lyncs version ${LYNCS_VERSION}")
 message(EMPH "-----------------------------------------------------------")
 message(EMPH "Install prefix:           (INSTALL_PREFIX)                 "
         ${CMAKE_INSTALL_PREFIX})
