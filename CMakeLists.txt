@@ -51,6 +51,7 @@ option(ENABLE_QUDA
 include(${CMAKE_SOURCE_DIR}/CMakeExt/MessageColor.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/quda.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/lyncs_config.cmake)
+include(${CMAKE_SOURCE_DIR}/CMakeExt/pytest.cmake)
 
 
 message(EMPH "Lyncs version ${LYNCS_VERSION}")
