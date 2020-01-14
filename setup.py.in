@@ -1,0 +1,3 @@
+from setuptools import setup, find_packages
+
+setup(name='lyncs_config', version='${LYNCS_VERSION}', packages=find_packages())
