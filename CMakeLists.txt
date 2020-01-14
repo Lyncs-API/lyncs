@@ -5,13 +5,8 @@ set(CMAKE_INCLUDE_DIRECTORIES_PROJECT_BEFORE ON)
 set(CMAKE_COLOR_MAKEFILE ON)
 set(CMAKE_RULE_MESSAGES OFF)
 set(CMAKE_VERBOSE_MAKEFILE OFF)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_CXX_STANDARD 11)
 
-enable_language(C)
-enable_language(CXX)
-
-project(LinCs)
+project(Lyncs)
 
 set(LYNCS_VERSION_MAJOR 0 CACHE STRING "LYNCS major version number.")
 set(LYNCS_VERSION_MINOR 0 CACHE STRING "LYNCS minor version number.")
@@ -31,27 +26,32 @@ else()
   set(CMAKE_INSTALL_PREFIX "$ENV{HOME}/opt/")
 endif()
 
-if (NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE "Release")
+
+## Build type
+set(_BUILD_TYPE RELEASE DEVELOP)
+if (NOT CMAKE_BUILD_TYPE IN_LIST _BUILD_TYPE)
+   unset(CMAKE_BUILD_TYPE CACHE)
 endif()
 
+if (NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE RELEASE CACHE STRING "Choose type of build. Options are RELEASE, DEVELOP")
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS ${_BUILD_TYPE})
+endif()
+
+
 ## Build options
-option(BUILD_TESTS
-       "Whether tests should be built" on)
-option(INSTALL_TESTS
-       "Whether tests should be installed" off)
 option(BUILD_DOCS
        "Whether doxygen documentation should be installed" off)
 option(BUILD_EXAMPLES
        "Specify whether to build examples" on)
-option(BUILD_SHARED_LIBS
-       "Specify whether libraries should be built as shared objects" off)
 option(ENABLE_QUDA
-       "Specify whether to enable quda library" on)
+       "Specify whether to enable quda library" off)
+
 
 include(${CMAKE_SOURCE_DIR}/CMakeExt/MessageColor.cmake)
-include(${CMAKE_SOURCE_DIR}/CMakeExt/GTest.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/quda.cmake)
+include(${CMAKE_SOURCE_DIR}/CMakeExt/lyncs_config.cmake)
+
 
 message(EMPH "Lyncs version ${LYNCS_VERSION}")
 message(EMPH "-----------------------------------------------------------")
@@ -67,19 +67,9 @@ message(INFO "Build tests:              (BUILD_TESTS)                    "
 message(INFO "C   compiler id:          ${CMAKE_C_COMPILER_ID}")
 message(INFO "C++ compiler id:          ${CMAKE_CXX_COMPILER_ID}")
 
-if (BUILD_TESTS)
-  if (GTEST_FOUND)
-    message(INFO "googletest                enabled")
-  else()
-    message(NOTE "googletest                to install")
-  endif()
-else()
-  message(INFO "googletest                disabled")
-endif()
-
 if (ENABLE_QUDA)
   if (QUDA_FOUND)
-    message(INFO "quda                      enabled")
+    message(EMPH "quda                      enabled")
   else()
     message(NOTE "quda                      to install")
   endif()
