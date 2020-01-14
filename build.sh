@@ -15,25 +15,30 @@ await_confirm() {
   fi
 }
 
-exit_message() {
+done_message() {
   echo "--------------------------------------------------------"
-  echo "Done. To install LinCs, run    make install    in $BUILD_DIR"
+  echo "Done. Lyncs installed succesfully."
+  if ! $FORCE_BUILD; then
+      echo ""
+      echo "   To run the tests, hit ENTER"
+      read confirm
+  fi
 }
 
 # Configure with default release build settings:
 mkdir -p $BUILD_DIR
 rm -Rf $BUILD_DIR/*
-(cd $BUILD_DIR && cmake -DCMAKE_BUILD_TYPE=Release \
-                        -DBUILD_SHARED_LIBS=ON \
-                        -DINSTALL_PREFIX=$HOME/opt/LinCs/ \
+(cd $BUILD_DIR && cmake -DCMAKE_BUILD_TYPE=DEVELOP \
+                        -DINSTALL_PREFIX=$HOME/.local/ \
                         \
                         -DBUILD_EXAMPLES=ON \
-                        -DBUILD_TESTS=ON \
                         -DBUILD_DOCS=ON \
 			\
-			-DENABLE_QUDA=ON \
+			-DENABLE_QUDA=OFF \
                         ../ && \
- await_confirm && \
- make -j ) && \
-exit_message
-
+     await_confirm && \
+     make -j &&
+     make -j install) && \
+	 python3 setup.py develop --user &&
+	 done_message && \
+	 (cd $BUILD_DIR && make -j CTEST_OUTPUT_ON_FAILURE=1 test)
