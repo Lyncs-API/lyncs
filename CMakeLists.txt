@@ -44,37 +44,42 @@ option(BUILD_DOCS
        "Whether doxygen documentation should be installed" off)
 option(BUILD_EXAMPLES
        "Specify whether to build examples" on)
-option(ENABLE_QUDA
-       "Specify whether to enable quda library" off)
-
 
 include(${CMAKE_SOURCE_DIR}/CMakeExt/MessageColor.cmake)
-include(${CMAKE_SOURCE_DIR}/CMakeExt/quda.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/lyncs_config.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/pytest.cmake)
 
+set(_EXT_LIBS QUDA TMLQCD)
+foreach(lib ${_EXT_LIBS})
+  option(ENABLE_${lib}
+         "Specify whether to enable ${LIB} library" off)
+  if(ENABLE_${lib})
+    include(${CMAKE_SOURCE_DIR}/CMakeExt/${lib}.cmake)
+  endif()
+endforeach(lib)
 
 message(EMPH "Lyncs version ${LYNCS_VERSION}")
 message(EMPH "-----------------------------------------------------------")
-message(EMPH "Install prefix:           (INSTALL_PREFIX)                 "
+message(EMPH "Install prefix:\t(INSTALL_PREFIX)\t"
         ${CMAKE_INSTALL_PREFIX})
-message(EMPH "Build type:               (CMAKE_BUILD_TYPE)               "
+message(EMPH "Build type:\t\t(CMAKE_BUILD_TYPE)\t"
         ${CMAKE_BUILD_TYPE})
-message(EMPH "Build shared libraries:   (BUILD_SHARED_LIBS)              "
-        ${BUILD_SHARED_LIBS})
 
-message(INFO "Build tests:              (BUILD_TESTS)                    "
-        ${BUILD_TESTS})
-message(INFO "C   compiler id:          ${CMAKE_C_COMPILER_ID}")
-message(INFO "C++ compiler id:          ${CMAKE_CXX_COMPILER_ID}")
+message(INFO "C   compiler id:\t${CMAKE_C_COMPILER_ID}")
+message(INFO "C++ compiler id:\t${CMAKE_CXX_COMPILER_ID}")
 
-if (ENABLE_QUDA)
-  if (QUDA_FOUND)
-    message(EMPH "quda                      enabled")
+foreach(lib ${_EXT_LIBS})
+  # TODO: improve formatting
+  if (ENABLE_${lib})
+    if (${lib}_FOUND)
+      message(EMPH "${lib}\t\tenabled")
+    elseif(${lib}_INSTALL)
+      message(NOTE "${lib}\t\tto install")
+    else()
+      message(NOTE "${lib}\t\tnot found in ${lib}_LIBRARY_PATH=${${lib}_LIBRARY_PATH}")
+    endif()
   else()
-    message(NOTE "quda                      to install")
+    message(INFO "${lib}\t\tdisabled")
   endif()
-else()
-  message(INFO "quda                      disabled")
-endif()
+endforeach(lib)
 
