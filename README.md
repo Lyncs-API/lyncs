@@ -2,10 +2,17 @@
 A python API for LQCD applications
 
 ## Installing:
-### Using cmake:
+For a default installation use one of `conda/pip install lyncs`.
 
-### Using pip wheels:
-
+### Advance setup:
+For a develop installation or for advanced options build the package using cmake.
+It can be done either by editing and running build.sh or running the following commands
+from the lyncs direction.
+```
+mkdir -p build && \
+( cd build && ccmake ../ && make -j && make install ) && \
+python3 setup.py develop --user
+```
 
 ## Goals:
 - Include several LQCD libraries within a single framework
@@ -22,6 +29,7 @@ A python API for LQCD applications
 (M) dask: Utility for sceduling distributed tasks
 (M) cppyy: Automatic binding to C/C++ libraries
 (O) dask-mpi, mpi4py: MPI for python
+(O) numba: JIT compilation of python code
 
 ### LQCD libraries:
 (O) Quda: LQCD on GPUs
