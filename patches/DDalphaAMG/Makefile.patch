@@ -1,0 +1,49 @@
+diff --git a/Makefile b/Makefile
+index ae45ecc..b16557d 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,10 +1,10 @@
+ # --- COMPILER ----------------------------------------
+-CC = mpiicc 
++CC = $(MPI_C_COMPILER)
+ 
+ # --- CFLAGS -----------------------------------------
+ CFLAGS_gnu = -std=gnu99 -Wall -pedantic -O3 -ffast-math -msse4.2 -fopenmp 
+ CFLAGS_intel = -std=gnu99 -Wall -pedantic -O3  -xHOST -qopenmp 
+-CFLAGS = $(CFLAGS_intel)
++CFLAGS = -std=gnu99 -Wall -pedantic -O3 -fpic $(MPI_C_COMPILER_FLAGS)
+ 
+ # --- DO NOT CHANGE -----------------------------------
+ CPP = cpp
+@@ -19,7 +19,7 @@ DOCDIR=doc
+ GSRCDIR = $(BUILDDIR)/gsrc
+ SRC = $(patsubst $(SRCDIR)/%,%,$(filter-out %_generic.c,$(wildcard $(SRCDIR)/*.c)))
+ TSTS = $(patsubst %.c,%,$(wildcard $(TSTDIR)/*.c))
+-LIB =  $(LIBDIR)/libDDalphaAMG.a $(LIBDIR)/libDDalphaAMG_devel.a $(INCDIR)/DDalphaAMG.h
++LIB =  $(LIBDIR)/libDDalphaAMG.so $(INCDIR)/DDalphaAMG.h
+ SRCGEN = $(patsubst $(SRCDIR)/%,%,$(wildcard $(SRCDIR)/*_generic.c))
+ GSRCFLT = $(patsubst %_generic.c,$(GSRCDIR)/%_float.c,$(SRCGEN))
+ GSRCDBL = $(patsubst %_generic.c,$(GSRCDIR)/%_double.c,$(SRCGEN))
+@@ -72,6 +72,9 @@ DDalphaAMG_devel: $(BINDIR)/DDalphaAMG_devel
+ $(BINDIR)/DDalphaAMG_devel : $(OBJDB)
+ 	$(CC) -g $(DEVEL_VERSION_FLAGS) -o $@ $(OBJDB) $(H5LIB) $(LIMELIB) -lm
+ 
++$(LIBDIR)/libDDalphaAMG.so: $(OBJ)
++	$(CC) -shared -o  $@ $(OBJ)
++
+ $(LIBDIR)/libDDalphaAMG.a: $(OBJ)
+ 	ar rc $@ $(OBJ)
+ 	ar d $@ main.o
+@@ -120,9 +123,9 @@ $(GSRCDIR)/%_double.c: $(SRCDIR)/%_generic.c $(firstword $(MAKEFILE_LIST))
+ 	$(MAKEDEP) $< | sed 's,\(.*\)\.o[ :]*,$(BUILDDIR)/\1_devel.o $@ : ,g' >> $@
+ 
+ copy: $(BINDIR) $(LIBDIR) $(INCDIR) 
+-	cp -r $(BINDIR)/ $(PREFIX)
+-	cp -r $(LIBDIR)/ $(PREFIX)
+-	cp -r $(INCDIR)/ $(PREFIX)
++	test -d $(PREFIX) && test -d $(BINDIR) && cp -r $(BINDIR)/ $(PREFIX)
++	test -d $(PREFIX) && test -d $(LIBDIR) && cp -r $(LIBDIR)/ $(PREFIX)
++	test -d $(PREFIX) && test -d $(LIBDIR) && cp -r $(INCDIR)/ $(PREFIX)
+ 
+ clean:
+ 	rm -f $(BUILDDIR)/*.o
