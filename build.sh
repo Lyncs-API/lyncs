@@ -27,7 +27,6 @@ done_message() {
 
 # Configure with default release build settings:
 mkdir -p $BUILD_DIR
-rm -Rf $BUILD_DIR/*
 (cd $BUILD_DIR && cmake -DCMAKE_BUILD_TYPE=DEVELOP \
                         -DINSTALL_PREFIX=$HOME/.local/ \
                         \
@@ -35,6 +34,8 @@ rm -Rf $BUILD_DIR/*
                         -DBUILD_DOCS=ON \
 			\
 			-DENABLE_QUDA=OFF \
+			-DENABLE_TMLQCD=OFF \
+			-DENABLE_C-LIME=ON \
                         ../ && \
      await_confirm && \
      make -j &&

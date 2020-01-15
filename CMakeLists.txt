@@ -49,7 +49,7 @@ include(${CMAKE_SOURCE_DIR}/CMakeExt/MessageColor.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/lyncs_config.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/pytest.cmake)
 
-set(_EXT_LIBS QUDA TMLQCD)
+set(_EXT_LIBS QUDA TMLQCD C-LIME)
 foreach(lib ${_EXT_LIBS})
   option(ENABLE_${lib}
          "Specify whether to enable ${LIB} library" off)
