@@ -27,7 +27,7 @@ if(NOT DDALPHAAMG_PATH)
   set(DDALPHAAMG_INSTALL ON)
 endif()
 
-if(EXISTS "${DDALPHAAMG_PATH}/lib/libhmc.so" AND EXISTS "${DDALPHAAMG_PATH}/include/hmc.h")
+if(EXISTS "${DDALPHAAMG_PATH}/lib/libDDalphaAMG.so" AND EXISTS "${DDALPHAAMG_PATH}/include/DDalphaAMG.h")
   set(DDALPHAAMG_FOUND ON)
 endif()
 

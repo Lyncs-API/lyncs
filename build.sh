@@ -33,9 +33,12 @@ mkdir -p $BUILD_DIR
                         -DBUILD_EXAMPLES=ON \
                         -DBUILD_DOCS=ON \
 			\
+			-DENABLE_MPI=ON \
+			\
 			-DENABLE_QUDA=OFF \
 			-DENABLE_TMLQCD=OFF \
-			-DENABLE_C-LIME=ON \
+			-DENABLE_LIME=ON \
+			-DENABLE_DDALPHAAMG=ON \
                         ../ && \
      await_confirm && \
      make -j &&

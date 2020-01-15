@@ -19,7 +19,7 @@ if(NOT LIME_PATH)
 endif()
 
 
-if(EXISTS "${LIME_PATH}/lib/libhmc.so" AND EXISTS "${LIME_PATH}/include/hmc.h")
+if(EXISTS "${LIME_PATH}/lib/liblime.so" AND EXISTS "${LIME_PATH}/include/lime.h")
   set(LIME_FOUND ON)
 endif()
 
