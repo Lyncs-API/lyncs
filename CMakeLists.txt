@@ -44,12 +44,17 @@ option(BUILD_DOCS
        "Whether doxygen documentation should be installed" off)
 option(BUILD_EXAMPLES
        "Specify whether to build examples" on)
+option(ENABLE_MPI
+       "Specify whether to build using MPI" on)
+
+if(ENABLE_MPI)
+  find_package(MPI REQUIRED)
+endif()
 
 include(${CMAKE_SOURCE_DIR}/CMakeExt/MessageColor.cmake)
-include(${CMAKE_SOURCE_DIR}/CMakeExt/lyncs_config.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/pytest.cmake)
 
-set(_EXT_LIBS QUDA TMLQCD C-LIME)
+set(_EXT_LIBS QUDA TMLQCD C-LIME DDALPHAAMG)
 foreach(lib ${_EXT_LIBS})
   option(ENABLE_${lib}
          "Specify whether to enable ${LIB} library" off)
@@ -57,6 +62,8 @@ foreach(lib ${_EXT_LIBS})
     include(${CMAKE_SOURCE_DIR}/CMakeExt/${lib}.cmake)
   endif()
 endforeach(lib)
+
+include(${CMAKE_SOURCE_DIR}/CMakeExt/lyncs_config.cmake)
 
 message(EMPH "Lyncs version ${LYNCS_VERSION}")
 message(EMPH "-----------------------------------------------------------")

@@ -12,5 +12,3 @@ bynary_dir = "${CMAKE_BINARY_DIR}"
 install_dir = "${CMAKE_INSTALL_PREFIX}"
 build_type = "${CMAKE_BUILD_TYPE}"
 
-# Information about quda
-with_quda = "${ENABLE_QUDA}"
