@@ -12,3 +12,7 @@ bynary_dir = "${CMAKE_BINARY_DIR}"
 install_dir = "${CMAKE_INSTALL_PREFIX}"
 build_type = "${CMAKE_BUILD_TYPE}"
 
+# Information about MPI
+mpi_enabled = "${ENABLE_MPI}"
+mpi_include = "${MPI_C_INCLUDE_DIRS}"
+mpi_libraries = "${MPI_C_LIBRARIES}"
