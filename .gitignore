@@ -82,3 +82,5 @@ coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
+.ipynb_checkpoints/
+.tmp/
