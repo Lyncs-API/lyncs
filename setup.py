@@ -6,6 +6,17 @@ except ModuleNotFoundError:
     # TODO: run cmake with default options and then import lyncs_config
     raise
 
+requirements = [
+    "cppyy>=1.6.2",
+    "dask",
+    "numpy"
+    ]
+
+if lyncs_config.mpi_enabled:
+    requirements.append("mpi4py")
+    requirements.append("dask_mpi")
+
+
 setup(name='lyncs',
       version=lyncs_config.version,
       packages=find_packages(),
@@ -22,5 +33,6 @@ setup(name='lyncs',
                    "Programming Language :: C++",
                    "Programming Language :: Python",
                    "Programming Language :: Python :: 3.6"],
-      license='BSD-3-Clause'
+      license='BSD-3-Clause',
+      install_requires = requirements
     )
