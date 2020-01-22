@@ -1,35 +1,175 @@
-"Utils for calls using MPI via dask"
+"""
+Utils for interfacing dask and MPI.
+Most of the content of this file is explained in the [notebook](notebooks/Dask-mpi.ipynb).
+"""
 
-def get_n_workers(
-        client,
-        num_workers = None,
-        workers = None,
-        resources = None,
-    ):
-    workers = workers or list(client.scheduler_info()["workers"].keys())
-    num_workers = num_workers or len(workers)
+from dask.distributed import Client as _Client
 
-    assert num_workers <= len(workers)
-
-    # TODO select accordingly requested resources
-
-    # TODO implement some rules to choose wisely n workers
-    # e.g. workers not busy
-
-    return workers[:num_workers]
-        
-def create_comm(
-        client,
-        actor = True,
-        **kwargs
-    ):
-    workers = get_n_workers(client, **kwargs)
-    ranks = [client.scheduler_info()["workers"][w]["id"] for w in workers]
-    group = client.scatter([ranks]*len(ranks), workers=workers, broadcast=True)
-
-    def _create_comm(group):
-        from mpi4py import MPI
-        return MPI.COMM_WORLD.Create_group(MPI.COMM_WORLD.group.Incl(group))
+class Client(_Client):
+    "Wrapper to dask.distributed.Client"
     
-    return client.map(_create_comm, group, actor=actor)
+    def __init__(
+            self,
+            num_workers,
+            threads_per_worker = 1,
+    ):
+        """
+        Returns a Client connected to a cluster of `num_workers` workers.
+        """
+        
+        # Check if we are running in interactive mode
+        import __main__ as main
+        self._interactive = not hasattr(main, '__file__')
+        
+        if not self._interactive:
+            # Then the script has been submitted in parallel with mpirun
+            from mpi4py import MPI
+            assert MPI.COMM_WORLD.size == num_workers+1, """
+            Error: (num_workers + 1) processes required.
+            The script has not been submitted on enough processes.
+            Got %d processes instead of %d.
+            """ % (MPI.COMM_WORLD.size, num_workers+1)
+            
+            from dask_mpi import initialize
+            initialize(nthreads=threads_per_worker, nanny=False)
+            
+            _Client.__init__(self)
+    
+        else:
+            import sh
+            import tempfile
+            
+            # Since dask-mpi produces several file we create a temporary directory
+            self._dir = tempfile.mkdtemp()
+            sh.cd(self._dir)
+            
+            # The command runs in the background (_bg=True) and the stdout(err) is stored in tmppath+"/log.out(err)"
+            server = sh.mpirun("-n", num_workers+1, "dask-mpi", "--no-nanny", "--nthreads", threads_per_worker,
+                               "--scheduler-file", "scheduler.json", _bg = True, _out="log.out", _err="log.err")
+            self._server = server
+            self._out = self._dir+"/log.out"
+            self._err = self._dir+"/log.err"
+            _Client.__init__(self, scheduler_file=self._dir+"/scheduler.json")
 
+        
+        # Waiting for all the workers to connect
+        import signal
+        import time
+        def handler(signum, frame):
+            raise RuntimeError("Couldn't connect to %d processes. Got %d workers."%(num_workers, len(workers)))
+
+        signal.signal(signal.SIGALRM, handler)
+        signal.alarm(1)
+
+        while len(self.workers) != num_workers: time.sleep(0.001)
+
+        signal.alarm(0)
+
+        self.ranks = {key: val["name"] for key,val in self.workers.items()}
+
+        
+
+    @property
+    def workers(self):
+        "Returns the list of workers."
+        return self.scheduler_info()["workers"]
+
+            
+    def __del__(self):
+        """
+        In case of interactive session closes the server that has been started by __init__
+        """
+        if self._interactive:
+            import shutil
+            self.shutdown()
+            self.close()
+            self._server.kill()
+            shutil.rmtree(self._dir)
+        
+        if hasattr(_Client, __del__):
+            _Client.__del__(self)
+
+            
+    def select_workers(
+            self,
+            num_workers = None,
+            workers = None,
+            exclude = None,
+            resources = None,
+    ):
+        """
+        Selects `num_workers` from the one available.
+        
+        Parameters
+        ----------
+        workers: list, default all
+          List of workers to choose from.
+        exclude: list, default none
+            List of workers to exclude from the total.
+        resources: dict, default none
+            Defines the resources the workers should have.
+        """
+
+        if not workers: workers = list(self.ranks.keys())
+        
+        assert len(set(workers)) == len(workers), "Workers has repetitions"
+        workers = set(workers)
+        
+        assert workers.issubset(self.ranks.keys()), "Some workers are unkown %s"%(workers.difference(self.ranks.keys()))
+
+        if exclude:
+            assert set(exclude).issubset(self.ranks.keys()), "Some workers to exclude are unkown %s"%(workers.difference(self.ranks.keys()))
+            workers = workers.difference(exclude)
+
+        if resources:
+            # TODO select accordingly requested resources
+            assert False, "Resources not implemented."
+
+        if not num_workers: num_workers = len(workers)
+        assert num_workers <= len(workers), "Available workers are less than required"
+        
+        # TODO implement some rules to choose wisely n workers
+        # e.g. workers not busy
+        selected = list(workers)[:num_workers]
+        
+        return selected
+    
+        
+    def create_comm(
+            self,
+            actor = True,
+            **kwargs
+        ):
+        """
+        Return a MPI communicator involving workers available by the client.
+
+        Parameters
+        ----------
+        actor: bool, default True
+            Wether the returned communicator should be a dask actor.
+        **kwargs: params
+            Following list of parameters for the function select_workers."""
+
+        workers = self.select_workers(**kwargs)
+        ranks = [self.ranks[w] for w in workers]
+        ranks = self.scatter(ranks*len(workers), workers=workers, hash=False, broadcast=False)
+
+        # Checking the distribution of the group
+        _workers = self.who_has(group).values()
+        for i,w in range(len(_workers)):
+            assert len(_workers[i])==1, "More than one process has the same reference"
+            _workers[i]=_workers[i][0]
+        assert set(workers) == set(_workers), """
+        Error: Something wrong with scatter. Not all the workers got a piece.
+        Expected workers = %s
+        Got workers = %s
+        """ % (workers, _workers)
+        
+        def _create_comm(ranks):
+            from mpi4py.MPI import COMM_WORLD as comm
+            return comm.Create_group(comm.group.Incl(ranks))
+
+        return self.map(_create_comm, ranks, actor=actor)
+
+# Adding select_workers documentation to create_comm
+Client.create_comm.__doc__ += Client.select_workers.__doc__.split("----------")[1]

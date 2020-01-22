@@ -1,5 +1,6 @@
 from lyncs_config import mpi_enabled as enabled
 assert enabled, "MPI not enabled. Cannot import it"
+from .dask_mpi import Client
 
 _lib = None
 def get_lib():
