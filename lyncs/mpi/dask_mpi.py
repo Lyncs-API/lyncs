@@ -10,20 +10,18 @@ class Client(_Client):
     
     def __init__(
             self,
-            num_workers,
+            num_workers = None,
             threads_per_worker = 1,
     ):
         """
         Returns a Client connected to a cluster of `num_workers` workers.
         """
+        self._server = None
         
-        # Check if we are running in interactive mode
-        import __main__ as main
-        self._interactive = not hasattr(main, '__file__')
-        
-        if not self._interactive:
+        from mpi4py import MPI
+        if MPI.COMM_WORLD.size > 1:
             # Then the script has been submitted in parallel with mpirun
-            from mpi4py import MPI
+            num_workers = num_workers or MPI.COMM_WORLD.size-1
             assert MPI.COMM_WORLD.size == num_workers+1, """
             Error: (num_workers + 1) processes required.
             The script has not been submitted on enough processes.
@@ -34,21 +32,30 @@ class Client(_Client):
             initialize(nthreads=threads_per_worker, nanny=False)
             
             _Client.__init__(self)
-    
+            
         else:
             import sh
             import tempfile
+            import multiprocessing
+
+            num_workers = num_workers or (multiprocessing.cpu_count()+1)
             
             # Since dask-mpi produces several file we create a temporary directory
             self._dir = tempfile.mkdtemp()
-            sh.cd(self._dir)
-            
-            # The command runs in the background (_bg=True) and the stdout(err) is stored in tmppath+"/log.out(err)"
-            server = sh.mpirun("-n", num_workers+1, "dask-mpi", "--no-nanny", "--nthreads", threads_per_worker,
-                               "--scheduler-file", "scheduler.json", _bg = True, _out="log.out", _err="log.err")
-            self._server = server
             self._out = self._dir+"/log.out"
             self._err = self._dir+"/log.err"
+            
+            # The command runs in the background (_bg=True) and the stdout(err) is stored in self._out(err)
+            import os
+            pwd=os.getcwd()
+            sh.cd(self._dir)
+            self._server = sh.mpirun("-n", num_workers+1, "dask-mpi", "--no-nanny", "--nthreads", threads_per_worker,
+                               "--scheduler-file", "scheduler.json", _bg = True, _out=self._out, _err=self._err)
+            sh.cd(pwd)
+
+            import atexit
+            atexit.register(self.close_server)
+            
             _Client.__init__(self, scheduler_file=self._dir+"/scheduler.json")
 
         
@@ -56,10 +63,11 @@ class Client(_Client):
         import signal
         import time
         def handler(signum, frame):
+            if self._server is not None: self.close_server()
             raise RuntimeError("Couldn't connect to %d processes. Got %d workers."%(num_workers, len(workers)))
 
         signal.signal(signal.SIGALRM, handler)
-        signal.alarm(1)
+        signal.alarm(5)
 
         while len(self.workers) != num_workers: time.sleep(0.001)
 
@@ -74,19 +82,30 @@ class Client(_Client):
         "Returns the list of workers."
         return self.scheduler_info()["workers"]
 
-            
+
+    def close_server(self):
+        """
+        Closes the running server
+        """
+        assert self._server is not None
+        import shutil
+        self.shutdown()
+        self.close()
+        self._server.wait()
+        shutil.rmtree(self._dir)
+        self._server = None
+        import atexit
+        atexit.unregister(self.close_server)
+
+        
     def __del__(self):
         """
-        In case of interactive session closes the server that has been started by __init__
+        In case of server started, closes the server
         """
-        if self._interactive:
-            import shutil
-            self.shutdown()
-            self.close()
-            self._server.kill()
-            shutil.rmtree(self._dir)
+        if self._server is not None:
+            self.close_server()
         
-        if hasattr(_Client, __del__):
+        if hasattr(_Client, "__del__"):
             _Client.__del__(self)
 
             
