@@ -8,7 +8,8 @@ def get_lib():
     if not _lib:
         import cppyy
         import lyncs_config as config
-        cppyy.add_include_path(config.mpi_include)
+        for _dir in config.mpi_include.split(";"):
+            cppyy.add_include_path(_dir)
         cppyy.include("mpi.h")
         cppyy.load_library(config.mpi_libraries)
         _lib = cppyy.gbl
