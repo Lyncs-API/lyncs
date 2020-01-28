@@ -170,14 +170,14 @@ class Client(_Client):
             Following list of parameters for the function select_workers."""
 
         workers = self.select_workers(**kwargs)
-        ranks = [self.ranks[w] for w in workers]
-        ranks = self.scatter(ranks*len(workers), workers=workers, hash=False, broadcast=False)
+        ranks = [[self.ranks[w] for w in workers]]*len(workers)
+        ranks = self.scatter(ranks, workers=workers, hash=False, broadcast=False)
 
         # Checking the distribution of the group
-        _workers = self.who_has(group).values()
-        for i,w in range(len(_workers)):
+        _workers = list(self.who_has(ranks).values())
+        for i in range(len(_workers)):
             assert len(_workers[i])==1, "More than one process has the same reference"
-            _workers[i]=_workers[i][0]
+            _workers[i] = _workers[i][0]
         assert set(workers) == set(_workers), """
         Error: Something wrong with scatter. Not all the workers got a piece.
         Expected workers = %s
