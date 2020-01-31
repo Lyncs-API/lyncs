@@ -21,4 +21,4 @@ def get_lib():
         
     return _lib
 
-from .solver import solver
+from .solver import _Solver
