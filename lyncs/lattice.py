@@ -1,3 +1,7 @@
+__all__ = [
+    'Lattice',
+]
+
 class Lattice:
     """
     Lattice base class.
@@ -46,7 +50,10 @@ class Lattice:
 
     @property
     def dims(self):
-        return self._dims.copy()
+        if "_dims" in self.__dict__:
+            return self._dims.copy()
+        else:
+            return {}
     
     @dims.setter
     def dims(self, value):
@@ -80,7 +87,10 @@ class Lattice:
 
     @property
     def dofs(self):
-        return self._dofs.copy()
+        if "_dofs" in self.__dict__:
+            return self._dofs.copy()
+        else:
+            return {}
     
     @dofs.setter
     def dofs(self, value):
@@ -144,17 +154,19 @@ class Lattice:
         try:
             getattr(type(self), key).__set__(self,value)
         except AttributeError:
-            try: 
+            if key in self.__dict__:
                 self.__dict__[key] = value
-            except KeyError:
-                assert isinstance(value,int), "Non-integer size"
-                assert value > 0, "Non-positive size"
-                if key in self.dims:
-                    self._dims[key] = value
-                elif key in self.dofs:
-                    self._dofs[key] = value
-                else:
-                    raise            
+            elif key in self.dims:
+                dims = self.dims
+                dims[key] = value
+                self.dims = dims
+            elif key in self.dofs:
+                dofs = self.dofs
+                dofs[key] = value
+                self.dofs = dofs
+            else:
+                self.__dict__[key] = value
+
     __setattr__ = __setitem__
 
 
