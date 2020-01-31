@@ -1,0 +1,161 @@
+class Lattice:
+    """
+    Lattice base class.
+    A container for all the information on the lattice theory.
+    """
+    
+    default_dims_labels = ["t", "x", "y", "z"]
+    default_dofs = {
+        "QCD": {
+            "spin": 4,
+            "color": 3,
+            },
+        }
+    
+    def __init__(
+            self,
+            dims = 4,
+            dofs = "QCD",
+            dtype = "complex64",
+    ):
+        """
+        Lattice initializer.
+        Note: order of dimensions and degree of freedoms has any significance.
+
+        Parameters
+        ----------
+        dims: dimensions (default naming: t,x,y,z if less than 5 or dim_0/1/2...)
+        -> int: number of dimensions (default 4)
+        -> list/tuple: size of the dimensions and len(list) = number of dimensions
+        -> dict: names of the dimensions (keys) + size (value)
+
+        dofs: specifies local degree of freedoms.
+        -> str: one of the labeled theories (QCD,...)
+        -> int: size of one-dimensional degree of freedom
+        -> list: size per dimension of the degrees of freedom (default naming: dof_0/1/2...)
+        -> dict: names of the degree of freedom (keys) + size (value)
+
+        dtype: data type of the degree of freedoms.
+        -> str: numpy data type
+        -> type: class data type
+        """
+
+        self.dims = dims
+        self.dofs = dofs
+        self.dtype = dtype
+
+    @property
+    def dims(self):
+        return self._dims.copy()
+    
+    @dims.setter
+    def dims(self, value):
+        
+        if isinstance(value, int):
+            assert isinstance(value,int), "Non-integer number of dimensions"
+            assert value > 0, "Non-positive number of dimensions"
+            
+            if value<=len(Lattice.default_dims_labels):
+                self._dims = { Lattice.default_dims_labels[i]:1 for i in range(value) }
+            else:
+                self._dims = { "dim_%d"%i:1 for i in range(value) }
+                    
+        elif isinstance(value, (list,tuple)):
+            assert all([isinstance(v,int) for v in value]), "Non-integer size of dimensions"
+            assert all([v>0 for v in value]), "Non-positive size of dimensions"
+            
+            if len(value)<=len(Lattice.default_dims_labels):
+                self._dims = { Lattice.default_dims_labels[i]:v for i,v in enumerate(value) }
+            else:
+                self._dims = { "dim_%d"%i:v for i,v in enumerate(value) }
+
+        elif isinstance(value, (dict)):
+            assert all([isinstance(v,int) for v in value.values()]), "Non-integer size of dimensions"
+            assert all([v>0 for v in value.values()]), "Non-positive size of dimensions"
+            
+            self._dims = value.copy()
+
+        else:
+            assert False, "Not allowed type %s"%type(value)
+
+    @property
+    def dofs(self):
+        return self._dofs.copy()
+    
+    @dofs.setter
+    def dofs(self, value):
+        
+        if isinstance(value, str):
+            assert value in Lattice.default_dofs, "Unknown dofs name"
+            self._dofs = Lattice.default_dofs[value].copy()
+                    
+        elif isinstance(value, int):
+            assert isinstance(value,int), "Non-integer size for dof"
+            assert value > 0, "Non-positive size for dof"
+            
+            self._dofs = { "dof_0":value }
+                    
+        elif isinstance(value, (list,tuple)):
+            assert all([isinstance(v,int) for v in value]), "Non-integer size of dofs"
+            assert all([v>0 for v in value]), "Non-positive size of dofs"
+            
+            self._dofs = { "dof_%d"%i:v for i,v in enumerate(value) }
+
+        elif isinstance(value, (dict)):
+            assert all([isinstance(v,int) for v in value.values()]), "Non-integer size of dofs"
+            assert all([v>0 for v in value.values()]), "Non-positive size of dofs"
+            
+            self._dofs = value.copy()
+
+        else:
+            assert False, "Not allowed type %s"%type(value)
+
+    @property
+    def dtype(self):
+        return self._dtype
+    
+    @dtype.setter
+    def dtype(self, value):
+        from numpy import dtype as ndt
+        self._dtype = ndt(value)
+
+    def __dir__(self):
+        o = set(dir(type(self)))
+        o.update(attr for attr in self.dims)
+        o.update(attr for attr in self.dofs)
+        return sorted(o)
+    
+    def __getitem__(self, key):
+        try:
+            return self.__dict__[key]
+        except KeyError:
+            try: 
+                return getattr(type(self), key).__get__(self)
+            except AttributeError:
+                if key in self.dims:
+                    return self.dims[key]
+                elif key in self.dofs:
+                    return self.dofs[key]
+                else:
+                    raise
+    __getattr__ = __getitem__
+
+    def __setitem__(self, key, value):
+        try:
+            getattr(type(self), key).__set__(self,value)
+        except AttributeError:
+            try: 
+                self.__dict__[key] = value
+            except KeyError:
+                assert isinstance(value,int), "Non-integer size"
+                assert value > 0, "Non-positive size"
+                if key in self.dims:
+                    self._dims[key] = value
+                elif key in self.dofs:
+                    self._dofs[key] = value
+                else:
+                    raise            
+    __setattr__ = __setitem__
+
+
+
