@@ -5,6 +5,12 @@ Most of the content of this file is explained in the [notebook](notebooks/Dask-m
 
 from dask.distributed import Client as _Client
 
+def default_client():
+    import distributed
+    client = distributed.default_client()
+    assert type(client) is Client, "No MPI client found"
+    return client
+
 class Client(_Client):
     "Wrapper to dask.distributed.Client"
     
@@ -108,6 +114,23 @@ class Client(_Client):
         if hasattr(_Client, "__del__"):
             _Client.__del__(self)
 
+    def who_has(self, *args, overload=True, **kwargs):
+        """
+        Overloading of distributed.Client who_has.
+        Checks that only one worker owns the futures and returns the list of workers.
+
+        Parameters
+        ----------
+        overload: bool, default true
+            If false the original who_has is used
+        """
+        if overload:
+            _workers = list(_Client.who_has(self, *args, **kwargs).values())
+            workers = [w[0] for w in _workers if len(w)==1]
+            assert len(workers) == len(_workers), "More than one process has the same reference"
+            return workers
+        else:
+            return _Client.who_has(self, *args, **kwargs)
             
     def select_workers(
             self,
@@ -156,7 +179,7 @@ class Client(_Client):
         
     def create_comm(
             self,
-            actor = True,
+            actor = False,
             **kwargs
         ):
         """
@@ -174,10 +197,7 @@ class Client(_Client):
         ranks = self.scatter(ranks, workers=workers, hash=False, broadcast=False)
 
         # Checking the distribution of the group
-        _workers = list(self.who_has(ranks).values())
-        for i in range(len(_workers)):
-            assert len(_workers[i])==1, "More than one process has the same reference"
-            _workers[i] = _workers[i][0]
+        _workers = self.who_has(ranks)
         assert set(workers) == set(_workers), """
         Error: Something wrong with scatter. Not all the workers got a piece.
         Expected workers = %s
