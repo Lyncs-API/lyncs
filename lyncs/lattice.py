@@ -129,6 +129,10 @@ class Lattice:
         from numpy import dtype as ndt
         self._dtype = ndt(value)
 
+    def __repr__(self):
+        from .utils import default_repr
+        return default_repr(self)
+
     def __dir__(self):
         o = set(dir(type(self)))
         o.update(attr for attr in self.dims)
