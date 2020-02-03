@@ -36,7 +36,33 @@ def load(
     field: (Field) The field object where to store the data. If none a new one is created and returned.
     """
     
-    pass
+    import os
+    assert os.access(filename, os.R_OK), "File does not exists or not readable"
+
+    if format: check_format(filename, format)
+    else: format = deduce_format(filename)
+
+    if lattice or field:
+        if field:
+            assert not lattice or lattice is field.lattice, "Both lattice and field given, but not compatible"
+            lattice = field.lattice
+        check_lattice(filename, format, lattice)
+    else:
+        lattice = deduce_lattice(filename, format)
+        
+    if type or field:
+        if field:
+            assert not type or type == field.type, "Both type and field given, but not compatible"
+            type = field.type
+        check_type(filename, format, lattice, type)
+    else:
+        type = deduce_type(filename, format, lattice)
+
+    from lyncs import Field
+    if not field: field = Field(lattice,type=type)
+    
+    _load(field, fielname, format)
+    return field
 
 
 def save(
