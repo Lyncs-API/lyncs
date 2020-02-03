@@ -13,6 +13,9 @@ class Lattice:
         "QCD": {
             "spin": 4,
             "color": 3,
+            "properties": {
+                "gauge_dofs": ["color"],
+                },
             },
         }
     
@@ -21,6 +24,7 @@ class Lattice:
             dims = 4,
             dofs = "QCD",
             dtype = "complex64",
+            properties = {},
     ):
         """
         Lattice initializer.
@@ -44,9 +48,11 @@ class Lattice:
         -> type: class data type
         """
 
+        self._properties = {}
         self.dims = dims
         self.dofs = dofs
         self.dtype = dtype
+        self.properties = properties
 
     @property
     def dims(self):
@@ -55,6 +61,10 @@ class Lattice:
         else:
             return {}
     
+    @property
+    def n_dims(self):
+        return len(self.dims)
+
     @dims.setter
     def dims(self, value):
         
@@ -92,12 +102,17 @@ class Lattice:
         else:
             return {}
     
+    @property
+    def n_dofs(self):
+        return len(self.dofs)
+
     @dofs.setter
     def dofs(self, value):
         
         if isinstance(value, str):
             assert value in Lattice.default_dofs, "Unknown dofs name"
             self._dofs = Lattice.default_dofs[value].copy()
+            self.properties = self._dofs.pop("properties", {})
                     
         elif isinstance(value, int):
             assert isinstance(value,int), "Non-integer size for dof"
@@ -121,6 +136,24 @@ class Lattice:
             assert False, "Not allowed type %s"%type(value)
 
     @property
+    def properties(self):
+        if "_properties" in self.__dict__:
+            return self._properties.copy()
+        else:
+            return {}
+
+    @properties.setter
+    def properties(self, value):
+        if isinstance(value, (dict)):
+            assert all([hasattr(self,key) for v in value.values() for key in v]), "Each property must be a list of attributes"
+            
+            self._properties.update(value)
+
+        else:
+            assert False, "Not allowed type %s"%type(value)
+
+
+    @property
     def dtype(self):
         return self._dtype
     
@@ -137,6 +170,7 @@ class Lattice:
         o = set(dir(type(self)))
         o.update(attr for attr in self.dims)
         o.update(attr for attr in self.dofs)
+        o.update(attr for attr in self.properties)
         return sorted(o)
     
     def __getitem__(self, key):
@@ -150,6 +184,8 @@ class Lattice:
                     return self.dims[key]
                 elif key in self.dofs:
                     return self.dofs[key]
+                elif key in self.properties:
+                    return self.properties[key]
                 else:
                     raise
     __getattr__ = __getitem__
@@ -168,6 +204,10 @@ class Lattice:
                 dofs = self.dofs
                 dofs[key] = value
                 self.dofs = dofs
+            elif key in self.properties:
+                properties = self.properties
+                properties[key] = value
+                self.properties = properties
             else:
                 self.__dict__[key] = value
 
