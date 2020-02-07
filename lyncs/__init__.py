@@ -3,6 +3,9 @@ Lyncs, a python API for LQCD applications
 """
 import lyncs_config as config
 from .lattice import *
+from .field import *
+from .load import *
+
 
 if config.mpi_enabled:
     from lyncs import mpi

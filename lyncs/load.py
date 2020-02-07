@@ -1,5 +1,5 @@
 """
-Implementation of IO functions for Lyncs.
+Implementation of load function for Lyncs.
 """
 
 __all__ = [
@@ -10,7 +10,7 @@ __all__ = [
 def load(
         filename,
         format = None,
-        lattice = None
+        lattice = None,
         field_type = None,
         **kwargs,
 ):
