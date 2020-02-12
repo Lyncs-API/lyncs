@@ -22,10 +22,13 @@ def scan_file(filename):
     
     def read_record_data(record):
         "Conditions when the data of a record should be read in this function"
-        if record["lime_type"] == "ildg-binary-data":
+        if record["lime_type"] in ["ildg-binary-data",]:
             return False
-        if records[-1]["data_length"] < 1000:
+        elif record["lime_type"] in ["ildg-format",]:
             return True
+        elif records[-1]["data_length"] < 1000:
+            return True
+        return False
 
     import os
     fsize = os.path.getsize(filename)
