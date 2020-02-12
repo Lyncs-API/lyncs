@@ -9,7 +9,8 @@ except ModuleNotFoundError:
 requirements = [
     "cppyy>=1.6.2",
     "dask",
-    "numpy"
+    "numpy",
+    "xmltodict",
     ]
 
 if lyncs_config.mpi_enabled:
