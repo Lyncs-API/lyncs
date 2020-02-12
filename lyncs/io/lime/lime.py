@@ -18,6 +18,15 @@ def is_lime_file(filename):
 
 
 def scan_file(filename):
+    "Scans the content of a lime file and returns the list of records"
+    
+    def read_record_data(record):
+        "Conditions when the data of a record should be read in this function"
+        if record["lime_type"] == "ildg-binary-data":
+            return False
+        if records[-1]["data_length"] < 1000:
+            return True
+
     import os
     fsize = os.path.getsize(filename)
     records = []
@@ -36,7 +45,7 @@ def scan_file(filename):
             assert records[-1]["magic_number"] == lime_magic_number
             records[-1]["MBbit"] = (records[-1]["msg_bits"] & (1 << 15)) >> 15
             records[-1]["MEbit"] = (records[-1]["msg_bits"] & (1 << 14)) >> 14
-            if records[-1]["data_length"] < 1000:
+            if read_record_data(records[-1]):
                 records[-1]["data"] = read_type(f,'%ds'%(records[-1]["data_length"],)).decode()
             pos = records[-1]["pos"] + records[-1]["data_length"] + ((8-records[-1]["data_length"]%8)%8)
                 
