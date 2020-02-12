@@ -23,7 +23,7 @@ class Lattice:
             self,
             dims = 4,
             dofs = "QCD",
-            dtype = "complex64",
+            dtype = "complex128",
             properties = {},
     ):
         """
@@ -95,6 +95,9 @@ class Lattice:
         else:
             assert False, "Not allowed type %s"%type(value)
 
+        dirs = list(self.dims.keys())
+        if len(dirs)>1: self.properties = { "time": [dirs[0]], "space": dirs[1:] }
+
     @property
     def dofs(self):
         if "_dofs" in self.__dict__:
@@ -145,6 +148,7 @@ class Lattice:
     @properties.setter
     def properties(self, value):
         if isinstance(value, (dict)):
+            assert all([isinstance(v,(list,tuple)) for v in value.values()]), "Each property must be a list or a tuple"
             assert all([hasattr(self,key) for v in value.values() for key in v]), "Each property must be a list of attributes"
             
             self._properties.update(value)
@@ -205,9 +209,13 @@ class Lattice:
                 dofs[key] = value
                 self.dofs = dofs
             elif key in self.properties:
-                properties = self.properties
-                properties[key] = value
-                self.properties = properties
+                if isinstance(value, (int)):
+                    for attr in self.properties[key]:
+                        self[attr] = value
+                else:
+                    properties = self.properties
+                    properties[key] = value
+                    self.properties = properties
             else:
                 self.__dict__[key] = value
 
