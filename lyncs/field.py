@@ -129,7 +129,31 @@ class Field:
                 assert False, "Got key that is neither list or str, %s" % key
                 
         return get_shape(self, self.field_type)
+
+
+    @property
+    def size(self):
+        """
+        Returns the number of elements in the field.
+        """
+        prod = 1
+        for t in self.shape: prod*=t[1]
+        return prod
+
+
+    @property
+    def dtype(self):
+        return self.lattice.dtype
+
     
+    @property
+    def byte_size(self):
+        """
+        Returns the size of the field in bytes
+        """
+        return self.size*self.dtype.itemsize
+    
+
         
     def load(
             self,
@@ -148,7 +172,7 @@ class Field:
         """
         from .io import get_reading_info, read_data
         from dask import delayed
-        info = get_field_reading_info(fielname, format=format, field=self, **info)
+        info = get_reading_info(filename, format=format, field=self, **info)
         self.array = delayed(read_data)(info)
         
 
