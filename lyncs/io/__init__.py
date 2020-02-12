@@ -17,29 +17,26 @@ _required_callables=[
 ]
 
 
-    
-def deduce_format(filename):
+def deduce_format(filename, format=format):
+    if format:
+        # TODO: implement alias for formats
+        assert format in formats, "Unknown format %s" % format
+        return format
+    else:
+        import sys
+        self = sys.modules[__name__]
+        for format in formats:
+            if getattr(self,format).is_compatible(filename):
+                return format
+        assert False, "Impossible to deduce format"
+        return None
+
+
+def deduce_field(filename, format=None, lattice=None, field_type=None):
     import sys
     self = sys.modules[__name__]
-    for format in formats:
-        if getattr(self,format).is_compatible(filename):
-            return format
-    assert False, "Impossible to deduce format"
-
-
-def deduce_lattice(filename, format=None, field_type=None):
-    import sys
-    self = sys.modules[__name__]
-    format  = format or deduce_format(filename)
-    return getattr(self,format).get_lattice(filename, field_type=field_type)
-
-
-def deduce_field_type(filename, format=None, lattice=None):
-    import sys
-    self = sys.modules[__name__]
-    format  = format or deduce_format(filename)
-    lattice = lattice or deduce_lattice(filename, format=format)
-    return getattr(self,format).get_field_type(filename, field_type=field_type)
+    format = deduce_format(filename)
+    return getattr(self,format).get_field(filename, lattice=lattice, field_type=field_type)
 
 
 def get_reading_info(filename, format, **kwargs):

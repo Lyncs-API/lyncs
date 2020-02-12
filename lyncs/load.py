@@ -31,21 +31,18 @@ def load(
     lattice: (Lattice) lyncs Lattice information (see Lattice for help).
              If none is deduced from the file.
 
-    type: (str) Type of the lyncs Field to store the data in (see Field for help). 
+    field_type: (str) Type of the lyncs Field to store the data in (see Field for help). 
           If none is deduced from the file.
 
-    field: (Field) The field object where to store the data. If none a new one is created and returned.
     """
 
-    format = format or deduce_format(filename)
+    from .io import deduce_format, deduce_field, formats
+    
+    format = deduce_format(filename, format=format)
 
     # TODO: if needed should support also other kind of files. E.g. config files, complex datasets etc.
-    # i.e. anything that will have a save option.
-    
-    lattice = lattice or deduce_lattice(filename, format=format, field_type=field_type)
-    field_type = field_type or deduce_field_type(filename, format=format, lattice=lattice)
+    # i.e. anything that will have a save option should be able to be loaded easily.
 
-    field = Field(lattice=lattice,field_type=field_type)
+    field = deduce_field(filename, format=format, lattice=lattice, field_type=field_type)    
     field.load(filename, format=format, **kwargs)
-    
     return field
