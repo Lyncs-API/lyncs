@@ -87,3 +87,6 @@ def get_field(filename, lattice=None, field_type=None):
     return field
 
     
+def get_reading_info(filename, **kwargs):
+    kwargs["filename"] = filename
+    return kwargs

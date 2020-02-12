@@ -98,6 +98,8 @@ class Field:
         from dask import delayed
         if value is None:
             self._array = delayed(self)
+        else:
+            self._array = value
 
 
     @property
@@ -153,7 +155,6 @@ class Field:
         """
         return self.size*self.dtype.itemsize
     
-
         
     def load(
             self,
