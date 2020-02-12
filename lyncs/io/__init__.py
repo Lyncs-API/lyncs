@@ -23,30 +23,27 @@ def deduce_format(filename, format=format):
         assert format in formats, "Unknown format %s" % format
         return format
     else:
-        import sys
-        self = sys.modules[__name__]
         for format in formats:
-            if getattr(self,format).is_compatible(filename):
+            if get_module(filename, format=format).is_compatible(filename):
                 return format
         assert False, "Impossible to deduce format"
-        return None
+
+    
+def get_module(filename, format=None):
+    import sys
+    self = sys.modules[__name__]
+    format = deduce_format(filename, format=format)
+    return getattr(self,format)
 
 
 def deduce_field(filename, format=None, lattice=None, field_type=None):
-    import sys
-    self = sys.modules[__name__]
-    format = deduce_format(filename)
-    return getattr(self,format).get_field(filename, lattice=lattice, field_type=field_type)
+    return get_module(filename, format=format).get_field(filename, lattice=lattice, field_type=field_type)
 
 
-def get_reading_info(filename, format, **kwargs):
-    import sys
-    self = sys.modules[__name__]
-    return getattr(self,format).get_reading_info(filename, **kwargs)
+def get_reading_info(filename, format=None, **kwargs):
+    return get_module(filename, format=format).get_reading_info(filename, format=format, **kwargs)
 
 
 def read_data(info):
-    import sys
-    self = sys.modules[__name__]
-    return getattr(self,info["format"]).read_data(info)
+    return get_module(info["filename"], format=info["format"]).read_data(info)
     
