@@ -171,7 +171,7 @@ class Tunable:
 
         
     def __getattr__(self, key):
-        if key not in Tunable.__slots__:
+        if key not in Tunable.__slots__ and (key in self.tunable_options or key in self.tuned_options):
             if key in self.tunable_options:
                 self.tune(key=key)
                 
