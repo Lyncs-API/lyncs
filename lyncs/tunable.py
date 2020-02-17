@@ -26,7 +26,7 @@ def to_delayed(obj, **attrs):
 
         obj_attrs = {}
         for attr in dir(type(obj)):
-            if attr not in dir(Tunable):
+            if attr not in dir(Delayed):
                 if hasattr(obj, attr) and ismethod(getattr(obj, attr)):
                     obj_attrs[attr] = wrap_func(getattr(type(obj), attr))
         obj_attrs["__slots__"] = type(obj).__slots__
@@ -85,12 +85,18 @@ class Delayed:
 
     
 class Tunable:
-    __slots__ = ["_tunable_options", "_tuned_options", "_tuning"]
+    __slots__ = [
+        "_tunable_options",
+        "_tuned_options",
+        "_tuning",
+        "_delayed_tuning",
+    ]
     
-    def __init__(self, **kwargs):
+    def __init__(self, delayed_tuning=True, **kwargs):
         self._tunable_options = {}
         self._tuned_options = {}
         self._tuning = False
+        self._delayed_tuning = delayed_tuning
         
         for key,val in kwargs.items():
             self.add_tunable_option(key,val)
@@ -109,6 +115,15 @@ class Tunable:
     @property
     def tuning(self):
         return self._tuning
+
+    
+    @property
+    def delayed_tuning(self):
+        return self._delayed_tuning
+
+    @delayed_tuning.setter
+    def delayed_tuning(self, value):
+        self._delayed_tuning = bool(value)
 
     
     @property
@@ -173,7 +188,10 @@ class Tunable:
     def __getattr__(self, key):
         if key not in Tunable.__slots__ and (key in self.tunable_options or key in self.tuned_options):
             if key in self.tunable_options:
-                self.tune(key=key)
+                if not self.delayed_tuning:
+                    self.tune(key=key)
+                else:
+                    return getattr(delayed(self), key)
                 
             if key in self.tuned_options:
                 return self._tuned_options[key]
@@ -193,6 +211,16 @@ class Tunable:
         else:
             super().__setattr__(key, value)
 
+
+class tunable_property(property):
+    def __init__(self,func):
+        def getter(cls):
+            try:
+                return func(cls)
+            except:
+                return delayed(func)(delayed(cls))
+        super().__init__(getter)
+            
 
 class TunableOption:
     "Base class for tunable options"

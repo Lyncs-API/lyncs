@@ -1,5 +1,5 @@
 
-from .tunable import Tunable
+from .tunable import Tunable, tunable_property
 
 class Field(Tunable):
     _field_types = {
@@ -16,6 +16,7 @@ class Field(Tunable):
             array = None,
             lattice = None,
             field_type = None,
+            delayed_tuning = True,
             tunable_options = {},
             tuned_options = {},
     ):
@@ -42,7 +43,6 @@ class Field(Tunable):
         """
         self.lattice = lattice or array.lattice
         self.field_type = field_type or array.field_type
-        self.array = array
         
         from .tunable import Permutation, ChunksOf
 
@@ -51,9 +51,11 @@ class Field(Tunable):
 
         all_options = tuned_options.copy()
         all_options.update(tunable_options)
-        Tunable.__init__(self,**all_options)
+        Tunable.__init__(self, delayed_tuning=delayed_tuning, **all_options)
         
         for key,val in tuned_options.items(): setattr(self,key,val)
+
+        self.array = array
 
 
     @property
@@ -159,15 +161,15 @@ class Field(Tunable):
         return get_shape(self, self.field_type)
 
 
-    @property
+    @tunable_property
     def array_shape(self):
         return tuple(self.lattice[key] for key in self.shape_order)
 
 
-    @property
+    @tunable_property
     def array_chunks(self):
         return tuple(self.chunks[key] if key in self.chunks else self.lattice[key] for key in self.shape_order)
-
+        
 
     @property
     def size(self):
@@ -232,11 +234,10 @@ class Field(Tunable):
         """
         from .tunable import delayed
         from dask.array import zeros
-        tuned = delayed(self)
         self.array = delayed(zeros)(
-            shape = tuned.array_shape,
-            chunks = tuned.array_chunks,
-            dtype = tuned.dtype,
+            shape = self.array_shape,
+            chunks = self.array_chunks,
+            dtype = self.dtype,
         )
 
 
