@@ -87,6 +87,9 @@ class Delayed:
         return ret
 
 
+class NotTuned(Exception):
+    pass
+
     
 class Tunable:
     __slots__ = [
@@ -94,6 +97,7 @@ class Tunable:
         "_tuned_options",
         "_tuning",
         "_delayed_tuning",
+        "_raise_not_tuned",
     ]
     
     def __init__(self, delayed_tuning=True, **kwargs):
@@ -193,6 +197,8 @@ class Tunable:
     def __getattr__(self, key):
         if key not in Tunable.__slots__ and (key in self.tunable_options or key in self.tuned_options):
             if key in self.tunable_options:
+                if self._raise_not_tuned:
+                    raise NotTuned
                 if not self.delayed_tuning:
                     self.tune(key=key)
                 else:
@@ -220,10 +226,13 @@ class Tunable:
 class tunable_property(property):
     def __init__(self,func):
         def getter(cls):
+            cls._raise_not_tuned = True
             try:
                 return func(cls)
-            except:
+            except NotTuned:
                 return delayed(func)(delayed(cls))
+            finally:
+                cls._raise_not_tuned = False
         super().__init__(getter)
             
 
