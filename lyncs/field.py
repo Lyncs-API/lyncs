@@ -34,22 +34,23 @@ class Field(Tunable):
         field_type: str or list(str).
           --> If str, then must be one of the labeled field types. See Field._field_types
           --> If list, then a list of variables of lattice.
-        extra_options: dict
-           List of parameters that may condition the execution of the computation.
-           Lyncs always tries to figure out the optimal approach for a calculation.
-           The parameters in this list should be given only for explicitely testing 
-           different approaches.
-        kwargs: equivalent to extra_options.
+        tunable_options: dict
+           List of tunable parameters with default values.
+           Tunable options are attributes of the field and can be used to condition the computation. 
+        tuned_options: dict
+           Same as tunable options but with a fixed value.
         """
         self.lattice = lattice or array.lattice
         self.field_type = field_type or array.field_type
         self.array = array
         
+        from .tunable import Permutation
+        
         Tunable.__init__(self,
-                         shape_order = [v[0] for v in self.shape],
-                         **tunable_options)
-        for key,val in tuned_options.items():
-            self.__setattr__(key,val)
+                         shape_order = Permutation([v[0] for v in self.shape]),
+                         **tunable_options,
+                         **tuned_options)
+        for key,val in tuned_options.items(): setattr(self,key,val)
 
 
     @property
