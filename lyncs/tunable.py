@@ -17,7 +17,8 @@ def to_delayed(obj, **attrs):
         return obj
 
     elif isinstance(obj, DaskDelayed):
-
+        from inspect import ismethod
+        
         def wrap_func(func):
             def wrapped(*args, **kwargs):
                 return to_delayed(func(*args, **kwargs), **attrs)
@@ -26,9 +27,8 @@ def to_delayed(obj, **attrs):
         obj_attrs = {}
         for attr in dir(type(obj)):
             if attr not in dir(Tunable):
-                val = getattr(type(obj), attr)
-                if callable(val):
-                    obj_attrs[attr] = wrap_func(val)
+                if hasattr(obj, attr) and ismethod(getattr(obj, attr)):
+                    obj_attrs[attr] = wrap_func(getattr(type(obj), attr))
         obj_attrs["__slots__"] = type(obj).__slots__
 
         obj_attrs.update(attrs)
@@ -75,6 +75,12 @@ class Delayed:
                 else: return False
         
         return is_tunable(self.dask.values())
+
+    
+    def __repr__(self):
+        ret = super().__repr__()
+        if self.tunable: ret = "Tunable"+ret
+        return ret
 
 
     
