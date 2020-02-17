@@ -1,5 +1,7 @@
 
-class Field:
+from .tunable import Tunable
+
+class Field(Tunable):
     _field_types = {
         "scalar": ["dims"],
         "vector": ["dims", "dofs"],
@@ -14,8 +16,8 @@ class Field:
             array = None,
             lattice = None,
             field_type = None,
-            extra_options = {},
-            **kwargs,
+            tunable_options = {},
+            tuned_options = {},
     ):
         """
         A field defined on the lattice.
@@ -41,11 +43,13 @@ class Field:
         """
         self.lattice = lattice or array.lattice
         self.field_type = field_type or array.field_type
-        
-        extra_options.update(kwargs)
-        self.extra_options = extra_options
-        
         self.array = array
+        
+        Tunable.__init__(self,
+                         shape_order = [v[0] for v in self.shape],
+                         **tunable_options)
+        for key,val in tuned_options.items():
+            self.__setattr__(key,val)
 
 
     @property
@@ -54,7 +58,7 @@ class Field:
             return self._lattice
         except:
             return None
-
+        
     @lattice.setter
     def	lattice(self, value):
         assert self.lattice is None, "Not allowed to change lattice, if needed ask to implement it"
@@ -63,6 +67,21 @@ class Field:
         
         self._lattice = value
 
+        
+    @property
+    def dtype(self):
+        return self.lattice.dtype
+
+
+    @property
+    def dims(self):
+        return [key for key,size in self.shape if key in self.lattice.dims]
+
+    
+    @property
+    def dofs(self):
+        return [key for key,size in self.shape if key in self.lattice.dofs]
+    
     
     @property
     def field_type(self):
@@ -76,13 +95,13 @@ class Field:
         assert self.field_type is None, "Not allowed to change field_type, if needed ask to implement it"
         def is_known(self, key):
             if isinstance(key, (list, tuple)):
-                return all(self.is_known(k) for k in key)
+                return all(is_known(self,k) for k in key)
             elif isinstance(key, str):
                 return key in self.lattice.__dir__() or key in self._field_types
             else:
                 assert False, "Got key that is neither list or str, %s" % key
                 
-        assert is_known(self,value), "Got unknown field type"
+        assert is_known(self, value), "Got unknown field type"
         self._field_type = value
 
 
@@ -95,9 +114,8 @@ class Field:
 
     @array.setter
     def array(self, value):
-        from dask import delayed
         if value is None:
-            self._array = delayed(self)
+            self.zeros()
         else:
             self._array = value
 
@@ -144,11 +162,6 @@ class Field:
 
 
     @property
-    def dtype(self):
-        return self.lattice.dtype
-
-    
-    @property
     def byte_size(self):
         """
         Returns the size of the field in bytes
@@ -193,24 +206,23 @@ class Field:
         """
         from .io import save_field
         save(self, fielname, format=format, field=overwrite)
-        
+
+
+    def zeros(self):
+        """
+        Initialize the field with zeros.
+        """
+        from .tunable import delayed
+        from dask.array import zeros
+        tuned = delayed(self)
+        self.array = delayed(zeros)(
+            shape = tuned.array_shape,
+            chuncks = tuned.chuncks,
+            dtype = tuned.dtype,
+        )
+
 
     def __repr__(self):
         from .utils import default_repr
         return default_repr(self)
     
-
-    def __dir__(self):
-        o = set(dir(type(self)))
-        o.update(self.__dict__.keys())
-        o.update(dir(self.array))
-        return sorted(o)
-
-    
-    def ___getattr___(self, key):
-        try: 
-            return getattr(type(self), key).__get__(self)
-        except AttributeError:
-            return getattr(self.array, key)
-        
-    __getattr__ = ___getattr___
