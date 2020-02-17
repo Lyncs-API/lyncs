@@ -44,18 +44,22 @@ class Field(Tunable):
         self.field_type = field_type or array.field_type
         self.array = array
         
-        from .tunable import Permutation
+        from .tunable import Permutation, ChunksOf
+
+        tunable_options["shape_order"] = Permutation([v[0] for v in self.shape])
+        tunable_options["chunks"] = ChunksOf(self.shape)
+
+        all_options = tuned_options.copy()
+        all_options.update(tunable_options)
+        Tunable.__init__(self,**all_options)
         
-        Tunable.__init__(self,
-                         shape_order = Permutation([v[0] for v in self.shape]),
-                         **tunable_options,
-                         **tuned_options)
         for key,val in tuned_options.items(): setattr(self,key,val)
 
 
     @property
     def lattice(self):
         try:
+            # TODO: should return a copy of lattice
             return self._lattice
         except:
             return None

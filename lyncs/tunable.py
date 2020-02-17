@@ -217,3 +217,21 @@ class Permutation(TunableOption):
     def compatible(self, value):
         from collections import Counter
         return len(self.get()) == len(value) and Counter(self.get()) == Counter(value)
+
+
+class ChunksOf(TunableOption):
+    "Tuned option must be chunks of a given shape"
+    def __init__(self, value):
+        if isinstance(value, (tuple,list)):
+            assert all(isinstance(v, tuple) and len(v)==2 for v in value)
+            shape = {key:val for key,val in value}
+        elif isinstance(value, dict):
+            shape = value
+        super().__init__(shape)
+    
+    def compatible(self, value):
+        chunks = ChunksOf(value)
+        shape = self.get()
+        # Here we ask for uniform distribution. Consider to allow for not uniform
+        return all(key in shape and val<shape[key] and shape[key]%val == 0 for key,val in chunks.get().items())
+    
