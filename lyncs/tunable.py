@@ -125,8 +125,8 @@ class Tunable:
         "Adds a tunable option where key is the name and val is the default value."
         if key in self.tuned_options:
             assert False, "A tuned options with the given name already exist."
-
-        self._tunable_options[key] = val
+            
+        self._tunable_options[key] = val if isinstance(val, TunableOption) else TunableOption(val)
 
 
     def tune(self, key=None, **kwargs):
@@ -150,13 +150,15 @@ class Tunable:
             return
 
         assert key in self.tunable_options, "Option %s not found" % key
-        self._tuned_options[key] = self._tunable_options.pop(key)
 
         self._tuning = True
         try:
             callback = kwargs.get("callback", None)
             if callback is not None:
-                self._tuned_options[key] = callback(key=key,value=value,**kwargs)
+                setattr(self, key, callback(key=key,value=value,**kwargs))
+            else:
+                setattr(self, key, self.tunable_options[key].get())
+            
         except:
             self._tuning = False
             raise
@@ -176,9 +178,42 @@ class Tunable:
     def __setattr__(self, key, value):
         if key not in Tunable.__slots__ and (key in self.tunable_options or key in self.tuned_options):
             if key in self.tunable_options:
+                assert self.tunable_options[key].compatible(value), """
+                Value not compatible with %s""" % self.tunable_options[key]
                 del self._tunable_options[key]
                 self._tuned_options[key] = value
             else:
                 assert False, "The value of a tuned option cannot be changed."
         else:
             super().__setattr__(key, value)
+
+
+class TunableOption:
+    "Base class for tunable options"
+    def __init__(self, value):
+        self._value = value
+
+    @property
+    def value(self):
+        return self.get()
+            
+    def get(self):
+        return self._value
+
+    def compatible(self, value):
+        return value == self.get()
+
+    def __repr__(self):
+        from .utils import default_repr
+        return default_repr(self)
+
+
+class Permutation(TunableOption):
+    "Tuned option must be a permutation of the given list/tuple"
+    def __init__(self, value):
+        assert isinstance(value, (tuple,list))
+        super().__init__(value)
+    
+    def compatible(self, value):
+        from collections import Counter
+        return len(self.get()) == len(value) and Counter(self.get()) == Counter(value)
