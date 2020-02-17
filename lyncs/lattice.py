@@ -222,4 +222,10 @@ class Lattice:
     __setattr__ = __setitem__
 
 
+    def __dask_tokenize__(self):
+        from dask.base import normalize_token
+            
+        return normalize_token(
+            (type(self), self.dims, self.dofs, self.dtype, self.properties)
+        )
 

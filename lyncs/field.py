@@ -245,3 +245,12 @@ class Field(Tunable):
         from .utils import default_repr
         return default_repr(self)
     
+
+    def __dask_tokenize__(self):
+        import uuid
+        from dask.base import normalize_token
+        if not hasattr(self, "_unique_id"): self._unique_id = str(uuid.uuid4())
+            
+        return normalize_token(
+            (type(self), self.lattice, self.field_type, self._unique_id)
+        )

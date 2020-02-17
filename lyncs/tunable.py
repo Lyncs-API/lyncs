@@ -45,7 +45,7 @@ def delayed(*args, **kwargs):
     For help see dask.delayed.
     """
     from dask import delayed as dask_delayed
-    return to_delayed(dask_delayed(*args, **kwargs))
+    return to_delayed(dask_delayed(*args, pure=True, **kwargs))
 
 
 
