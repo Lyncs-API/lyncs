@@ -113,6 +113,9 @@ class Field(Tunable):
     @property
     def array(self):
         try:
+            from .tunable import Delayed
+            if isinstance(self._array, Delayed) and not self._array.tunable:
+                self._array = self._array.compute()
             return self._array
         except:
             return None
@@ -154,6 +157,16 @@ class Field(Tunable):
                 assert False, "Got key that is neither list or str, %s" % key
                 
         return get_shape(self, self.field_type)
+
+
+    @property
+    def array_shape(self):
+        return tuple(self.lattice[key] for key in self.shape_order)
+
+
+    @property
+    def array_chunks(self):
+        return tuple(self.chunks[key] if key in self.chunks else self.lattice[key] for key in self.shape_order)
 
 
     @property
@@ -222,7 +235,7 @@ class Field(Tunable):
         tuned = delayed(self)
         self.array = delayed(zeros)(
             shape = tuned.array_shape,
-            chuncks = tuned.chuncks,
+            chunks = tuned.array_chunks,
             dtype = tuned.dtype,
         )
 
