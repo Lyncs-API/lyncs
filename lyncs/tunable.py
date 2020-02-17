@@ -59,8 +59,12 @@ class Delayed:
         self.__setstate__(obj.__getstate__())
                           
     
-    def tune():
+    def tune(self, **kwargs):
         if not self.tunable: return
+        
+        from dask.delayed import DelayedAttr
+        if isinstance(self, DelayedAttr):
+            return self._obj.compute().tune(key=self._attr)
         pass
 
 
@@ -168,7 +172,7 @@ class Tunable:
             return
         
         elif key in self.tuned_options:
-            return
+            return self.tuned_options[key]
 
         assert key in self.tunable_options, "Option %s not found" % key
 
@@ -183,6 +187,7 @@ class Tunable:
         except:
             self._tuning = False
             raise
+        return self.tuned_options[key]
 
         
     def __getattr__(self, key):
@@ -191,7 +196,7 @@ class Tunable:
                 if not self.delayed_tuning:
                     self.tune(key=key)
                 else:
-                    return getattr(delayed(self), key)
+                    return delayed(self).__getattr__(key)
                 
             if key in self.tuned_options:
                 return self._tuned_options[key]
