@@ -125,15 +125,13 @@ class Tunable:
         "_tunable_options",
         "_tuned_options",
         "_tuning",
-        "_delayed_tuning",
         "_raise_not_tuned",
     ]
     
-    def __init__(self, delayed_tuning=True, **kwargs):
+    def __init__(self, **kwargs):
         self._tunable_options = {}
         self._tuned_options = {}
         self._tuning = False
-        self._delayed_tuning = delayed_tuning
         
         for key,val in kwargs.items():
             self.add_tunable_option(key,val)
@@ -152,15 +150,6 @@ class Tunable:
     @property
     def tuning(self):
         return self._tuning
-
-    
-    @property
-    def delayed_tuning(self):
-        return self._delayed_tuning
-
-    @delayed_tuning.setter
-    def delayed_tuning(self, value):
-        self._delayed_tuning = bool(value)
 
     
     @property
@@ -228,8 +217,6 @@ class Tunable:
             if key in self.tunable_options:
                 if self._raise_not_tuned:
                     raise NotTuned
-                if not self.delayed_tuning:
-                    self.tune(key=key)
                 else:
                     return delayed(self).__getattr__(key)
                 

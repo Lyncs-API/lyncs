@@ -16,7 +16,6 @@ class Field(Tunable):
             array = None,
             lattice = None,
             field_type = None,
-            delayed_tuning = True,
             tunable_options = {},
             tuned_options = {},
     ):
@@ -51,7 +50,7 @@ class Field(Tunable):
 
         all_options = tuned_options.copy()
         all_options.update(tunable_options)
-        Tunable.__init__(self, delayed_tuning=delayed_tuning, **all_options)
+        Tunable.__init__(self, **all_options)
         
         for key,val in tuned_options.items(): setattr(self,key,val)
 
