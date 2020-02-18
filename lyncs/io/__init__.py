@@ -12,9 +12,16 @@ for format in formats:
 
 _required_callables=[
     "is_compatible",
-    "get_lattice",
-    "get_field_type",
+    "get_type",
+    "file_manager",
 ]
+
+
+def get_module(filename, format=None):
+    import sys
+    self = sys.modules[__name__]
+    format = deduce_format(filename, format=format)
+    return getattr(self,format)
 
 
 def deduce_format(filename, format=format):
@@ -29,21 +36,10 @@ def deduce_format(filename, format=format):
         assert False, "Impossible to deduce format"
 
     
-def get_module(filename, format=None):
-    import sys
-    self = sys.modules[__name__]
-    format = deduce_format(filename, format=format)
-    return getattr(self,format)
+def deduce_type(filename, format=None, **kwargs):
+    return get_module(filename, format=format).get_type(filename, **kwargs)
 
 
-def deduce_field(filename, format=None, lattice=None, field_type=None):
-    return get_module(filename, format=format).get_field(filename, lattice=lattice, field_type=field_type)
-
-
-def get_reading_info(filename, format=None, **kwargs):
-    return get_module(filename, format=format).get_reading_info(filename, format=format, **kwargs)
-
-
-def read_data(info):
-    return get_module(info["filename"], format=info["format"]).read_data(info)
+def file_manager(filename, format=None, **kwargs):
+    return get_module(filename, format=format).file_manager(filename, **kwargs)
     

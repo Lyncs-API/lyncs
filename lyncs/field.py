@@ -63,7 +63,7 @@ class Field(Tunable):
         try:
             # TODO: should return a copy of lattice
             return self._lattice
-        except:
+        except AttributeError:
             return None
         
     @lattice.setter
@@ -94,7 +94,7 @@ class Field(Tunable):
     def field_type(self):
         try:
             return self._field_type
-        except:
+        except AttributeError:
             return None
 
     @field_type.setter
@@ -115,11 +115,14 @@ class Field(Tunable):
     @property
     def array(self):
         try:
-            from .tunable import Delayed
-            if isinstance(self._array, Delayed) and not self._array.tunable:
-                self._array = self._array.compute()
+            from .tunable import Delayed, NotTuned
+            if isinstance(self._array, Delayed):
+                try:
+                    self._array = self._array.compute(tune=False)
+                except:
+                    pass
             return self._array
-        except:
+        except AttributeError:
             return None
 
     @array.setter
@@ -204,10 +207,16 @@ class Field(Tunable):
         format: (str) format of the file to read (see load for help).
         info: information needed to perform the reading.
         """
-        from .io import get_reading_info, read_data
-        from dask import delayed
-        info = get_reading_info(filename, format=format, field=self, **info)
-        self.array = delayed(read_data)(info)
+        from .io import file_manager
+        from .tunable import delayed
+        def read_array(*args, **kwargs):
+            from dask.array import from_delayed
+            return from_delayed(*args, **kwargs)
+        io = file_manager(filename, format=format, field=self, **info)
+        self.array = delayed(read_array)(io.read(),
+                                         self.array_chunks,
+                                         dtype=self.dtype,
+                                         name=filename)
         
 
     def save(
@@ -225,7 +234,7 @@ class Field(Tunable):
         info: information needed to perform the writing.
         """
         from .io import save_field
-        save(self, fielname, format=format, field=overwrite)
+        save(self, filename, format=format, field=overwrite)
 
 
     def zeros(self):

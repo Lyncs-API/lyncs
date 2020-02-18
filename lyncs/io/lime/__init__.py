@@ -5,7 +5,7 @@ engines = [
     ]
 
 from . import lime as pylime
-default = "pylime"
+default_engine = "pylime"
 
 # from lyncs import config
 # if config.clime_enabled:
@@ -13,6 +13,13 @@ default = "pylime"
 #     engines.append("clime")
 
 # TODO: add more, e.g. lemon
+
+def get_engine(engine=None):
+    import sys
+    engine = engine or default_engine
+    self = sys.modules[__name__]
+    return getattr(self,engine)
+
 
 def is_compatible(filename):
     try:
@@ -48,9 +55,21 @@ def get_field_type(records):
         # TODO
         assert False, "To be implemented"
     
+
+def get_shape_order(field):
+    shape_order = ['x', 'y', 'z', 't']
     
+    if field.field_type == "gauge_links":
+        shape_order.extend(['n_dims', 'color', 'color'])
+    else:
+        # TODO
+        assert False, "To be implemented"
+        
+    return shape_order
     
-def get_field(filename, lattice=None, field_type=None):
+
+    
+def get_type(filename, lattice=None, field_type=None, **kwargs):
     records = pylime.scan_file(filename)
     records = {r["lime_type"]: (r["data"] if "data" in r else r["data_length"]) for r in records}
     
@@ -80,13 +99,31 @@ def get_field(filename, lattice=None, field_type=None):
 
     from lyncs import Field
     field = Field(lattice=lattice, field_type=field_type)
+    field.shape_order = get_shape_order(field)
+    
     assert field.byte_size == records["ildg-binary-data"], """
         Size of deduced field (%s) is not compatible with size of data (%s).
         """ %(field.byte_size, records["ildg-binary-data"])
     
     return field
 
+
+from ...tunable import Tunable, tunable_property, delayed
+
+class file_manager(Tunable):
     
-def get_reading_info(filename, **kwargs):
-    kwargs["filename"] = filename
-    return kwargs
+    def __init__(self, filename, **kwargs):
+        from ...tunable import Choice
+        self.filename = filename
+        
+        Tunable.__init__(
+            self,
+            lime_engine=Choice(engines),
+        )
+
+    @tunable_property
+    def engine(self):
+        return get_engine(self.lime_engine)
+
+    def read(self):
+        return self.engine.read(self.filename)

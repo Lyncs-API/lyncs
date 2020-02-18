@@ -10,13 +10,11 @@ __all__ = [
 def load(
         filename,
         format = None,
-        lattice = None,
-        field_type = None,
         **kwargs,
 ):
     """
     Loads data from file and returns it as a lyncs object.
-    The resulting object can be either a field, or ...
+    The file must contain 
 
     Parameters
     ----------
@@ -28,6 +26,8 @@ def load(
     - "HDF5", "H5": HDF5 file format
     - "lime": lime file format
 
+    **kwargs: Additional list of information to perform the reading. E.g. the following options.
+
     lattice: (Lattice) lyncs Lattice information (see Lattice for help).
              If none is deduced from the file.
 
@@ -36,13 +36,13 @@ def load(
 
     """
 
-    from .io import deduce_format, deduce_field, formats
+    from os import access, R_OK
+    assert access(filename, R_OK), "File %s does not exist or is not readable" % filename
+    
+    from .io import deduce_format, deduce_type
     
     format = deduce_format(filename, format=format)
 
-    # TODO: if needed should support also other kind of files. E.g. config files, complex datasets etc.
-    # i.e. anything that will have a save option should be able to be loaded easily.
-
-    field = deduce_field(filename, format=format, lattice=lattice, field_type=field_type)    
-    field.load(filename, format=format, **kwargs)
-    return field
+    obj = deduce_type(filename, format=format, **kwargs)
+    obj.load(filename, format=format, **kwargs)
+    return obj
