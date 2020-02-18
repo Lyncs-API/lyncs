@@ -86,7 +86,7 @@ class Delayed:
         return {key:val for key,val in self.dask.items() if is_tunable(val)}.items()
 
     
-    def compute(self, *args, tune_kwargs={}, **kwargs):
+    def compute(self, *args, tune=True, tune_kwargs={}, **kwargs):
         """
         Same as dask.compute but calls tune first. See dask.delayed.compute for help.
         
@@ -95,19 +95,18 @@ class Delayed:
         tune_kwargs: dict
             Kwargs that will be passed to the tune function.
         """
-        self.tune(**tune_kwargs)
+        if tune: self.tune(**tune_kwargs)
         return super().compute(*args, **kwargs)
     
 
     def visualize(self, mark_tunable="red", **kwargs):
         if mark_tunable:
-            kwargs["function_attributes"] = { k: {"color": mark_tunable} for k,v in self.tunable_items}
             kwargs["data_attributes"] = { k: {"color": mark_tunable,
                                               "label": ", ".join(v.tunable_options.keys()),
                                               "fontcolor": mark_tunable,
                                               "fontsize": "12",
                                              }
-                                          for k,v in self.tunable_items }
+                                          for k,v in self.tunable_items if isinstance(v,Tunable) }
         return super().visualize(**kwargs)
 
     
@@ -252,6 +251,12 @@ class Tunable:
         else:
             super().__setattr__(key, value)
 
+            
+    def __repr__(self):
+        from .utils import default_repr
+        return default_repr(self)
+        
+
 
 class tunable_property(property):
     def __init__(self,func):
@@ -260,9 +265,10 @@ class tunable_property(property):
             try:
                 return func(cls)
             except NotTuned:
-                return delayed(func)(delayed(cls))
+                return delayed(getter)(delayed(cls))
             finally:
                 cls._raise_not_tuned = False
+        getter.__name__=func.__name__
         super().__init__(getter)
             
 
@@ -287,9 +293,9 @@ class TunableOption:
 
 
 class Permutation(TunableOption):
-    "Tuned option must be a permutation of the given list/tuple"
+    "A permutation of the given list/tuple"
     def __init__(self, value):
-        assert isinstance(value, (tuple,list))
+        assert isinstance(value, (tuple,list)), "A permutation must be initialized with a list/tuple"
         super().__init__(value)
     
     def compatible(self, value):
@@ -297,8 +303,21 @@ class Permutation(TunableOption):
         return len(self.get()) == len(value) and Counter(self.get()) == Counter(value)
 
 
+class Choice(TunableOption):
+    "One element of list/tuple"
+    def __init__(self, value):
+        assert isinstance(value, (tuple,list)), "A choice must be initialized with a list/tuple"
+        assert len(value) > 0, "List cannot be empty"
+        super().__init__(value)
+    
+    def compatible(self, value):
+        return value in self.get()
+
+    def get(self):
+        return self._value[0]
+
 class ChunksOf(TunableOption):
-    "Tuned option must be chunks of a given shape"
+    "Chunks of a given shape"
     def __init__(self, value):
         if isinstance(value, (tuple,list)):
             assert all(isinstance(v, tuple) and len(v)==2 for v in value)
@@ -311,5 +330,5 @@ class ChunksOf(TunableOption):
         chunks = ChunksOf(value)
         shape = self.get()
         # Here we ask for uniform distribution. Consider to allow for not uniform
-        return all(key in shape and val<shape[key] and shape[key]%val == 0 for key,val in chunks.get().items())
+        return all(key in shape and val<=shape[key] and shape[key]%val == 0 for key,val in chunks.get().items())
     
