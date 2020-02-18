@@ -84,3 +84,6 @@ coverage.xml
 .pytest_cache/
 .ipynb_checkpoints/
 .tmp/
+
+# Dask visualize
+mydask.png
