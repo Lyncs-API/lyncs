@@ -56,10 +56,10 @@ def get_field_type(records):
         assert False, "To be implemented"
     
 
-def get_shape_order(field):
+def get_shape_order(field_type):
     shape_order = ['x', 'y', 'z', 't']
     
-    if field.field_type == "gauge_links":
+    if field_type == "gauge_links":
         shape_order.extend(['n_dims', 'color', 'color'])
     else:
         # TODO
@@ -68,7 +68,6 @@ def get_shape_order(field):
     return shape_order
     
 
-    
 def get_type(filename, lattice=None, field_type=None, **kwargs):
     records = pylime.scan_file(filename)
     records = {r["lime_type"]: (r["data"] if "data" in r else r["data_length"]) for r in records}
@@ -98,8 +97,12 @@ def get_type(filename, lattice=None, field_type=None, **kwargs):
         field_type = read_field_type
 
     from lyncs import Field
-    field = Field(lattice=lattice, field_type=field_type)
-    field.shape_order = get_shape_order(field)
+    
+    field = Field(
+        lattice=lattice,
+        field_type=field_type,
+        shape_order = get_shape_order(field_type),
+    )
     
     assert field.byte_size == records["ildg-binary-data"], """
         Size of deduced field (%s) is not compatible with size of data (%s).

@@ -121,6 +121,10 @@ class NotTuned(Exception):
 
     
 class Tunable:
+    """
+    A base class for tunable objects.
+    """
+    
     __slots__ = [
         "_tunable_options",
         "_tuned_options",
@@ -128,15 +132,29 @@ class Tunable:
         "_raise_not_tuned",
     ]
     
-    def __init__(self, **kwargs):
+    def __init__(
+            self,
+            tunable_options = {},
+            tuned_options = {},
+            **kwargs
+    ):
         self._tunable_options = {}
         self._tuned_options = {}
         self._tuning = False
         
-        for key,val in kwargs.items():
+        for key,val in tunable_options.items():
             self.add_tunable_option(key,val)
 
-        
+        for key,val in kwargs.items():
+            if isinstance(val,TunableOption):
+                self.add_tunable_option(key,val)
+            else:
+                self.add_tuned_option(key,val)
+                
+        for key,val in tuned_options.items():
+            self.add_tuned_option(key,val)
+
+            
     @property
     def tunable(self):
         return bool(self.tunable_options)
@@ -170,11 +188,22 @@ class Tunable:
 
     def add_tunable_option(self, key, val):
         "Adds a tunable option where key is the name and val is the default value."
-        if key in self.tuned_options:
-            assert False, "A tuned options with the given name already exist."
+        assert key not in self.tunable_options, "A tunable options with the given name already exist."
+        assert key not in self.tuned_options, "A tuned options with the given name already exist."
             
         self._tunable_options[key] = val if isinstance(val, TunableOption) else TunableOption(val)
 
+
+    def add_tuned_option(self, key, val):
+        "Adds a tunde option where key is the name and val is the value."
+        assert key not in self.tuned_options, "A tuned options with the given name already exist."
+        
+        if key in self.tunable_options:
+            setattr(self,key,val)
+        else:
+            self._tuned_options[key] = val
+
+        
 
     def tune(self, key=None, **kwargs):
         """

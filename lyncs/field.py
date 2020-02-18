@@ -18,6 +18,7 @@ class Field(Tunable):
             field_type = None,
             tunable_options = {},
             tuned_options = {},
+            **kwargs
     ):
         """
         A field defined on the lattice.
@@ -47,13 +48,9 @@ class Field(Tunable):
 
         tunable_options["shape_order"] = Permutation([v[0] for v in self.shape])
         tunable_options["chunks"] = ChunksOf(self.shape)
-
-        all_options = tuned_options.copy()
-        all_options.update(tunable_options)
-        Tunable.__init__(self, **all_options)
         
-        for key,val in tuned_options.items(): setattr(self,key,val)
-
+        Tunable.__init__(self, tunable_options=tunable_options, tuned_options=tuned_options, **kwargs)
+        
         self.array = array
 
 
