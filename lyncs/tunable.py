@@ -48,7 +48,16 @@ def delayed(*args, **kwargs):
     return to_delayed(dask_delayed(*args, pure=True, **kwargs))
 
 
+def is_tunable(obj):
+    "Tells whether an object is tunable"
+    if isinstance(obj, (list, tuple)):
+        if len(obj) == 0: return False
+        else: return is_tunable(obj[0]) or is_tunable(obj[1:])
+    else:
+        if isinstance(obj, Tunable): return obj.tunable is True
+        else: return False
 
+        
 class Delayed:
     """
     A lyncs.Delayed object is the same as a dask.Delayed object that also implements a tuning step.
@@ -70,15 +79,36 @@ class Delayed:
 
     @property
     def tunable(self):
-        def is_tunable(val):
-            if isinstance(val, (list, tuple)):
-                if len(val) == 0: return False
-                else: return is_tunable(val[0]) or is_tunable(val[1:])
-            else:
-                if isinstance(val, Tunable): return val.tunable is True
-                else: return False
+        return is_tunable(list(self.dask.values()))
+
+    @property
+    def tunable_items(self):
+        return {key:val for key,val in self.dask.items() if is_tunable(val)}.items()
+
+    
+    def compute(self, *args, tune_kwargs={}, **kwargs):
+        """
+        Same as dask.compute but calls tune first. See dask.delayed.compute for help.
         
-        return is_tunable(self.dask.values())
+        Parameters
+        ----------
+        tune_kwargs: dict
+            Kwargs that will be passed to the tune function.
+        """
+        self.tune(**tune_kwargs)
+        return super().compute(*args, **kwargs)
+    
+
+    def visualize(self, mark_tunable="red", **kwargs):
+        if mark_tunable:
+            kwargs["function_attributes"] = { k: {"color": mark_tunable} for k,v in self.tunable_items}
+            kwargs["data_attributes"] = { k: {"color": mark_tunable,
+                                              "label": ", ".join(v.tunable_options.keys()),
+                                              "fontcolor": mark_tunable,
+                                              "fontsize": "12",
+                                             }
+                                          for k,v in self.tunable_items }
+        return super().visualize(**kwargs)
 
     
     def __repr__(self):

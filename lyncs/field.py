@@ -233,8 +233,10 @@ class Field(Tunable):
         Initialize the field with zeros.
         """
         from .tunable import delayed
-        from dask.array import zeros
-        self.array = delayed(zeros)(
+        def zero_array(*args, **kwargs):
+            from dask.array import zeros
+            return zeros(*args, **kwargs)
+        self.array = delayed(zero_array)(
             shape = self.array_shape,
             chunks = self.array_chunks,
             dtype = self.dtype,
