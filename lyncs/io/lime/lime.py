@@ -53,3 +53,47 @@ def scan_file(filename):
             pos = records[-1]["pos"] + records[-1]["data_length"] + ((8-records[-1]["data_length"]%8)%8)
                 
     return records
+
+
+def read(filename, shape, dtype, chunks=None, chunk_id=None):
+    import numpy as np
+    from itertools import product
+    
+    shape = np.array(shape)
+    chunks = np.array(chunks or shape)
+    chunk_id = np.array(chunk_id or np.zeros_like(shape))
+    records = scan_file(filename)
+    records = {r["lime_type"]: r for r in records}
+
+    data_record = records["ildg-binary-data"]
+    
+    assert data_record["data_length"] == np.prod(shape)*dtype.itemsize
+
+    n_chunks = shape//chunks
+
+    start = ([0,] + list(np.where(n_chunks>1)[0]))[-1]
+    consecutive = np.prod(chunks[start:])
+    n_reads = np.prod(chunks)//consecutive
+
+    if n_reads == 1:
+        offset = 0
+        for i,l,L in zip(chunk_id,chunks,shape):
+            offset = offset*L+i*l
+        offset *= dtype.itemsize
+        offset += data_record["pos"]
+        return np.fromfile(filename, dtype=dtype, count=consecutive, offset=offset).reshape(chunks)
+
+    arr = np.ndarray(tuple(chunks[:start])+(consecutive,), dtype=dtype)
+    read_ids = list(product(*[range(l) for l in chunks[:start]]))
+    assert len(read_ids) == n_reads
+    
+    for read_id in read_ids:
+        offset = 0
+        for i,j,l,L in zip(chunk_id,read_id+tuple(0 for i in range(len(shape)-start)),chunks,shape):
+            offset = offset*L+i*l+j
+        offset *= dtype.itemsize
+        offset += data_record["pos"]
+
+        arr[read_id] = np.fromfile(filename, dtype=dtype, count=consecutive, offset=offset)
+
+    return arr.reshape(chunks)

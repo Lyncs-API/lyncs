@@ -115,9 +115,10 @@ from ...tunable import Tunable, tunable_property, delayed
 
 class file_manager(Tunable):
     
-    def __init__(self, filename, **kwargs):
+    def __init__(self, filename, field=None, **kwargs):
         from ...tunable import Choice
         self.filename = filename
+        self.field = field
         
         Tunable.__init__(
             self,
@@ -130,8 +131,13 @@ class file_manager(Tunable):
 
     
     def read(self, chunk_id=None):
-        return delayed(self.engine.read)(chunk_id = chunk_id)
+        return delayed(self.engine.read)(self.filename,
+                                         shape=self.field.array_shape,
+                                         dtype=self.field.dtype,
+                                         chunks=self.field.array_chunks,
+                                         chunk_id=chunk_id)
 
+    
     def __dask_tokenize__(self):
         from dask.base import normalize_token
             

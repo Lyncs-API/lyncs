@@ -220,7 +220,7 @@ class Field(Tunable):
 
             reads = [io.read(chunk_id) for chunk_id in chunks_id]
             
-            keys = [("read-chunk", *chunk_id) for chunk_id in chunks_id]
+            keys = [(filename, *chunk_id) for chunk_id in chunks_id]
             vals = [read.key for read in reads]
             dsk = dict(zip(keys, vals))
 
