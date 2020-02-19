@@ -111,8 +111,9 @@ class Field(Tunable):
     @property
     def array(self):
         try:
-            from .tunable import Delayed, NotTuned
-            if isinstance(self._array, Delayed):
+            from dask.array import Array
+            from .tunable import LyncsMethodsMixin
+            if not isinstance(self._array, Array) and isinstance(self._array, LyncsMethodsMixin):
                 try:
                     self._array = self._array.compute(tune=False)
                 except:
@@ -204,10 +205,12 @@ class Field(Tunable):
         info: information needed to perform the reading.
         """
         from .io import file_manager
-        from .tunable import delayed
+        from .tunable import delayed, add_lyncs_methods
+        from dask.array import from_delayed
+        
         def read_array(*args, **kwargs):
-            from dask.array import from_delayed
-            return from_delayed(*args, **kwargs)
+            return add_lyncs_methods(from_delayed(*args, **kwargs))
+        
         io = file_manager(filename, format=format, field=self, **info)
         self.array = delayed(read_array)(io.read(),
                                          self.array_chunks,
@@ -237,10 +240,12 @@ class Field(Tunable):
         """
         Initialize the field with zeros.
         """
-        from .tunable import delayed
+        from .tunable import delayed, add_lyncs_methods
+        from dask.array import zeros
+        
         def zero_array(*args, **kwargs):
-            from dask.array import zeros
-            return zeros(*args, **kwargs)
+            return add_lyncs_methods(zeros(*args, **kwargs))
+        
         self.array = delayed(zero_array)(
             shape = self.array_shape,
             chunks = self.array_chunks,

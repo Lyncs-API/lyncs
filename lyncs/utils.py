@@ -28,3 +28,21 @@ def default_repr(self):
             ret += arg_eq+val
     ret += ")"
     return ret
+
+
+def add_parameters_to_doc(doc, doc_params):
+    """
+    Inserts doc_params in the first empty line after Parameters if possible.
+    """
+    doc = doc.split("\n")
+    found=False
+    for i,line in enumerate(doc):
+        words = line.split()
+        if words and "Parameters" == line.split()[0]:
+            found=True
+        if found and not words:
+            doc.insert(i,doc_params)
+            return "\n".join(doc)
+        
+    return "\n".join(doc)+doc_params
+            

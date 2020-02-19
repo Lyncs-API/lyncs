@@ -3,49 +3,50 @@ Extension of dask delayed with a tunable aware Delayed object.
 """
 
 __all__ = [
+    "add_lyncs_methods",
     "delayed",
     "Tunable"
 ]
 
 
-def to_delayed(obj, **attrs):
-    """
-    Converts a dask.Delayed object into a lyncs.Delayed object with parent the type of the object.
-    """
-    from dask.delayed import Delayed as DaskDelayed
-    if isinstance(obj, Delayed):
-        return obj
+from dask.base import DaskMethodsMixin
+from .utils import add_parameters_to_doc
 
-    elif isinstance(obj, DaskDelayed):
+def add_lyncs_methods(obj, **attrs):
+    """
+    Replaces the DaskMethodsMixin with LyncsMethodsMixin
+    """
+    if isinstance(obj, DaskMethodsMixin) and not isinstance(obj, LyncsMethodsMixin):
         from inspect import ismethod
         
-        def wrap_func(func):
+        def wrap_method(method):
             def wrapped(*args, **kwargs):
-                return to_delayed(func(*args, **kwargs), **attrs)
+                return add_lyncs_methods(method(*args, **kwargs), **attrs)
+            wrapped.__name__ = method.__name__
+            wrapped.__doc__ = method.__doc__
             return wrapped
 
         obj_attrs = {}
         for attr in dir(type(obj)):
-            if attr not in dir(Delayed):
+            if attr not in dir(LyncsMethodsMixin):
                 if hasattr(obj, attr) and ismethod(getattr(obj, attr)):
-                    obj_attrs[attr] = wrap_func(getattr(type(obj), attr))
-        obj_attrs["__slots__"] = type(obj).__slots__
-
+                    obj_attrs[attr] = wrap_method(getattr(type(obj), attr))
+                    
         obj_attrs.update(attrs)
-        return type(type(obj).__name__, (Delayed, type(obj)), obj_attrs)(obj)
+        object.__setattr__(obj, "__class__",
+                           type(type(obj).__name__, (LyncsMethodsMixin, type(obj)), obj_attrs))
 
-    else:
-        return obj
+    return obj
     
 
     
 def delayed(*args, **kwargs):
     """
-    Equivalent to dask.delayed, but returns a lyncs.Delayed instead of a dask.Delayed object. 
+    Equivalent to dask.delayed, but returns a tunable-aware Delayed object. 
     For help see dask.delayed.
     """
     from dask import delayed as dask_delayed
-    return to_delayed(dask_delayed(*args, pure=True, **kwargs))
+    return add_lyncs_methods(dask_delayed(*args, pure=True, **kwargs))
 
 
 def is_tunable(obj):
@@ -54,27 +55,29 @@ def is_tunable(obj):
         if len(obj) == 0: return False
         else: return is_tunable(obj[0]) or is_tunable(obj[1:])
     else:
-        if isinstance(obj, Tunable): return obj.tunable is True
-        else: return False
+        return isinstance(obj, Tunable) and obj.tunable
 
         
-class Delayed:
+class LyncsMethodsMixin(DaskMethodsMixin):
     """
-    A lyncs.Delayed object is the same as a dask.Delayed object that also implements a tuning step.
-    If in the dask graph there is an object of type Tunable, this will be tuned.
-    The tune step is performed before any graph optimization or calculation.
+    LyncsMethodsMixin makes DaskMethodsMixin aware of tunable objects.
+    DaskMethodsMixin implements the compute, optimize, visualize and persist function.
+    Here we add also a tune function and we call it appropriately in the others.
     """
-    def __init__(self, obj):
-        self.__setstate__(obj.__getstate__())
-                          
     
     def tune(self, **kwargs):
         if not self.tunable: return
         
         from dask.delayed import DelayedAttr
-        if isinstance(self, DelayedAttr):
-            return self._obj.compute().tune(key=self._attr)
-        pass
+        if isinstance(self, DelayedAttr) and \
+           isinstance(self.dask[self._obj.key], Tunable) and \
+           self._attr in self.dask[self._obj.key].tunable_options:
+            # Special case for tunable options
+            return self.dask[self._obj.key].tune(key=self._attr)
+
+        for key,val in self.tunable_items:
+            val.tune(**kwargs)
+        return self
 
 
     @property
@@ -87,19 +90,18 @@ class Delayed:
 
     
     def compute(self, *args, tune=True, tune_kwargs={}, **kwargs):
-        """
-        Same as dask.compute but calls tune first. See dask.delayed.compute for help.
-        
-        Parameters
-        ----------
-        tune_kwargs: dict
-            Kwargs that will be passed to the tune function.
-        """
         if tune: self.tune(**tune_kwargs)
         return super().compute(*args, **kwargs)
-    
 
-    def visualize(self, mark_tunable="red", **kwargs):
+    compute.__doc__ = add_parameters_to_doc(DaskMethodsMixin.compute.__doc__, """
+        tune: bool
+            Whether to perform tuning before computing.
+        tune_kwargs: dict
+            Kwargs that will be passed to the tune function.
+        """)
+
+    
+    def visualize(self, *args, mark_tunable="red", **kwargs):
         if mark_tunable:
             kwargs["data_attributes"] = { k: {"color": mark_tunable,
                                               "label": ", ".join(v.tunable_options.keys()),
@@ -107,8 +109,13 @@ class Delayed:
                                               "fontsize": "12",
                                              }
                                           for k,v in self.tunable_items if isinstance(v,Tunable) }
-        return super().visualize(**kwargs)
+        return super().visualize(*args, **kwargs)
 
+    visualize.__doc__ = add_parameters_to_doc(DaskMethodsMixin.visualize.__doc__, """
+        mark_tunable: color
+            Marks the tunable object with the given color. Skips if None.
+        """)
+    
     
     def __repr__(self):
         ret = super().__repr__()
