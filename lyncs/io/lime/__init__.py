@@ -128,5 +128,13 @@ class file_manager(Tunable):
     def engine(self):
         return get_engine(self.lime_engine)
 
-    def read(self):
-        return self.engine.read(self.filename)
+    
+    def read(self, chunk_id=None):
+        return delayed(self.engine.read)(chunk_id = chunk_id)
+
+    def __dask_tokenize__(self):
+        from dask.base import normalize_token
+            
+        return normalize_token(
+            (type(self), self.filename)
+        )

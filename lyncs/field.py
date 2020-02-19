@@ -208,14 +208,27 @@ class Field(Tunable):
         from .tunable import delayed
         from dask.array import from_delayed
         
-        def read_array(*args, **kwargs):
-            return from_delayed(*args, **kwargs)
-        
         io = file_manager(filename, format=format, field=self, **info)
-        self.array = delayed(read_array)(io.read(),
-                                         self.array_chunks,
-                                         dtype=self.dtype,
-                                         name=filename)
+        
+        def read_array(shape, chunks):
+            from dask.highlevelgraph import HighLevelGraph
+            from dask.array.core import normalize_chunks, Array
+            from itertools import product
+            
+            chunks = normalize_chunks(chunks, shape=shape)
+            chunks_id = list(product(*[range(len(bd)) for bd in chunks]))
+
+            reads = [io.read(chunk_id) for chunk_id in chunks_id]
+            
+            keys = [("read-chunk", *chunk_id) for chunk_id in chunks_id]
+            vals = [read.key for read in reads]
+            dsk = dict(zip(keys, vals))
+
+            graph = HighLevelGraph.from_collections(filename, dsk, dependencies=reads)
+
+            return Array(graph, filename, chunks, dtype=self.dtype)
+        
+        self.array = delayed(read_array)(self.array_shape, self.array_chunks)
         
 
     def save(
