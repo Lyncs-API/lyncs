@@ -205,11 +205,11 @@ class Field(Tunable):
         info: information needed to perform the reading.
         """
         from .io import file_manager
-        from .tunable import delayed, add_lyncs_methods
+        from .tunable import delayed
         from dask.array import from_delayed
         
         def read_array(*args, **kwargs):
-            return add_lyncs_methods(from_delayed(*args, **kwargs))
+            return from_delayed(*args, **kwargs)
         
         io = file_manager(filename, format=format, field=self, **info)
         self.array = delayed(read_array)(io.read(),
@@ -240,11 +240,11 @@ class Field(Tunable):
         """
         Initialize the field with zeros.
         """
-        from .tunable import delayed, add_lyncs_methods
+        from .tunable import delayed
         from dask.array import zeros
         
         def zero_array(*args, **kwargs):
-            return add_lyncs_methods(zeros(*args, **kwargs))
+            return zeros(*args, **kwargs)
         
         self.array = delayed(zero_array)(
             shape = self.array_shape,
