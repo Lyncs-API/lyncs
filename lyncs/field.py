@@ -189,17 +189,13 @@ class Field(Tunable):
         return self.size*self.dtype.itemsize
 
 
-    def tune(self):
-        return self.array.tune()
+    def compute(self, **kwargs):
+        self.tune(kwargs.pop("tune_kwargs",{}))
+        return self.array.compute(**kwargs)
 
 
-    def compute(self):
-        self.tune()
-        return self.array.compute()
-
-
-    def visualize(self):
-        return self.array.visualize()
+    def visualize(self, **kwargs):
+        return self.array.visualize(**kwargs)
 
         
     def load(
