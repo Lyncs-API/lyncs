@@ -57,7 +57,7 @@ def get_field_type(records):
     
 
 def get_shape_order(field_type):
-    shape_order = ['x', 'y', 'z', 't']
+    shape_order = ['t', 'z', 'y', 'x']
     
     if field_type == "gauge_links":
         shape_order.extend(['n_dims', 'color', 'color'])
