@@ -1,9 +1,10 @@
 """
-Implementation of load function for Lyncs.
+Several high-level function for creating a field.
 """
 
 __all__ = [
     'load',
+    'zeros_like',
 ]
 
 
@@ -46,3 +47,26 @@ def load(
     obj = deduce_type(filename, format=format, **kwargs)
     obj.load(filename, format=format, **kwargs)
     return obj
+
+
+def zeros_like(
+        field,
+        **kwargs,
+):
+    """
+    Creates a zero field with the same properties of the one given.
+
+    Parameters
+    ----------
+    field: (Field)
+       The field to take information from.
+    kwargs: (dict)
+       List of parameter to pass to the field. They may replace arguments of field.
+    """
+
+    from .field import Field
+    lattice = kwargs.pop("lattice", field.lattice)
+    field_type = kwargs.pop("field_type", field.field_type)
+    # TODO: should connect also the tunable paramters and the distibution order.
+    
+    return Field(lattice=lattice, field_type=field_type, **kwargs)
