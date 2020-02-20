@@ -47,7 +47,7 @@ class Field(Tunable):
         from .tunable import Permutation, ChunksOf
 
         tunable_options["shape_order"] = Permutation([v[0] for v in self.shape])
-        tunable_options["chunks"] = ChunksOf(self.shape)
+        tunable_options["chunks"] = ChunksOf(self.dims)
         
         Tunable.__init__(self, tunable_options=tunable_options, tuned_options=tuned_options, **kwargs)
         
