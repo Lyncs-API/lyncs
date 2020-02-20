@@ -187,7 +187,20 @@ class Field(Tunable):
         Returns the size of the field in bytes
         """
         return self.size*self.dtype.itemsize
-    
+
+
+    def tune(self):
+        return self.array.tune()
+
+
+    def compute(self):
+        self.tune()
+        return self.array.compute()
+
+
+    def visualize(self):
+        return self.array.visualize()
+
         
     def load(
             self,
