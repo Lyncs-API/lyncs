@@ -5,90 +5,9 @@ Extension of dask delayed with a tunable aware Delayed object.
 __all__ = [
     "delayed",
     "Tunable",
+    "tunable_property",
     "LyncsMethodsMixin",
 ]
-
-from dask.base import DaskMethodsMixin as LyncsMethodsMixin
-from .utils import add_parameters_to_doc
-
-# Here we monkey patch DaskMethodsMixin in order to make it tunable-aware
-LyncsMethodsMixin.__name__ = "LyncsMethodsMixin"
-
-def is_tunable(obj):
-    "Tells whether an object is tunable"
-    if isinstance(obj, (list, tuple)):
-        if len(obj) == 0: return False
-        else: return is_tunable(obj[0]) or is_tunable(obj[1:])
-    else:
-        return isinstance(obj, Tunable) and obj.tunable
-
-    
-def tune(self, **kwargs):
-    if not self.tunable: return
-
-    from dask.delayed import DelayedAttr
-    if isinstance(self, DelayedAttr) and \
-       isinstance(self.dask[self._obj.key], Tunable) and \
-       self._attr in self.dask[self._obj.key].tunable_options:
-        # Special case for tunable options
-        return self.dask[self._obj.key].tune(key=self._attr)
-
-    for key,val in self.tunable_items:
-        val.tune(**kwargs)
-    return self
-
-LyncsMethodsMixin.tune = tune
-
-
-@property
-def tunable(self):
-    return is_tunable(list(self.dask.values()))
-
-LyncsMethodsMixin.tunable = tunable
-
-
-@property
-def tunable_items(self):
-    return {key:val for key,val in self.dask.items() if is_tunable(val)}.items()
-
-LyncsMethodsMixin.tunable_items = tunable_items
-
-
-dask_compute = LyncsMethodsMixin.compute
-
-def compute(self, *args, tune=True, tune_kwargs={}, **kwargs):
-    if tune: self.tune(**tune_kwargs)
-    return dask_compute(self, *args, **kwargs)
-
-compute.__doc__ = add_parameters_to_doc(dask_compute.__doc__, """
-    tune: bool
-        Whether to perform tuning before computing.
-    tune_kwargs: dict
-        Kwargs that will be passed to the tune function.
-    """)
-
-LyncsMethodsMixin.compute = compute
-
-
-dask_visualize = LyncsMethodsMixin.visualize
-
-def visualize(self, *args, mark_tunable="red", **kwargs):
-    if mark_tunable:
-        kwargs["data_attributes"] = { k: {"color": mark_tunable,
-                                          "label": ", ".join(v.tunable_options.keys()),
-                                          "fontcolor": mark_tunable,
-                                          "fontsize": "12",
-                                         }
-                                      for k,v in self.tunable_items if isinstance(v,Tunable) }
-    return dask_visualize(self, *args, **kwargs)
-
-visualize.__doc__ = add_parameters_to_doc(dask_visualize.__doc__, """
-    mark_tunable: color
-        Marks the tunable object with the given color. Skips if None.
-    """)
-
-LyncsMethodsMixin.visualize = visualize
-
 
 from dask.delayed import delayed as dask_delayed
 
@@ -98,7 +17,8 @@ def delayed(*args,**kwargs):
 
 delayed.__doc__ = dask_delayed.__doc__
 
-    
+
+raise_not_tuned = False
 class NotTuned(Exception):
     pass
 
@@ -112,7 +32,6 @@ class Tunable:
         "_tunable_options",
         "_tuned_options",
         "_tuning",
-        "_raise_not_tuned",
     ]
     
     def __init__(
@@ -172,9 +91,13 @@ class Tunable:
     def add_tunable_option(self, key, val):
         "Adds a tunable option where key is the name and val is the default value."
         assert key not in self.tunable_options, "A tunable options with the given name already exist."
-        assert key not in self.tuned_options, "A tuned options with the given name already exist."
-            
-        self._tunable_options[key] = val if isinstance(val, TunableOption) else TunableOption(val)
+
+        val = val if isinstance(val, TunableOption) else TunableOption(val)
+        
+        if key in self.tuned_options:
+            assert val.compatible(self.tuned_options[key]), "A tuned options with the given name already exist and it is not compatible."
+        else:
+            self._tunable_options[key] = val
 
 
     def add_tuned_option(self, key, val):
@@ -227,7 +150,8 @@ class Tunable:
     def __getattr__(self, key):
         if key not in Tunable.__slots__ and (key in self.tunable_options or key in self.tuned_options):
             if key in self.tunable_options:
-                if self._raise_not_tuned:
+                global raise_not_tuned
+                if raise_not_tuned:
                     raise NotTuned
                 else:
                     return getattr(delayed(self),key)
@@ -260,13 +184,14 @@ class Tunable:
 class tunable_property(property):
     def __init__(self,func):
         def getter(cls):
-            cls._raise_not_tuned = True
+            global raise_not_tuned
+            raise_not_tuned = True
             try:
                 return func(cls)
             except NotTuned:
                 return delayed(getter)(delayed(cls))
             finally:
-                cls._raise_not_tuned = False
+                raise_not_tuned = False
         getter.__name__=func.__name__
         super().__init__(getter)
             
@@ -331,3 +256,94 @@ class ChunksOf(TunableOption):
         # Here we ask for uniform distribution. Consider to allow for not uniform
         return all(key in shape and val<=shape[key] and shape[key]%val == 0 for key,val in chunks.get().items())
     
+
+# In the following we monkey patch DaskMethodsMixin in order to make it tunable-aware
+
+from dask.base import DaskMethodsMixin as LyncsMethodsMixin
+from .utils import add_parameters_to_doc
+
+
+LyncsMethodsMixin.__name__ = "LyncsMethodsMixin"
+
+
+def _is_tunable(obj):
+    "Tells whether an object is tunable"
+    if isinstance(obj, (list, tuple)):
+        if len(obj) == 0: return False
+        else: return _is_tunable(obj[0]) or _is_tunable(obj[1:])
+    else:
+        return isinstance(obj, Tunable) and obj.tunable
+
+
+    
+def tune(self, **kwargs):
+    if not self.tunable: return
+
+    from dask.delayed import DelayedAttr
+    if isinstance(self, DelayedAttr) and \
+       isinstance(self.dask[self._obj.key], Tunable) and \
+       self._attr in self.dask[self._obj.key].tunable_options:
+        # Special case for tunable options
+        return self.dask[self._obj.key].tune(key=self._attr)
+
+    for key,val in self.tunable_items:
+        val.tune(**kwargs)
+    return self
+
+LyncsMethodsMixin.tune = tune
+
+
+
+@property
+def tunable(self):
+    return _is_tunable(list(self.dask.values()))
+
+LyncsMethodsMixin.tunable = tunable
+
+
+
+@property
+def tunable_items(self):
+    return {key:val for key,val in self.dask.items() if _is_tunable(val)}.items()
+
+LyncsMethodsMixin.tunable_items = tunable_items
+
+
+# In compute, we tune and then compute
+
+dask_compute = LyncsMethodsMixin.compute
+
+def compute(self, *args, tune=True, tune_kwargs={}, **kwargs):
+    if tune: self.tune(**tune_kwargs)
+    return dask_compute(self, *args, **kwargs)
+
+compute.__doc__ = add_parameters_to_doc(dask_compute.__doc__, """
+    tune: bool
+        Whether to perform tuning before computing.
+    tune_kwargs: dict
+        Kwargs that will be passed to the tune function.
+    """)
+
+LyncsMethodsMixin.compute = compute
+
+
+# In visualize, we mark in red tunable objects
+
+dask_visualize = LyncsMethodsMixin.visualize
+
+def visualize(self, *args, mark_tunable="red", **kwargs):
+    if mark_tunable:
+        kwargs["data_attributes"] = { k: {"color": mark_tunable,
+                                          "label": ", ".join(v.tunable_options.keys()),
+                                          "fontcolor": mark_tunable,
+                                          "fontsize": "12",
+                                         }
+                                      for k,v in self.tunable_items if isinstance(v,Tunable) }
+    return dask_visualize(self, *args, **kwargs)
+
+visualize.__doc__ = add_parameters_to_doc(dask_visualize.__doc__, """
+    mark_tunable: color
+        Marks the tunable object with the given color. Skips if None.
+    """)
+
+LyncsMethodsMixin.visualize = visualize
