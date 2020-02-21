@@ -56,16 +56,19 @@ def get_field_type(records):
         assert False, "To be implemented"
     
 
-def get_shape_order(field_type):
-    shape_order = ['t', 'z', 'y', 'x']
+def get_fixed_options(field_type):
+    opts = {}
+    dims_order = ['t', 'z', 'y', 'x']
     
     if field_type == "gauge_links":
-        shape_order.extend(['n_dims', 'color', 'color'])
+        opts["dirs_order"] = dims_order
+        opts["shape_order"] = dims_order + ['n_dims', 'color', 'color']
+        opts["color_order"] = "row_major"
     else:
         # TODO
         assert False, "To be implemented"
         
-    return shape_order
+    return opts
     
 
 def get_type(filename, lattice=None, field_type=None, **kwargs):
@@ -101,7 +104,7 @@ def get_type(filename, lattice=None, field_type=None, **kwargs):
     field = Field(
         lattice=lattice,
         field_type=field_type,
-        shape_order = get_shape_order(field_type),
+        tuned_options = get_fixed_options(field_type),
     )
     
     assert field.byte_size == records["ildg-binary-data"], """
