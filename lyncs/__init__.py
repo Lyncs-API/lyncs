@@ -6,7 +6,7 @@ from . import io
 
 from .lattice import *
 from .field import *
-from .load import *
+from .creation import *
 
 
 if config.mpi_enabled:

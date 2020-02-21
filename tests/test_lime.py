@@ -7,7 +7,7 @@ def test_read_config():
     assert conf.size == 4**4*4*3*3
 
     # without distribution
-    conf.chunks = conf.shape
+    conf.chunks = conf.dims
     reference = conf.compute()
     assert reference.shape == conf.array_shape
 
@@ -16,7 +16,7 @@ def test_read_config():
     for chunk in chunks:
         chunk = dict(zip(['t','z','y','x'],chunk))
         conf = lyncs.load(conf_path)
-        conf.chunks = conf.shape
+        conf.chunks = chunk
         read = conf.compute()
         assert numpy.all(read==reference)
     

@@ -78,12 +78,12 @@ class Field(Tunable):
 
     @property
     def dims(self):
-        return [key for key,size in self.shape if key in self.lattice.dims]
+        return {key:size for key,size in self.shape if key in self.lattice.dims}
 
     
     @property
     def dofs(self):
-        return [key for key,size in self.shape if key in self.lattice.dofs]
+        return {key:size for key,size in self.shape if key in self.lattice.dofs}
     
     
     @property
@@ -190,7 +190,7 @@ class Field(Tunable):
 
 
     def compute(self, **kwargs):
-        self.tune(kwargs.pop("tune_kwargs",{}))
+        self.tune(**kwargs.pop("tune_kwargs",{}))
         return self.array.compute(**kwargs)
 
 
