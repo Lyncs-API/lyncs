@@ -18,6 +18,7 @@ class Field(Tunable):
             field_type = None,
             tunable_options = {},
             tuned_options = {},
+            labels = {},
             **kwargs
     ):
         """
@@ -41,6 +42,7 @@ class Field(Tunable):
         tuned_options: dict
            Same as tunable options but with a fixed value.
         """
+        self._labels={}
         self.lattice = lattice or array.lattice
         self.field_type = field_type or array.field_type
         
@@ -49,10 +51,26 @@ class Field(Tunable):
         tunable_options["shape_order"] = Permutation([v[0] for v in self.shape])
         tunable_options["chunks"] = ChunksOf(self.dims)
         
-        Tunable.__init__(self, tunable_options=tunable_options, tuned_options=tuned_options, **kwargs)
-        
-        self.array = array
+        Tunable.__init__(self, tunable_options=tunable_options, tuned_options=tuned_options)
 
+
+        from importlib import import_module
+        for name in self.dimensions:
+            try:
+                module = import_module(".fields.%s"%name, package="lyncs")
+                for attr in module.__all__:
+                    val = getattr(module, attr)
+                    if attr == "__init__":
+                        val(self, **kwargs)
+                    else:
+                        setattr(self, attr, val)
+            except ModuleNotFoundError:
+                pass
+
+        for label, coords in labels.items(): self.label(label, **coords)
+            
+        self.array = array
+        
 
     @property
     def lattice(self):
@@ -84,8 +102,35 @@ class Field(Tunable):
     @property
     def dofs(self):
         return {key:size for key,size in self.shape if key in self.lattice.dofs}
-    
-    
+
+
+    @property
+    def dimensions(self):
+        dims = set()
+        
+        def add(key):
+            if isinstance(key, (list, tuple, dict)):
+                for k in key: add(k)
+            elif isinstance(key, str):
+                dims.add(key)
+                if key in self.lattice.__dir__(): add(self.lattice[key])
+                elif key in self._field_types: add(self._field_types[key])
+                    
+        add(self.field_type)
+
+        def expand(prop):
+            if isinstance(prop, str):
+                if isinstance(self.lattice[prop], int):
+                    return prop
+                else:
+                    return " ".join([expand(key) for key in self.lattice[prop]])
+                    
+        for prop in self.lattice.properties:
+            names = expand(prop).split()
+            if set(names).issubset(dims): dims.add(prop)
+            
+        return dims
+                
     @property
     def field_type(self):
         try:
@@ -188,6 +233,32 @@ class Field(Tunable):
         """
         return self.size*self.dtype.itemsize
 
+
+    @property
+    def labels(self):
+        return self._labels
+    
+
+    def label(self, name, **coords):
+        """
+        Labels a given set of values of the coordinate space.
+        Labels are accessible via __getitem__.
+
+        E.g.
+        
+        field.label("source", x=0, y=0, z=0, t=0)
+        dofs = field["source"]
+        
+        Parameters
+        ----------
+        name: (str)
+           Name of the label.
+        coords: (dict)
+           The coordinate of a subset of dimensions.
+        """
+        assert all([key in self.dimensions for key in coords]), "Some of the dimensions are not known"
+        self._labels[name] = coords
+        
 
     def compute(self, **kwargs):
         self.tune(**kwargs.pop("tune_kwargs",{}))
