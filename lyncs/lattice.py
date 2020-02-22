@@ -176,6 +176,9 @@ class Lattice:
         o.update(attr for attr in self.dofs)
         o.update(attr for attr in self.properties)
         return sorted(o)
+
+    def __contains__(self, key):
+        return key in self.dims or key in self.dofs or key in self.properties
     
     def __getitem__(self, key):
         try:
