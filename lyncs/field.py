@@ -53,7 +53,6 @@ class Field(Tunable):
         
         Tunable.__init__(self, tunable_options=tunable_options, tuned_options=tuned_options)
 
-
         from importlib import import_module
         for name in self.dimensions:
             try:
@@ -104,6 +103,20 @@ class Field(Tunable):
         return {key:size for key,size in self.shape if key in self.lattice.dofs}
 
 
+    def _expand(self, prop):
+        "Expands a lattice/field property into the fundamental dimensions"
+        def __expand(prop):
+            if prop in self.lattice and isinstance(self.lattice[prop], int):
+                return prop
+            else:
+                if prop in self.lattice:
+                    return " ".join([__expand(key) for key in self.lattice[prop]])
+                else:
+                    return " ".join([__expand(key) for key in self._field_types[prop]])
+                
+        return __expand(prop).split()
+    
+    
     @property
     def dimensions(self):
         dims = set()
@@ -113,24 +126,18 @@ class Field(Tunable):
                 for k in key: add(k)
             elif isinstance(key, str):
                 dims.add(key)
-                if key in self.lattice.__dir__(): add(self.lattice[key])
+                if key in self.lattice: add(self.lattice[key])
                 elif key in self._field_types: add(self._field_types[key])
                     
         add(self.field_type)
-
-        def expand(prop):
-            if isinstance(prop, str):
-                if isinstance(self.lattice[prop], int):
-                    return prop
-                else:
-                    return " ".join([expand(key) for key in self.lattice[prop]])
-                    
+        
         for prop in self.lattice.properties:
-            names = expand(prop).split()
+            names = self._expand(prop)
             if set(names).issubset(dims): dims.add(prop)
             
         return dims
-                
+    
+    
     @property
     def field_type(self):
         try:
@@ -234,6 +241,13 @@ class Field(Tunable):
         return self.size*self.dtype.itemsize
 
 
+    def get(self, **coords):
+        assert all([key in self.dimensions for key in coords]), "Unknown dimesion %s" % coords
+        
+        pass
+    
+        
+
     @property
     def labels(self):
         return self._labels
@@ -241,7 +255,7 @@ class Field(Tunable):
 
     def label(self, name, **coords):
         """
-        Labels a given set of values of the coordinate space.
+        Labels a given set of coordinates.
         Labels are accessible via __getitem__.
 
         E.g.
@@ -359,3 +373,14 @@ class Field(Tunable):
         return normalize_token(
             (type(self), self.lattice, self.field_type, self._unique_id)
         )
+
+    
+    def __getitem__(self, *labels):
+        assert all([label in self.labels for label in labels]), "Unknown label"
+        coords = {}
+        for label in labels:
+            coord = self._labels[label]
+            assert all([key not in coords or coords[key]==val for key, val in coord])
+            coords.update(coord)
+            
+        return self.get(**coords)
