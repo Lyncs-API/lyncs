@@ -6,19 +6,19 @@ class Field(Tunable):
         "scalar": ["dims"],
         "vector": ["dims", "dofs"],
         "propagator": ["vector", "dofs"],
-        "gauge": ["dims", "gauge_dofs", "gauge_dofs"],
-        "gauge_links": ["gauge", "n_dims"],
+        "gauge_links": ["dims", "n_dims", "gauge_dofs", "gauge_dofs"],
         }
-    
+    _default_field_type = "vector"
     
     def __init__(
             self,
             array = None,
             lattice = None,
             field_type = None,
+            coords = {},
+            labels = {},
             tunable_options = {},
             tuned_options = {},
-            labels = {},
             **kwargs
     ):
         """
@@ -29,22 +29,43 @@ class Field(Tunable):
         array : array_like
             Values for this field. Must be an ``numpy.ndarray``, ndarray like,
             or castable to an ``ndarray``. A view of the array's data is used
-            instead of a copy if possible. If instead it is alreadt a field 
-            object, then a copy of the field is made.
+            instead of a copy if possible. If instead it is a field object,
+            then a copy of the field is made with appropriate transformations
+            induced by the given parameters.
+            E.g. 
+            Field(array=field, coords={'x':0}) selects values at x=0
+            Field(array=field, shape_order=[...]) changes the shape_order if needed.
+            etc...
         lattice: Lattice object.
             The lattice on which the field is defined.
         field_type: str or list(str).
           --> If str, then must be one of the labeled field types. See Field._field_types
           --> If list, then a list of variables of lattice.
+        coords: dict, str or list of str
+           Coordinates of the field, i.e. range of values for any of the dimensions.
+           It can be integer, range, slice or None. If None then is a reduced global field.
+           It can be also one or a list of labels.
+        labels: dict
+           Dictionary of labeled coordinates of the field, e.g. "source": dict(x=0, y=0, z=0, t=0)
         tunable_options: dict
            List of tunable parameters with default values.
            Tunable options are attributes of the field and can be used to condition the computation. 
         tuned_options: dict
            Same as tunable options but with a fixed value.
+        kwargs: dict
+           Extra paramters that will be passed to the child classes of the field during initialization.
         """
-        self._labels={}
-        self.lattice = lattice or array.lattice
-        self.field_type = field_type or array.field_type
+        from .lattice import default_lattice
+        
+        self.lattice = lattice or (array.lattice if isinstance(array, Field) else default_lattice())
+        
+        self.field_type = field_type or (array.field_type if isinstance(array, Field) else Field._default_field_type)
+        
+        if isinstance(array, Field): self.labels = array.labels
+        self.labels = labels
+        
+        if isinstance(array, Field): self.coords = array.coords
+        self.coords = coords
         
         from .tunable import Permutation, ChunksOf
 
@@ -66,7 +87,6 @@ class Field(Tunable):
             except ModuleNotFoundError:
                 pass
 
-        for label, coords in labels.items(): self.label(label, **coords)
             
         self.array = array
         
@@ -161,6 +181,32 @@ class Field(Tunable):
 
 
     @property
+    def coords(self):
+        try:
+            return self._given_coords
+        except AttributeError:
+            return {}
+
+    @coords.setter
+    def coords(self, coords):
+        coords = coords.copy()
+        for key, val in self.coords:
+            assert key not in coords or coords[key]==val, "Cannot change value of fixed coordinate %s" % key
+            coords[key] = val
+            
+        _coords = {}
+        for key, val in coords.items():
+            assert key in self.dimensions, "Unknown dimesion %s" % key
+            dims = self._expand(key)
+            for dim in dims:
+                assert dim not in _coords or _coords[dim]==val, "Setting multiple time the same dimension"
+                _coords[dim]=val
+                
+        self._coords = _coords
+        self._given_coords = coords
+
+
+    @property
     def array(self):
         try:
             from dask.array import Array
@@ -239,19 +285,23 @@ class Field(Tunable):
         Returns the size of the field in bytes
         """
         return self.size*self.dtype.itemsize
-
-
-    def get(self, **coords):
-        assert all([key in self.dimensions for key in coords]), "Unknown dimesion %s" % coords
-        
-        pass
     
-        
-
+    
+    def get(self, **coords):
+        return Field(array=self, coords=coords)
+    
+    
     @property
     def labels(self):
-        return self._labels
-    
+        try:
+            return self._labels
+        except AttributeError:
+            return {}
+
+    @labels.setter
+    def labels(self, labels):
+        for label, coords in labels.items():
+            self.label(label, **coords)
 
     def label(self, name, **coords):
         """
@@ -270,6 +320,7 @@ class Field(Tunable):
         coords: (dict)
            The coordinate of a subset of dimensions.
         """
+        if not hasattr(self, "_labels"): self._labels={}
         assert all([key in self.dimensions for key in coords]), "Some of the dimensions are not known"
         self._labels[name] = coords
         
