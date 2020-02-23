@@ -9,7 +9,7 @@ def test_read_config():
     # without distribution
     conf.chunks = conf.dims
     reference = conf.compute()
-    assert reference.shape == conf.array_shape
+    assert reference.shape == conf.field_shape
 
     from itertools import product
     chunks = product(*[[1,2,4]]*4)

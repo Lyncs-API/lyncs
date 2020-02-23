@@ -12,7 +12,7 @@ class Field(Tunable):
     
     def __init__(
             self,
-            array = None,
+            field = None,
             lattice = None,
             field_type = None,
             coords = {},
@@ -26,15 +26,15 @@ class Field(Tunable):
         
         Parameters
         ----------
-        array : array_like
+        field : array_like or Field
             Values for this field. Must be an ``numpy.ndarray``, ndarray like,
             or castable to an ``ndarray``. A view of the array's data is used
             instead of a copy if possible. If instead it is a field object,
             then a copy of the field is made with appropriate transformations
             induced by the given parameters.
             E.g. 
-            Field(array=field, coords={'x':0}) selects values at x=0
-            Field(array=field, shape_order=[...]) changes the shape_order if needed.
+            Field(field=field, coords={'x':0}) selects values at x=0
+            Field(field=field, shape_order=[...]) changes the shape_order if needed.
             etc...
         lattice: Lattice object.
             The lattice on which the field is defined.
@@ -57,14 +57,14 @@ class Field(Tunable):
         """
         from .lattice import default_lattice
         
-        self.lattice = lattice or (array.lattice if isinstance(array, Field) else default_lattice())
+        self.lattice = lattice or (field.lattice if isinstance(field, Field) else default_lattice())
         
-        self.field_type = field_type or (array.field_type if isinstance(array, Field) else Field._default_field_type)
+        self.field_type = field_type or (field.field_type if isinstance(field, Field) else Field._default_field_type)
         
-        if isinstance(array, Field): self.labels = array.labels
+        if isinstance(field, Field): self.labels = field.labels
         self.labels = labels
         
-        if isinstance(array, Field): self.coords = array.coords
+        if isinstance(field, Field): self.coords = field.coords
         self.coords = coords
         
         from .tunable import Permutation, ChunksOf
@@ -88,7 +88,7 @@ class Field(Tunable):
                 pass
 
             
-        self.array = array
+        self.field = field
         
 
     @property
@@ -207,25 +207,25 @@ class Field(Tunable):
 
 
     @property
-    def array(self):
+    def field(self):
         try:
             from dask.array import Array
             from .tunable import LyncsMethodsMixin
-            if not isinstance(self._array, Array) and isinstance(self._array, LyncsMethodsMixin):
+            if not isinstance(self._field, Array) and isinstance(self._field, LyncsMethodsMixin):
                 try:
-                    self._array = self._array.compute(tune=False)
+                    self._field = self._field.compute(tune=False)
                 except:
                     pass
-            return self._array
+            return self._field
         except AttributeError:
             return None
 
-    @array.setter
-    def array(self, value):
+    @field.setter
+    def field(self, value):
         if value is None:
             self.zeros()
         else:
-            self._array = value
+            self._field = value
 
 
     @property
@@ -260,12 +260,12 @@ class Field(Tunable):
 
 
     @tunable_property
-    def array_shape(self):
+    def field_shape(self):
         return tuple(self.lattice[key] for key in self.shape_order)
 
 
     @tunable_property
-    def array_chunks(self):
+    def field_chunks(self):
         return tuple(self.chunks[key] if key in self.chunks else self.lattice[key] for key in self.shape_order)
         
 
@@ -288,7 +288,7 @@ class Field(Tunable):
     
     
     def get(self, **coords):
-        return Field(array=self, coords=coords)
+        return Field(field=self, coords=coords)
     
     
     @property
@@ -327,11 +327,11 @@ class Field(Tunable):
 
     def compute(self, **kwargs):
         self.tune(**kwargs.pop("tune_kwargs",{}))
-        return self.array.compute(**kwargs)
+        return self.field.compute(**kwargs)
 
 
     def visualize(self, **kwargs):
-        return self.array.visualize(**kwargs)
+        return self.field.visualize(**kwargs)
 
         
     def load(
@@ -355,7 +355,7 @@ class Field(Tunable):
         
         io = file_manager(filename, format=format, field=self, **info)
         
-        def read_array(shape, chunks):
+        def read_field(shape, chunks):
             from dask.highlevelgraph import HighLevelGraph
             from dask.array.core import normalize_chunks, Array
             from itertools import product
@@ -373,7 +373,7 @@ class Field(Tunable):
 
             return Array(graph, filename, chunks, dtype=self.dtype)
         
-        self.array = delayed(read_array)(self.array_shape, self.array_chunks)
+        self.field = delayed(read_field)(self.field_shape, self.field_chunks)
         
 
     def save(
@@ -401,12 +401,12 @@ class Field(Tunable):
         from .tunable import delayed
         from dask.array import zeros
         
-        def zero_array(*args, **kwargs):
+        def zero_field(*args, **kwargs):
             return zeros(*args, **kwargs)
         
-        self.array = delayed(zero_array)(
-            shape = self.array_shape,
-            chunks = self.array_chunks,
+        self.field = delayed(zero_field)(
+            shape = self.field_shape,
+            chunks = self.field_chunks,
             dtype = self.dtype,
         )
 

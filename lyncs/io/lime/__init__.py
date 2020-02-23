@@ -135,9 +135,9 @@ class file_manager(Tunable):
     
     def read(self, chunk_id=None):
         return delayed(self.engine.read)(self.filename,
-                                         shape=self.field.array_shape,
+                                         shape=self.field.field_shape,
                                          dtype=self.field.dtype,
-                                         chunks=self.field.array_chunks,
+                                         chunks=self.field.field_chunks,
                                          chunk_id=chunk_id)
 
     
