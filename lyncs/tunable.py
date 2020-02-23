@@ -101,7 +101,7 @@ class Tunable:
 
 
     def add_tuned_option(self, key, val):
-        "Adds a tunde option where key is the name and val is the value."
+        "Adds a tuned option where key is the name and val is the value."
         assert key not in self.tuned_options, "A tuned options with the given name already exist."
         
         if key in self.tunable_options:
@@ -109,8 +109,13 @@ class Tunable:
         else:
             self._tuned_options[key] = val
 
-        
 
+    def add_option(self, key, val):
+        "Adds a tunable/tuned option (accordingly to val) where key is the name and val is the value."
+        if isinstance(val, TunableOption): self.add_tunable_options(key, val)
+        else: self.add_tuned_option(key, val)
+
+        
     def tune(self, key=None, **kwargs):
         """
         Tunes a tunable option.

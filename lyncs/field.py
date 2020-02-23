@@ -5,7 +5,7 @@ class Field(Tunable):
     _field_types = {
         "scalar": ["dims"],
         "vector": ["dims", "dofs"],
-        "propagator": ["vector", "dofs"],
+        "propagator": ["dims", "dofs", "dofs"],
         "gauge_links": ["dims", "n_dims", "gauge_dofs", "gauge_dofs"],
         }
     _default_field_type = "vector"
@@ -69,11 +69,13 @@ class Field(Tunable):
         
         from .tunable import Permutation, ChunksOf
 
+        # TODO: if field is a Field, then we should link here to its tunable.
         tunable_options["shape_order"] = Permutation([v[0] for v in self.shape])
         tunable_options["chunks"] = ChunksOf(self.dims)
         
         Tunable.__init__(self, tunable_options=tunable_options, tuned_options=tuned_options)
 
+        # Loading dynamically methods and attributed from the field types in fields
         from importlib import import_module
         for name in self.dimensions:
             try:
@@ -87,6 +89,9 @@ class Field(Tunable):
             except ModuleNotFoundError:
                 pass
 
+        # Considering the remaining kwargs as tunable options
+        for key, val in kwargs:
+            self.add_option(key,val)
             
         self.field = field
         
