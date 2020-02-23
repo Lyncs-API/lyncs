@@ -1,6 +1,13 @@
 __all__ = [
+    'default_lattice',
     'Lattice',
 ]
+
+_last_lattice = None
+def default_lattice():
+    assert _last_lattice is not None, "Any lattice has been defined yet."
+    return _last_lattice
+
 
 class Lattice:
     """
@@ -53,6 +60,9 @@ class Lattice:
         self.dofs = dofs
         self.dtype = dtype
         self.properties = properties
+
+        global _last_lattice
+        _last_lattice = self
 
     @property
     def dims(self):
@@ -178,7 +188,7 @@ class Lattice:
         return sorted(o)
 
     def __contains__(self, key):
-        return key in self.dims or key in self.dofs or key in self.properties
+        return key in ["dims", "dofs"] or key in self.dims or key in self.dofs or key in self.properties
     
     def __getitem__(self, key):
         try:
