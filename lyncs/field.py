@@ -1,7 +1,13 @@
+__all__ = [
+    "Field",
+]
 
 from .tunable import Tunable, tunable_property
+from .field_methods import FieldMethods
+from functools import wraps
+from .tunable import visualize, compute
 
-class Field(Tunable):
+class Field(Tunable, FieldMethods):
     _field_types = {
         "scalar": ["dims"],
         "vector": ["dims", "dofs"],
@@ -368,11 +374,13 @@ class Field(Tunable):
         self._labels[name] = coords
         
 
+    @wraps(compute)
     def compute(self, **kwargs):
         self.tune(**kwargs.pop("tune_kwargs",{}))
         return self.field.compute(**kwargs)
 
 
+    @wraps(visualize)
     def visualize(self, **kwargs):
         return self.field.visualize(**kwargs)
 
