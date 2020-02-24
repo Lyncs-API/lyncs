@@ -4,12 +4,15 @@ Extension of dask delayed with a tunable aware Delayed object.
 
 __all__ = [
     "delayed",
+    "Delayed",
+    "RaiseNotTuned",
     "Tunable",
     "tunable_property",
     "LyncsMethodsMixin",
 ]
 
 from dask.delayed import delayed as dask_delayed
+from dask.delayed import Delayed
 
 def delayed(*args,**kwargs):
     kwargs.setdefault("pure", True)
@@ -18,9 +21,31 @@ def delayed(*args,**kwargs):
 delayed.__doc__ = dask_delayed.__doc__
 
 
-raise_not_tuned = False
 class NotTuned(Exception):
     pass
+
+    
+raise_not_tuned = False
+not_tuned_error = NotTuned
+
+class RaiseNotTuned:
+    def __init__(self, *args, **kwargs):
+        self.error = NotTuned(*args, **kwargs)
+    
+    def __enter__(self):
+        global raise_not_tuned, not_tuned_error
+        raise_not_tuned = True
+        tmp = not_tuned_error
+        not_tuned_error = self.error
+        self.error = not_tuned_error
+        return type(not_tuned_error)
+
+    def __exit__(self, type, value, traceback):
+        global raise_not_tuned, not_tuned_error
+        raise_not_tuned = False
+        tmp = not_tuned_error
+        not_tuned_error = self.error
+        self.error = not_tuned_error
 
     
 class Tunable:
@@ -157,7 +182,7 @@ class Tunable:
             if key in self.tunable_options:
                 global raise_not_tuned
                 if raise_not_tuned:
-                    raise NotTuned
+                    raise not_tuned_error
                 else:
                     return getattr(delayed(self),key)
                 
@@ -189,14 +214,11 @@ class Tunable:
 class tunable_property(property):
     def __init__(self,func):
         def getter(cls):
-            global raise_not_tuned
-            raise_not_tuned = True
-            try:
-                return func(cls)
-            except NotTuned:
-                return delayed(getter)(delayed(cls))
-            finally:
-                raise_not_tuned = False
+            with RaiseNotTuned("In tunable property") as err:
+                try:
+                    return func(cls)
+                except err:
+                    return delayed(getter)(delayed(cls))
         getter.__name__=func.__name__
         super().__init__(getter)
             
