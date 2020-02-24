@@ -67,13 +67,16 @@ class Field(Tunable):
         if isinstance(field, Field): self.coords = field.coords
         self.coords = coords
         
-        from .tunable import Permutation, ChunksOf
-
-        # TODO: if field is a Field, then we should link here to its tunable.
-        tunable_options["shape_order"] = Permutation([v[0] for v in self.shape])
-        tunable_options["chunks"] = ChunksOf(self.dims)
-        
-        Tunable.__init__(self, tunable_options=tunable_options, tuned_options=tuned_options)
+        if isinstance(field, Field):
+            self._tunable_options = field._tunable_options
+            self._tuned_options = field._tuned_options
+        else:
+            from .tunable import Permutation, ChunksOf
+            
+            tunable_options["shape_order"] = Permutation([key for key,val in self.shape])
+            tunable_options["chunks"] = ChunksOf(self.dims)
+            
+            Tunable.__init__(self, tunable_options=tunable_options, tuned_options=tuned_options)
 
         # Loading dynamically methods and attributed from the field types in fields
         from importlib import import_module
@@ -194,8 +197,11 @@ class Field(Tunable):
 
     @coords.setter
     def coords(self, coords):
+        from .tunable import Delayed, RaiseNotTuned
+        import numpy as np
+        
         coords = coords.copy()
-        for key, val in self.coords:
+        for key, val in self.coords.items():
             assert key not in coords or coords[key]==val, "Cannot change value of fixed coordinate %s" % key
             coords[key] = val
             
@@ -205,6 +211,12 @@ class Field(Tunable):
             dims = self._expand(key)
             for dim in dims:
                 assert dim not in _coords or _coords[dim]==val, "Setting multiple time the same dimension"
+                
+                try:
+                    assert len(list(val)) > 0, "Empty list not allowed"
+                except TypeError:
+                    val = [val]
+
                 _coords[dim]=val
                 
         self._coords = _coords
@@ -227,10 +239,32 @@ class Field(Tunable):
 
     @field.setter
     def field(self, value):
+        from .tunable import Delayed, tunable_property
+        
         if value is None:
             self.zeros()
-        else:
+            
+        elif isinstance(value, Field):
+            self._field = value.field
+            
+            if self.coords != value.coords:
+                field_coords = value._coords if hasattr(value, "_coords") else {}
+                coords = {key:val for key,val in self._coords.items() if key not in field_coords}
+
+                @tunable_property
+                def mask(self):
+                    mask = [slice(None) for i in self.shape]
+                    for key,val in coords.items():
+                        mask[self.shape_order.index(key)] = val
+                    return tuple(mask)
+                
+                self._field = self._field[get_mask(value)]
+                
+        elif isinstance(value, Delayed):
             self._field = value
+        else:
+            # TODO specialize
+            assert False, "Not implemented yet"
 
 
     @property
@@ -255,6 +289,8 @@ class Field(Tunable):
                 else:
                     assert False, "Unknown attribute %s"%key
                 if isinstance(value, int):
+                    if key in self._coords:
+                        value = len(self._coords[key])
                     return [(key, value)]
                 else:
                     return get_shape(self,value)
@@ -266,12 +302,14 @@ class Field(Tunable):
 
     @tunable_property
     def field_shape(self):
-        return tuple(self.lattice[key] for key in self.shape_order)
+        shape = {key:val for key,val in self.shape}
+        return tuple(shape[key] for key in self.shape_order)
 
 
     @tunable_property
     def field_chunks(self):
-        return tuple(self.chunks[key] if key in self.chunks else self.lattice[key] for key in self.shape_order)
+        shape = {key:val for key,val in self.shape}
+        return tuple(self.chunks[key] if key in self.chunks else shape[key] for key in self.shape_order)
         
 
     @property
@@ -436,7 +474,7 @@ class Field(Tunable):
         coords = {}
         for label in labels:
             coord = self._labels[label]
-            assert all([key not in coords or coords[key]==val for key, val in coord])
+            assert all([key not in coords or coords[key]==val for key, val in coord.items()])
             coords.update(coord)
             
         return self.get(**coords)
