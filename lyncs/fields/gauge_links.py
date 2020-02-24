@@ -11,11 +11,12 @@ __all__ = [
 def __init__(self, **kwargs):
     
     from ..tunable import Permutation
-    
-    self.add_tunable_option("dirs_order", Permutation(list(self.dims.keys())))
+
+    if "dirs_order" not in self.tunable_options:
+        self.add_tunable_option("dirs_order", Permutation(list(self.dims.keys())))
 
     for dir in self.dims.keys():
-        self.label(dir, n_dims=self.dirs_order.index(dir))
+        self.label(dir, n_dims=[self.dirs_order.index(dir)])
     
 
 
