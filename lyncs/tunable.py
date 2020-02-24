@@ -210,6 +210,9 @@ class tunable_property(property):
         getter.__name__=func.__name__
         super().__init__(getter)
 
+    def __call__(self, cls):
+        return self.fget(cls)
+
 
 class TunableOption:
     "Base class for tunable options"
