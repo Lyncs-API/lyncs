@@ -56,7 +56,6 @@ class Tunable:
     __slots__ = [
         "_tunable_options",
         "_tuned_options",
-        "_tuning",
     ]
     
     def __init__(
@@ -67,7 +66,6 @@ class Tunable:
     ):
         self._tunable_options = {}
         self._tuned_options = {}
-        self._tuning = False
         
         for key,val in tunable_options.items():
             self.add_tunable_option(key,val)
@@ -92,11 +90,6 @@ class Tunable:
         return not self.tunable
 
 
-    @property
-    def tuning(self):
-        return self._tuning
-
-    
     @property
     def tunable_options(self):
         if hasattr(self, "_tunable_options"):
@@ -163,17 +156,12 @@ class Tunable:
 
         assert key in self.tunable_options, "Option %s not found" % key
 
-        self._tuning = True
-        try:
-            callback = kwargs.get("callback", None)
-            if callback is not None:
-                setattr(self, key, callback(key=key,value=value,**kwargs))
-            else:
-                setattr(self, key, self.tunable_options[key].get())
+        callback = kwargs.get("callback", None)
+        if callback is not None:
+            setattr(self, key, callback(key=key,value=value,**kwargs))
+        else:
+            setattr(self, key, self.tunable_options[key].get())
             
-        except:
-            self._tuning = False
-            raise
         return self.tuned_options[key]
 
         
@@ -221,7 +209,7 @@ class tunable_property(property):
                     return delayed(getter)(delayed(cls))
         getter.__name__=func.__name__
         super().__init__(getter)
-            
+
 
 class TunableOption:
     "Base class for tunable options"
