@@ -188,7 +188,7 @@ class Lattice:
         return sorted(o)
 
     def __contains__(self, key):
-        return key in ["dims", "dofs"] or key in self.dims or key in self.dofs or key in self.properties
+        return key in ["n_dims", "dims", "dofs"] or key in self.dims or key in self.dofs or key in self.properties
     
     def __getitem__(self, key):
         try:
