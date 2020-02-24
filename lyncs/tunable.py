@@ -336,10 +336,10 @@ def compute(self, *args, tune=True, tune_kwargs={}, **kwargs):
     return dask_compute(self, *args, **kwargs)
 
 compute.__doc__ = add_parameters_to_doc(dask_compute.__doc__, """
-    tune: bool
-        Whether to perform tuning before computing.
-    tune_kwargs: dict
-        Kwargs that will be passed to the tune function.
+        tune: bool
+            Whether to perform tuning before computing.
+        tune_kwargs: dict
+            Kwargs that will be passed to the tune function.
     """)
 
 LyncsMethodsMixin.compute = compute
@@ -350,6 +350,7 @@ LyncsMethodsMixin.compute = compute
 dask_visualize = LyncsMethodsMixin.visualize
 
 def visualize(self, *args, mark_tunable="red", **kwargs):
+    kwargs.setdefault("rankdir","LR")
     if mark_tunable:
         kwargs["data_attributes"] = { k: {"color": mark_tunable,
                                           "label": ", ".join(v.tunable_options.keys()),
@@ -360,8 +361,8 @@ def visualize(self, *args, mark_tunable="red", **kwargs):
     return dask_visualize(self, *args, **kwargs)
 
 visualize.__doc__ = add_parameters_to_doc(dask_visualize.__doc__, """
-    mark_tunable: color
-        Marks the tunable object with the given color. Skips if None.
+        mark_tunable: color
+            Marks the tunable object with the given color. Skips if None.
     """)
 
 LyncsMethodsMixin.visualize = visualize
