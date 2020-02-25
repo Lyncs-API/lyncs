@@ -148,7 +148,7 @@ class Field(Tunable, FieldMethods):
         if value != self.dtype:
             self._dtype = value
             if self.field is not None:
-                self.field = self.field.astype(dtype)
+                self.field = self.field.astype(value)
 
 
     @property
