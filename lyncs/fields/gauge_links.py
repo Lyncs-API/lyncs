@@ -29,7 +29,6 @@ def plaquette(self, dirs=None):
     for dir1 in dirs:
         for dir2 in dirs:
             if dir1!=dir2:
-                plaq += self[dir1].dot(self[dir2].shift(dir1, 1), "gauge_dofs") \
-                                  .dot(self[dir1].shift(dir2, 1).conj(), "gauge_dofs") \
-                                  .dot(self[dir2].conj(), "gauge_dofs").sum()
+                plaq += (self[dir1] @ self[dir2].shift(dir1, 1) @ \
+                         self[dir1].shift(dir2, 1).conj() @ self[dir2].conj()).sum()
     return plaq
