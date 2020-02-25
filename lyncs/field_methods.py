@@ -83,8 +83,10 @@ def wrap_ufunc(ufunc):
     @wraps(ufunc)
     def wrapped(field, *args, **kwargs):
         from .field import Field
+        import numpy as np
         assert isinstance(field, Field), "First argument must be a field type"
-        field = Field(field)
+        dtype = ufunc(np.array([1], dtype=field.dtype), *args, **kwargs).dtype
+        field = Field(field, dtype=dtype)
         field.field = ufunc(field.field, *args, **kwargs)
         return field
     return wrapped
