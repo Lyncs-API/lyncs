@@ -39,8 +39,7 @@ def get_lattice(records):
                          'x': int(info["lx"]),
                          'y': int(info["ly"]),
                          'z': int(info["lz"])},
-                   dofs = "QCD",
-                   dtype = "complex%d"%(int(info["precision"])*2))
+                   dofs = "QCD")
 
 
 def get_field_type(records):
@@ -100,10 +99,14 @@ def get_type(filename, lattice=None, field_type=None, **kwargs):
         field_type = read_field_type
 
     from lyncs import Field
+
+    import xmltodict
+    info = xmltodict.parse(records["ildg-format"])["ildgFormat"]
     
     field = Field(
         lattice=lattice,
         field_type=field_type,
+        dtype = "complex%d"%(int(info["precision"])*2),
         tuned_options = get_fixed_options(field_type),
     )
     

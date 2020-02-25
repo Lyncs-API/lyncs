@@ -49,16 +49,11 @@ class Lattice:
         -> int: size of one-dimensional degree of freedom
         -> list: size per dimension of the degrees of freedom (default naming: dof_0/1/2...)
         -> dict: names of the degree of freedom (keys) + size (value)
-
-        dtype: data type of the degree of freedoms.
-        -> str: numpy data type
-        -> type: class data type
         """
 
         self._properties = {}
         self.dims = dims
         self.dofs = dofs
-        self.dtype = dtype
         self.properties = properties
 
         global _last_lattice
@@ -167,15 +162,6 @@ class Lattice:
             assert False, "Not allowed type %s"%type(value)
 
 
-    @property
-    def dtype(self):
-        return self._dtype
-    
-    @dtype.setter
-    def dtype(self, value):
-        from numpy import dtype as ndt
-        self._dtype = ndt(value)
-
     def __repr__(self):
         from .utils import default_repr
         return default_repr(self)
@@ -239,6 +225,6 @@ class Lattice:
         from dask.base import normalize_token
             
         return normalize_token(
-            (type(self), self.dims, self.dofs, self.dtype, self.properties)
+            (type(self), self.dims, self.dofs, self.properties)
         )
 

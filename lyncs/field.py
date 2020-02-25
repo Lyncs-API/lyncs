@@ -15,12 +15,14 @@ class Field(Tunable, FieldMethods):
         "gauge_links": ["dims", "n_dims", "gauge_dofs", "gauge_dofs"],
         }
     _default_field_type = "vector"
+    _default_dtype = "complex128"
     
     def __init__(
             self,
             field = None,
             lattice = None,
             field_type = None,
+            dtype = None,
             coords = {},
             labels = {},
             tunable_options = {},
@@ -46,7 +48,9 @@ class Field(Tunable, FieldMethods):
             The lattice on which the field is defined.
         field_type: str or list(str).
           --> If str, then must be one of the labeled field types. See Field._field_types
-          --> If list, then a list of variables of lattice.
+          --> If list, then a list of variables of lattice.        
+        dtype: str or numpy dtype compatible
+           Data type of the field
         coords: dict, str or list of str
            Coordinates of the field, i.e. range of values for any of the dimensions.
            It can be integer, range, slice or None. If None then is a reduced global field.
@@ -66,7 +70,9 @@ class Field(Tunable, FieldMethods):
         self.lattice = lattice or (field.lattice if isinstance(field, Field) else default_lattice())
         
         self.field_type = field_type or (field.field_type if isinstance(field, Field) else Field._default_field_type)
-        
+
+        self.dtype = dtype or (field.dtype if isinstance(field, Field) else Field._default_dtype)
+
         if isinstance(field, Field): self.labels = field.labels
         self.labels = labels
         
@@ -121,10 +127,28 @@ class Field(Tunable, FieldMethods):
         
         self._lattice = value
 
-        
+
     @property
     def dtype(self):
-        return self.lattice.dtype
+        from dask.array import Array
+        if isinstance(self.field, Array):
+            import warnings
+            if self.field.dtype != self._dtype:
+                warnings.warn("Mistmatch between set dtype and field dtype")
+            return self.field.dtype
+        elif hasattr(self, "_dtype"):
+            return self._dtype
+        else:
+            return None
+    
+    @dtype.setter
+    def dtype(self, value):
+        from numpy import dtype
+        value = dtype(value)
+        if value != self.dtype:
+            self._dtype = value
+            if self.field is not None:
+                self.field = self.field.astype(dtype)
 
 
     @property
@@ -234,11 +258,15 @@ class Field(Tunable, FieldMethods):
         try:
             from dask.array import Array
             from .tunable import LyncsMethodsMixin
-            if not isinstance(self._field, Array) and isinstance(self._field, LyncsMethodsMixin):
+            if not isinstance(self._field, Array) and isinstance(self._field, LyncsMethodsMixin) and not self.__dict__.get("_field_lock", False):
                 try:
+                    self._field_lock = True
                     self._field = self._field.compute(tune=False)
                 except:
                     pass
+                finally:
+                    self._field_lock = False
+                    del self._field_lock
             return self._field
         except AttributeError:
             return None
@@ -246,6 +274,7 @@ class Field(Tunable, FieldMethods):
     @field.setter
     def field(self, value):
         from .tunable import Delayed, tunable_property
+        from dask.array import Array
         
         if value is None:
             self.zeros()
@@ -268,6 +297,16 @@ class Field(Tunable, FieldMethods):
                 
         elif isinstance(value, Delayed):
             self._field = value
+
+        elif isinstance(value, Array):
+            assert type(self.field_shape) is tuple, "Field order not defined yet"
+            assert self.field_shape == value.shape, "Shape mismatch"
+            
+            if type(self.field_chunks) is not tuple or self.field_chunks != value.chunksize:
+                self.chunks = {key: val for key, val in zip(self.shape_order, value.chunksize)}
+                
+            self._field = value
+
         else:
             # TODO specialize
             assert False, "Not implemented yet"
@@ -308,14 +347,30 @@ class Field(Tunable, FieldMethods):
 
     @tunable_property
     def field_shape(self):
+        from dask.array import Array
+        import warnings
         shape = {key:val for key,val in self.shape}
-        return tuple(shape[key] for key in self.shape_order)
+        field_shape = tuple(shape[key] for key in self.shape_order)
+        if isinstance(self.field, Array):
+            if self.field.shape != field_shape:
+                warnings.warn("Mistmatch between computed and real field shape")
+            return self.field.shape
+        else:
+            return field_shape    
 
 
     @tunable_property
     def field_chunks(self):
+        from dask.array import Array
+        import warnings
         shape = {key:val for key,val in self.shape}
-        return tuple(self.chunks[key] if key in self.chunks else shape[key] for key in self.shape_order)
+        field_chunks = tuple(self.chunks[key] if key in self.chunks else shape[key] for key in self.shape_order)
+        if isinstance(self.field, Array):
+            if self.field.chunksize != field_chunks:
+                warnings.warn("Mistmatch between computed and real field chunks")
+            return self.field.chunksize
+        else:
+            return field_chunks
         
 
     @property
