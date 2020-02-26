@@ -53,8 +53,8 @@ class Field(Tunable, FieldMethods):
            Data type of the field
         coords: dict, str or list of str
            Coordinates of the field, i.e. range of values for any of the dimensions.
-           It can be integer, range, slice or None. If None then is a reduced global field.
-           It can be also one or a list of labels.
+           If dictionary, keys must be dimensions of the field and value can be integer, range, slice.
+           Otherwise, it can be a label or a list of labels/dictionaries.
         labels: dict
            Dictionary of labeled coordinates of the field, e.g. "source": dict(x=0, y=0, z=0, t=0)
         tunable_options: dict
@@ -247,6 +247,17 @@ class Field(Tunable, FieldMethods):
                 assert False, "Got key that is neither list or str, %s" % key
                 
         assert is_known(self, value), "Got unknown field type"
+
+        if value not in self._field_types:
+            target = sorted(self._expand(value))
+            for field_type in self._field_types:
+                try:
+                    if sorted(self._expand(field_type)) == target:
+                        value = field_type
+                        break
+                except:
+                    pass
+                    
         self._field_type = value
 
 
