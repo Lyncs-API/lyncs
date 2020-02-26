@@ -42,7 +42,7 @@ class Field(Tunable, FieldMethods):
             induced by the given parameters.
             E.g. 
             Field(field=field, coords={'x':0}) selects values at x=0
-            Field(field=field, shape_order=[...]) changes the shape_order if needed.
+            Field(field=field, axes_order=[...]) changes the axes_order if needed.
             etc...
         lattice: Lattice object.
             The lattice on which the field is defined.
@@ -85,7 +85,7 @@ class Field(Tunable, FieldMethods):
         else:
             from .tunable import Permutation, ChunksOf
             
-            tunable_options["shape_order"] = Permutation([key for key,val in self.shape])
+            tunable_options["axes_order"] = Permutation([key for key,val in self.shape])
             tunable_options["chunks"] = ChunksOf(self.dims)
             
             Tunable.__init__(self, tunable_options=tunable_options, tuned_options=tuned_options)
@@ -317,7 +317,7 @@ class Field(Tunable, FieldMethods):
                 def mask(self):
                     mask = [slice(None) for i in self.shape]
                     for key,val in coords.items():
-                        mask[self.shape_order.index(key)] = val
+                        mask[self.axes_order.index(key)] = val
                     return tuple(mask)
                 
                 self._field = self._field[mask(value)]
@@ -334,7 +334,7 @@ class Field(Tunable, FieldMethods):
             """ % (self.field_shape, value.shape)
             
             if type(self.field_chunks) is not tuple or self.field_chunks != value.chunksize:
-                self.chunks = {key: val for key, val in zip(self.shape_order, value.chunksize)}
+                self.chunks = {key: val for key, val in zip(self.axes_order, value.chunksize)}
                 
             self._field = value
 
@@ -348,7 +348,7 @@ class Field(Tunable, FieldMethods):
         from dask.array import Array
         import warnings
         shape = {key:val for key,val in self.shape}
-        field_shape = tuple(shape[key] for key in self.shape_order)
+        field_shape = tuple(shape[key] for key in self.axes_order)
         if isinstance(self.field, Array):
             if self.field.shape != field_shape:
                 warnings.warn("Mistmatch between computed and real field shape")
@@ -362,7 +362,7 @@ class Field(Tunable, FieldMethods):
         from dask.array import Array
         import warnings
         shape = {key:val for key,val in self.shape}
-        field_chunks = tuple(self.chunks[key] if key in self.chunks else shape[key] for key in self.shape_order)
+        field_chunks = tuple(self.chunks[key] if key in self.chunks else shape[key] for key in self.axes_order)
         if isinstance(self.field, Array):
             if self.field.chunksize != field_chunks:
                 warnings.warn("Mistmatch between computed and real field chunks")
