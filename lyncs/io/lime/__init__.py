@@ -62,7 +62,7 @@ def get_fixed_options(field_type):
     if field_type == "gauge_links":
         opts["dirs_order"] = dims_order
         opts["axes_order"] = dims_order + ['n_dims', 'color', 'color']
-        opts["color_order"] = "row_major"
+        opts["color_order"] = (0,1)
     else:
         # TODO
         assert False, "To be implemented"

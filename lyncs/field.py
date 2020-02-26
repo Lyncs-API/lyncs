@@ -87,6 +87,11 @@ class Field(Tunable, FieldMethods):
             
             tunable_options["axes_order"] = Permutation([key for key,val in self.shape])
             tunable_options["chunks"] = ChunksOf(self.dims)
+
+            for key in set(self.axes):
+                count = self.axes.count(key)
+                if count > 1:
+                    tunable_options[key+"_order"] = Permutation(list(range(count)))
             
             Tunable.__init__(self, tunable_options=tunable_options, tuned_options=tuned_options)
 
