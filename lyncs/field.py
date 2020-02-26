@@ -177,6 +177,9 @@ class Field(Tunable, FieldMethods):
     
     @property
     def dimensions(self):
+        """
+        Returns all the possible dimensions valid for the field.
+        """
         dims = set()
         
         def add(key):
@@ -193,7 +196,31 @@ class Field(Tunable, FieldMethods):
             names = self._expand(prop)
             if set(names).issubset(dims): dims.add(prop)
             
+        dims = list(dims)
+        dims.sort()
         return dims
+
+
+    @property
+    def axes(self):
+        """
+        Returns the list of fundamental dimensions. The order is not significant.
+        """
+        return self._expand(self.field_type)
+    
+    
+    @property
+    def shape(self):
+        """
+        Returns the list of dimensions with size. The order is not significant.
+        """
+        def get_size(key):
+            if key in self._coords:
+                return len(self._coords[key])
+            else:
+                return self.lattice[key]
+                
+        return [(key, get_size(key)) for key in self.axes]
     
     
     @property
@@ -315,40 +342,7 @@ class Field(Tunable, FieldMethods):
             # TODO specialize
             assert False, "Not implemented yet"
 
-
-    @property
-    def shape(self):
-        """
-        Returns the list of dimensions with size. The order is not significant.
-        """
-        def get_shape(self, key):
-            if isinstance(key, (list, tuple)):
-                ret = []
-                for k in key:
-                    ret += get_shape(self,k)
-                return ret
-            elif isinstance(key, dict):
-                assert all(isinstance(value, int) for value in key.values())
-                return list(key.items())
-            elif isinstance(key, str):
-                if key in self.lattice.__dir__():
-                    value = getattr(self.lattice, key)
-                elif key in self._field_types:
-                    value = self._field_types[key]
-                else:
-                    assert False, "Unknown attribute %s"%key
-                if isinstance(value, int):
-                    if key in self._coords:
-                        value = len(self._coords[key])
-                    return [(key, value)]
-                else:
-                    return get_shape(self,value)
-            else:
-                assert False, "Got key that is neither list or str, %s" % key
-                
-        return get_shape(self, self.field_type)
-
-
+            
     @tunable_property
     def field_shape(self):
         from dask.array import Array
