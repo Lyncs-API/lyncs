@@ -293,14 +293,18 @@ class Field(Tunable, FieldMethods):
                         mask[self.shape_order.index(key)] = val
                     return tuple(mask)
                 
-                self._field = self._field[get_mask(value)]
+                self._field = self._field[mask(value)]
                 
         elif isinstance(value, Delayed):
             self._field = value
 
         elif isinstance(value, Array):
             assert type(self.field_shape) is tuple, "Field order not defined yet"
-            assert self.field_shape == value.shape, "Shape mismatch"
+            assert self.field_shape == value.shape, """
+            Shape mismatch:
+            field_shape = %s
+            new_field_shape = %s
+            """ % (self.field_shape, value.shape)
             
             if type(self.field_chunks) is not tuple or self.field_chunks != value.chunksize:
                 self.chunks = {key: val for key, val in zip(self.shape_order, value.chunksize)}
