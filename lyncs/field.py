@@ -169,7 +169,9 @@ class Field(Tunable, FieldMethods):
     def _expand(self, prop):
         "Expands a lattice/field property into the fundamental dimensions"
         def __expand(prop):
-            if prop in self.lattice and isinstance(self.lattice[prop], int):
+            if isinstance(prop,(list,tuple,set)):
+                return " ".join([__expand(key) for key in prop])
+            elif prop in self.lattice and isinstance(self.lattice[prop], int):
                 return prop
             else:
                 if prop in self.lattice:
@@ -248,7 +250,7 @@ class Field(Tunable, FieldMethods):
                 
         assert is_known(self, value), "Got unknown field type"
 
-        if value not in self._field_types:
+        if not isinstance(value, str) or value not in self._field_types:
             target = sorted(self._expand(value))
             for field_type in self._field_types:
                 try:
