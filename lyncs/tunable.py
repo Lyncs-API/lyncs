@@ -345,6 +345,24 @@ compute.__doc__ = add_parameters_to_doc(dask_compute.__doc__, """
 LyncsMethodsMixin.compute = compute
 
 
+# In perist, we tune and then persist
+
+dask_persist = LyncsMethodsMixin.persist
+
+def persist(self, *args, tune=True, tune_kwargs={}, **kwargs):
+    if tune: self.tune(**tune_kwargs)
+    return dask_persist(self, *args, **kwargs)
+
+persist.__doc__ = add_parameters_to_doc(dask_persist.__doc__, """
+        tune: bool
+            Whether to perform tuning before computing.
+        tune_kwargs: dict
+            Kwargs that will be passed to the tune function.
+    """)
+
+LyncsMethodsMixin.persist = persist
+
+
 # In visualize, we mark in red tunable objects
 
 dask_visualize = LyncsMethodsMixin.visualize
