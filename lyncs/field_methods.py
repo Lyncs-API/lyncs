@@ -19,11 +19,11 @@ class FieldMethods:
     
     
     def __matmul__(self, other):
-        return matmul(self,other)
+        return self.dot(other)
     
     
     def __rmatmul__(self, other):
-        return matmul(other, self)
+        return other.dot(self)
     
     
     def reshape(self, *axes_order):
@@ -33,8 +33,41 @@ class FieldMethods:
         *NOTE*: this is conceptually different from numpy.reshape.
         """
         from .field import Field
-        return Field(self, axes_order = axes_order)
+        return Field(self, axes_order=axes_order)
     
+    
+    def rechunk(self, **chunks):
+        """
+        Changes the chunks of the field.
+        """
+        from .field import Field
+        return Field(self, chunks=chunks)
+    
+    
+    def squeeze(self, axis=None):
+        """
+        Removes axes with size one. (E.g. axes where a coordinate has been selected)
+        """
+        if axis is None:
+            new_axes = [axis for axis,size in self.shape if size>1]
+        else:
+            shape = {axis:size for axis,size in self.shape}
+            assert axis in shape
+            assert shape[axis]==1
+            new_axes = [ax for ax,size in self.shape if ax!=axis]
+            
+        return Field(self, field_type=new_axes)
+
+        
+    @property
+    def real(self):
+        return real(self)
+
+    
+    @property
+    def imag(self):
+        return imag(self)
+
     
     @property
     def T(self):
@@ -111,6 +144,48 @@ class FieldMethods:
         """
         return self.transpose(*axes, **axes_order).conj()
 
+    
+    def trace(self, *axes):
+        """
+        Performs the trace over the matrix axes.
+        
+        Parameters
+        ----------
+        axes: str
+            If given, only the listed axes are traced.
+        """
+        axes = list(axes)
+        if not axes:
+            for axis in set(self.axes):
+                if self.axes.count(axis) == 2:
+                    axes.append(axis)
+        else:
+            # TODO should work also for non-fundamental axes
+            for	axis in	axes:
+                assert self.axes.count(axis) == 2, "Only matrix indeces can be traced"
+                
+        new_axes = self.axes
+        for axis in axes:
+            while axis in new_axes:
+                new_axes.remove(axis)
+            
+        new_field = Field(self, field_type = new_axes)
+        
+        if len(axes) == 1:
+            new_field.field = self.field #TODO
+        else:
+            #TODO
+            pass
+
+        return new_field
+    
+    
+    def dot(self, *axes):
+        pass
+        
+
+
+    
 # The following are simple universal functions and they are dynamically wrapped
 
 ufuncs = (
@@ -190,6 +265,7 @@ ufuncs = (
     ("floor", True, ),
     ("ceil", True, ),
     ("trunc", False, ),
+    ("round", True, ),
     # more math routines
     ("degrees", False, ),
     ("radians", False, ),
@@ -201,8 +277,8 @@ ufuncs = (
     ("clip", True, ),
     ("isreal", True, ),
     ("iscomplex", True, ),
-    ("real", True, ),
-    ("imag", True, ),
+    ("real", False, ),
+    ("imag", False, ),
     ("fix", False, ),
     ("i0", False, ),
     ("sinc", False, ),
@@ -237,10 +313,27 @@ operators = (
     ("__rdivmod__", ),
 )
 
+reductions = (
+    ("any", ),
+    ("all", ),
+    ("min", ),
+    ("max", ),
+    ("argmin", ),
+    ("argmax", ),
+    ("sum", ),
+    ("prod", ),
+    ("mean", ),
+    ("std", ),
+    ("var", ),
+)
+
 
 def prepare(*fields):
     from .field import Field
     assert all([isinstance(field, Field) for field in fields])
+    if len(fields)==1:
+        return fields, Field(fields[0])
+    
     # TODO
     return fields, Field(fields[0])
 
@@ -286,6 +379,56 @@ def wrap_ufunc(ufunc):
     return wrapped
 
 
+def wrap_reduction(reduction):
+    @wraps(reduction)
+    def wrapped(field, *axes, **kwargs):
+        from .field import Field
+        from .tunable import Delayed, delayed, tunable_property
+        import numpy as np
+        
+        assert isinstance(field, Field), "First argument must be a field type"
+
+
+        # Extracting the axes to reduce
+        axes=list(axes)
+        tmp=kwargs.pop("axis",[])
+        axes.extend([tmp] if isinstance(tmp,str) else tmp)
+        tmp=kwargs.pop("axes",[])
+        axes.extend([tmp] if isinstance(tmp,str) else tmp)
+
+        array = field.field
+        delay = isinstance(array, Delayed)
+        if not axes:
+            if delay: return delayed(reduction)(array, **kwargs)
+            else: return reduction(array, **kwargs)
+        else:
+            assert set(axes).issubset(field.dimensions)
+            dtype = reduction(np.array([1], dtype=field.dtype)).dtype
+            axes = field._expand(axes)
+            new_axes = field.axes
+            for axis in set(axes):
+                while axis in new_axes:
+                    new_axes.remove(axis)
+
+            @tunable_property
+            def get_axes(field):
+                old_axes = list(field.axes_order)
+                axes = list(range(len(old_axes)))
+                for axis in new_axes:
+                    axes.pop(old_axes.index(axis))
+                    old_axes.remove(axis)
+                return tuple(axes)
+                    
+            kwargs["axis"] = get_axes(field)
+            field = Field(field, field_type=new_axes, dtype=dtype)
+            if delay: field.field = delayed(reduction)(array, **kwargs)
+            else: field.field = reduction(array, **kwargs)
+            return field
+        
+    return wrapped
+
+
+
 for name, is_member in ufuncs:
     ufunc = getattr(dask,name)
     globals()[name] = wrap_ufunc(ufunc)
@@ -297,3 +440,9 @@ for name, is_member in ufuncs:
 for name, in operators:
     ufunc = getattr(dask.Array,name)
     setattr(FieldMethods, name, wrap_ufunc(ufunc))
+
+for name, in reductions:
+    ufunc = getattr(dask,name)
+    globals()[name] = wrap_reduction(ufunc) 
+    ufunc = getattr(dask.Array,name)
+    setattr(FieldMethods, name, wrap_reduction(ufunc))
