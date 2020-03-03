@@ -1,5 +1,5 @@
 def test_ufuncs():
-    from lyncs.field_methods import ufuncs, operators
+    from lyncs.field_methods import ufuncs, operators, reductions
     from lyncs import Lattice, Field
     import lyncs
     
@@ -18,8 +18,12 @@ def test_ufuncs():
             res = getattr(lyncs, name)(field1, field2, *args)
 
     for name, in operators:
-        print(name)
         try:
             res = getattr(field1, name)()
         except TypeError:
             res = getattr(field1, name)(field2)
+
+    for name, in reductions:
+        for dim in field1.dimensions:
+            print(name, dim)
+            res = getattr(field1, name)(dim)

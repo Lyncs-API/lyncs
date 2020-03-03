@@ -102,12 +102,18 @@ class Field(Tunable, FieldMethods):
         counts = Counter(self.axes)
         if len(counts)>1:
             self.add_option("axes_order", Permutation(self.axes))
+        else:
+            self.axes_order = self.axes
 
         for key,count in Counter(self.axes).items():
             if count > 1:
                 self.add_option(key+"_order", Permutation(list(range(count))))
 
-        self.add_option("chunks", ChunksOf(self.dims))
+        from numpy import prod
+        if prod([v for v in self.dims.values()])>1:
+            self.add_option("chunks", ChunksOf(self.dims))
+        else:
+            self.chunks = self.dims
 
         # Loading dynamically methods and attributed from the field types in fields
         from importlib import import_module

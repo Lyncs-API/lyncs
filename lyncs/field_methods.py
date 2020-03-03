@@ -433,7 +433,7 @@ def wrap_reduction(reduction):
             out = Field(field, field_type=new_axes, dtype=dtype, zeros_init=True)
         else:
             out = Field(field, field_type=[], dtype=dtype, zeros_init=True)
-        print(out)
+            
         out.field = tunable_function(reduction)(field.field, **kwargs)
         return out
         
