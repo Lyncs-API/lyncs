@@ -46,3 +46,17 @@ def add_parameters_to_doc(doc, doc_params):
         
     return "\n".join(doc)+doc_params
             
+
+def to_list(*args):
+    from .tunable import tunable_function, Delayed
+    
+    @tunable_function
+    def to_list(*args):
+        return list(args)
+    
+    lst = to_list(*args)
+    if isinstance(lst, Delayed):
+        lst._length = len(args)
+        
+    return lst
+    
