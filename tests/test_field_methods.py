@@ -4,29 +4,22 @@ def test_ufuncs():
     import lyncs
     
     lattice = Lattice(dims=4, dofs="QCD")
-    field = Field(lattice=lattice, dtype="complex64")
-    field2 = Field(lattice=lattice, dtype="complex128")
-    field3 = Field(lattice=lattice, dtype="float32")
-    field4 = Field(lattice=lattice, dtype="float64")
+    field1 = Field(lattice=lattice, dtype="float32")
+    field2 = Field(lattice=lattice, dtype="int")
     
     for name, is_member in ufuncs:
         if name == "clip":
-            kwargs = {"a_min":0,"a_max":1}
+            args = (0,1)
         else:
-            kwargs = {}
+            args = ()
         try:
-            res = getattr(lyncs, name)(field, **kwargs)
-        except ValueError:
-            try:
-                res = getattr(lyncs, name)(field, field2, **kwargs)
-            except:
-                res = getattr(lyncs, name)(field3, field4, **kwargs)
+            res = getattr(lyncs, name)(field1, *args)
         except TypeError:
-            res = getattr(lyncs, name)(field3, **kwargs)
+            res = getattr(lyncs, name)(field1, field2, *args)
 
     for name, in operators:
         print(name)
         try:
-            res = getattr(field3, name)()
+            res = getattr(field1, name)()
         except TypeError:
-            res = getattr(field3, name)(field4)
+            res = getattr(field1, name)(field2)

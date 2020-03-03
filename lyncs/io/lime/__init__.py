@@ -107,7 +107,7 @@ def get_type(filename, lattice=None, field_type=None, **kwargs):
         lattice=lattice,
         field_type=field_type,
         dtype = "complex%d"%(int(info["precision"])*2),
-        tuned_options = get_fixed_options(field_type),
+        fixed_options = get_fixed_options(field_type),
     )
     
     assert field.byte_size == records["ildg-binary-data"], """
@@ -117,7 +117,7 @@ def get_type(filename, lattice=None, field_type=None, **kwargs):
     return field
 
 
-from ...tunable import Tunable, tunable_property, delayed
+from ...tunable import Tunable, tunable_function, delayed
 
 class file_manager(Tunable):
     
@@ -125,15 +125,14 @@ class file_manager(Tunable):
         from ...tunable import Choice
         self.filename = filename
         self.field = field
-        
-        Tunable.__init__(
-            self,
-            lime_engine=Choice(engines),
-        )
+        self.add_option("lime_engine",Choice(engines))
 
-    @tunable_property
+    @property
     def engine(self):
-        return get_engine(self.lime_engine)
+        @tunable_function
+        def engine(lime_engine):
+            return get_engine(lime_engine)
+        return engine(self.lime_engine)
 
     
     def read(self, chunk_id=None):

@@ -2,10 +2,10 @@ __all__ = [
     "Field",
 ]
 
-from .tunable import Tunable, tunable_property
+from .tunable import Tunable, tunable_function
 from .field_methods import FieldMethods
 from functools import wraps
-from .tunable import visualize, compute
+from .tunable import visualize, compute, persist
 
 class Field(Tunable, FieldMethods):
     _field_types = {
@@ -26,7 +26,8 @@ class Field(Tunable, FieldMethods):
             coords = {},
             labels = {},
             tunable_options = {},
-            tuned_options = {},
+            fixed_options = {},
+            zeros_init = False,
             **kwargs
     ):
         """
@@ -40,15 +41,15 @@ class Field(Tunable, FieldMethods):
             instead of a copy if possible. If instead it is a field object,
             then a copy of the field is made with appropriate transformations
             induced by the given parameters.
-            E.g. 
+            E.g.
             Field(field=field, coords={'x':0}) selects values at x=0
             Field(field=field, axes_order=[...]) changes the axes_order if needed.
             etc...
         lattice: Lattice object.
             The lattice on which the field is defined.
         field_type: str or list(str).
-          --> If str, then must be one of the labeled field types. See Field._field_types
-          --> If list, then a list of variables of lattice.        
+            If str, then must be one of the labeled field types. See Field._field_types.
+            If list, then a list of dimensions of lattice.
         dtype: str or numpy dtype compatible
            Data type of the field
         coords: dict, str or list of str
@@ -60,40 +61,53 @@ class Field(Tunable, FieldMethods):
         tunable_options: dict
            List of tunable parameters with default values.
            Tunable options are attributes of the field and can be used to condition the computation. 
-        tuned_options: dict
+        fixed_options: dict
            Same as tunable options but with a fixed value.
+        zeros_init: bool
+           Initializes the field with zeros.
         kwargs: dict
            Extra paramters that will be passed to the child classes of the field during initialization.
         """
         from .lattice import default_lattice
         
-        self.lattice = lattice or (field.lattice if isinstance(field, Field) else default_lattice())
+        self.lattice = lattice if lattice is not None else \
+                       field.lattice if isinstance(field, Field) else \
+                       default_lattice()
         
-        self.field_type = field_type or (field.field_type if isinstance(field, Field) else Field._default_field_type)
+        self.field_type = field_type if field_type is not None else \
+                          field.field_type if isinstance(field, Field) else \
+                          Field._default_field_type
 
-        self.dtype = dtype or (field.dtype if isinstance(field, Field) else Field._default_dtype)
+        self.dtype = dtype if dtype is not None else \
+                     field.dtype if hasattr(field, "dtype") else \
+                     Field._default_dtype
 
-        if isinstance(field, Field): self.labels = field.labels
-        self.labels = labels
-        
-        if isinstance(field, Field): self.coords = field.coords
-        self.coords = coords
+        if isinstance(field, Field):
+            for key,val in field.labels.items():
+                try: self.label(key, **val)
+                except AssertionError: pass
+                
+        for key,val in labels.items():
+            self.label(key, val)
         
         if isinstance(field, Field):
-            self._tunable_options = field._tunable_options
-            self._tuned_options = field._tuned_options
-        else:
-            from .tunable import Permutation, ChunksOf
-            
-            tunable_options["axes_order"] = Permutation([key for key,val in self.shape])
-            tunable_options["chunks"] = ChunksOf(self.dims)
+            for coord in field.coords:
+                try: self.coords=coord
+                except AssertionError: pass
+        self.coords = coords
 
-            for key in set(self.axes):
-                count = self.axes.count(key)
-                if count > 1:
-                    tunable_options[key+"_order"] = Permutation(list(range(count)))
-            
-            Tunable.__init__(self, tunable_options=tunable_options, tuned_options=tuned_options)
+        from .tunable import Permutation, ChunksOf
+        from collections import Counter
+
+        counts = Counter(self.axes)
+        if len(counts)>1:
+            self.add_option("axes_order", Permutation(self.axes))
+
+        for key,count in Counter(self.axes).items():
+            if count > 1:
+                self.add_option(key+"_order", Permutation(list(range(count))))
+
+        self.add_option("chunks", ChunksOf(self.dims))
 
         # Loading dynamically methods and attributed from the field types in fields
         from importlib import import_module
@@ -108,12 +122,30 @@ class Field(Tunable, FieldMethods):
                         setattr(self, attr, val)
             except ModuleNotFoundError:
                 pass
+            
+        for key,val in tunable_options.items():
+            self.add_option(key, val, user_defined=True)
+
+        for key, val in fixed_options.items():
+            assert key in self.options, "Unknown options %s" % key
+            setattr(self, key, val)
 
         # Considering the remaining kwargs as tunable options
-        for key, val in kwargs:
-            self.add_option(key,val)
+        for key, val in kwargs.items():
+            assert key in self.options, "Unknown options %s" % key
+            setattr(self, key, val)
             
-        self.field = field
+        if isinstance(field, Field):
+            for key,val in field.options.items():
+                if key in self.options:
+                    setattr(self, key, val)
+                elif val._from_user==True:
+                    self.add_option(key,val)
+
+        if zeros_init or field is None:
+            self.zeros()
+        else:
+            self.field = field
         
 
     @property
@@ -135,16 +167,7 @@ class Field(Tunable, FieldMethods):
 
     @property
     def dtype(self):
-        from dask.array import Array
-        if isinstance(self.field, Array):
-            import warnings
-            if self.field.dtype != self._dtype:
-                warnings.warn("Mistmatch between set dtype and field dtype")
-            return self.field.dtype
-        elif hasattr(self, "_dtype"):
-            return self._dtype
-        else:
-            return None
+        return self.__dict__.get("_dtype", None)
     
     @dtype.setter
     def dtype(self, value):
@@ -222,8 +245,8 @@ class Field(Tunable, FieldMethods):
         Returns the list of dimensions with size. The order is not significant.
         """
         def get_size(key):
-            if key in self._coords:
-                return len(self._coords[key])
+            if key in self.coords:
+                return len(self.coords[key])
             else:
                 return self.lattice[key]
                 
@@ -232,10 +255,8 @@ class Field(Tunable, FieldMethods):
     
     @property
     def field_type(self):
-        try:
-            return self._field_type
-        except AttributeError:
-            return None
+        return self.__dict__.get("_field_type", None)
+    
 
     @field_type.setter
     def	field_type(self, value):
@@ -265,37 +286,45 @@ class Field(Tunable, FieldMethods):
 
     @property
     def coords(self):
-        try:
-            return self._given_coords
-        except AttributeError:
-            return {}
+        return self.__dict__.get("_coords", {})
 
+    
     @coords.setter
     def coords(self, coords):
-        from .tunable import Delayed, RaiseNotTuned
-        import numpy as np
-        
-        coords = coords.copy()
-        for key, val in self.coords.items():
-            assert key not in coords or coords[key]==val, "Cannot change value of fixed coordinate %s" % key
-            coords[key] = val
-            
+
+        _coords = {}
+        def unpack(coords):
+            if isinstance(coords, (tuple, list)):
+                for coord in coords:
+                    unpack(coord)
+            elif isinstance(coords, str) and coords in self.labels:
+                unpack(self.labels[coords])
+            elif isinstance(coords, dict):
+                _coords.update(coords)
+            else:
+                assert False, "Not implemented"
+        unpack(coords)
+
+        coords = _coords
         _coords = {}
         for key, val in coords.items():
             assert key in self.dimensions, "Unknown dimesion %s" % key
             dims = self._expand(key)
             for dim in dims:
-                assert dim not in _coords or _coords[dim]==val, "Setting multiple time the same dimension"
+                assert dim not in _coords or _coords[dim]==val, "Setting multiple time the same dimension not allowed"
                 
                 try:
                     assert len(list(val)) > 0, "Empty list not allowed"
                 except TypeError:
                     val = [val]
-
+                    
                 _coords[dim]=val
                 
+        for key, val in self.coords.items():
+            assert key not in _coords or _coords[key]==val, "Cannot change value of fixed coordinate %s" % key
+            _coords[key] = val
+            
         self._coords = _coords
-        self._given_coords = coords
 
 
     @property
@@ -303,42 +332,40 @@ class Field(Tunable, FieldMethods):
         try:
             from dask.array import Array
             from .tunable import LyncsMethodsMixin
-            if not isinstance(self._field, Array) and isinstance(self._field, LyncsMethodsMixin) and not self.__dict__.get("_field_lock", False):
-                try:
-                    self._field_lock = True
-                    self._field = self._field.compute(tune=False)
-                except:
-                    pass
-                finally:
-                    self._field_lock = False
-                    del self._field_lock
+            if not isinstance(self._field, Array):
+                self._field = self._field.compute(tune=False)
+            elif isinstance(self._field, Array):
+                import warnings
+                if self._field.shape != self.field_shape:
+                    warnings.warn("Mistmatch between computed and real field shape")
+                if self._field.chunksize != self.field_chunks:
+                    warnings.warn("Mistmatch between computed and real field chunks")
+                if self._field.dtype != self.dtype:
+                    warnings.warn("Mistmatch between computed %s and real field %s" % (self.dtype, self._field.dtype))
             return self._field
         except AttributeError:
             return None
 
     @field.setter
     def field(self, value):
-        from .tunable import Delayed, tunable_property
+        from .tunable import Delayed, tunable_function
         from dask.array import Array
         
-        if value is None:
-            self.zeros()
-            
-        elif isinstance(value, Field):
+        if isinstance(value, Field):
             self._field = value.field
             
             if self.coords != value.coords:
-                field_coords = value._coords if hasattr(value, "_coords") else {}
-                coords = {key:val for key,val in self._coords.items() if key not in field_coords}
+                field_coords = value.coords if hasattr(value, "_coords") else {}
+                coords = {key:val for key,val in self.coords.items() if key not in field_coords}
 
-                @tunable_property
-                def mask(self):
+                @tunable_function
+                def get_coord(axes_order):
                     mask = [slice(None) for i in self.shape]
                     for key,val in coords.items():
-                        mask[self.axes_order.index(key)] = val
+                        mask[axes_order.index(key)] = val
                     return tuple(mask)
                 
-                self._field = self._field[mask(value)]
+                self._field = self._field[get_coord(value.axes_order)]
                 
         elif isinstance(value, Delayed):
             self._field = value
@@ -351,8 +378,10 @@ class Field(Tunable, FieldMethods):
             new_field_shape = %s
             """ % (self.field_shape, value.shape)
             
-            if type(self.field_chunks) is not tuple or self.field_chunks != value.chunksize:
+            if isinstance(self.field_chunks, Delayed):
                 self.chunks = {key: val for key, val in zip(self.axes_order, value.chunksize)}
+            else:
+                value=value.rechunk(self.field_chunks)
                 
             self._field = value
 
@@ -361,32 +390,23 @@ class Field(Tunable, FieldMethods):
             assert False, "Not implemented yet"
 
             
-    @tunable_property
+    @property
     def field_shape(self):
-        from dask.array import Array
-        import warnings
-        shape = {key:val for key,val in self.shape}
-        field_shape = tuple(shape[key] for key in self.axes_order)
-        if isinstance(self.field, Array):
-            if self.field.shape != field_shape:
-                warnings.warn("Mistmatch between computed and real field shape")
-            return self.field.shape
-        else:
-            return field_shape    
+        @tunable_function
+        def field_shape(axes_order):
+            shape = {key:val for key,val in self.shape}
+            return tuple(shape[key] for key in axes_order)
+        
+        return field_shape(self.axes_order)
 
 
-    @tunable_property
+    @property
     def field_chunks(self):
-        from dask.array import Array
-        import warnings
-        shape = {key:val for key,val in self.shape}
-        field_chunks = tuple(self.chunks[key] if key in self.chunks else shape[key] for key in self.axes_order)
-        if isinstance(self.field, Array):
-            if self.field.chunksize != field_chunks:
-                warnings.warn("Mistmatch between computed and real field chunks")
-            return self.field.chunksize
-        else:
-            return field_chunks
+        @tunable_function
+        def field_chunks(chunks, axes_order):
+            shape = {key:val for key,val in self.shape}
+            return tuple(self.chunks[key] if key in self.chunks else shape[key] for key in self.axes_order)
+        return field_chunks(self.chunks, self.axes_order)
         
 
     @property
@@ -407,22 +427,11 @@ class Field(Tunable, FieldMethods):
         return self.size*self.dtype.itemsize
     
     
-    def get(self, **coords):
-        return Field(field=self, coords=coords)
-    
-    
     @property
     def labels(self):
-        try:
-            return self._labels
-        except AttributeError:
-            return {}
+        return self.__dict__.get("_labels",{})
 
-    @labels.setter
-    def labels(self, labels):
-        for label, coords in labels.items():
-            self.label(label, **coords)
-
+    
     def label(self, name, **coords):
         """
         Labels a given set of coordinates.
@@ -443,12 +452,25 @@ class Field(Tunable, FieldMethods):
         if not hasattr(self, "_labels"): self._labels={}
         assert all([key in self.dimensions for key in coords]), "Some of the dimensions are not known"
         self._labels[name] = coords
-        
 
-    @wraps(compute)
+
+    @property
+    def dask(self):
+        return self.field.dask
+
+    
+    @wraps(persist)
     def compute(self, **kwargs):
+        "NOTE: here we follow the dask.delayed convention. I.e. compute=persist and result=compute"
         self.tune(**kwargs.pop("tune_kwargs",{}))
-        return self.field.compute(**kwargs)
+        self.field = self.field.persist(**kwargs)
+        
+        
+    @wraps(compute)
+    def result(self, **kwargs):
+        "NOTE: here we follow the dask.delayed convention. I.e. compute=persist and result=compute"
+        self.compute()
+        return self.field.compute()
 
 
     @wraps(visualize)
@@ -472,11 +494,12 @@ class Field(Tunable, FieldMethods):
         info: information needed to perform the reading.
         """
         from .io import file_manager
-        from .tunable import delayed
+        from .tunable import tunable_function
         from dask.array import from_delayed
         
         io = file_manager(filename, format=format, field=self, **info)
-        
+
+        @tunable_function
         def read_field(shape, chunks):
             from dask.highlevelgraph import HighLevelGraph
             from dask.array.core import normalize_chunks, Array
@@ -495,7 +518,7 @@ class Field(Tunable, FieldMethods):
 
             return Array(graph, filename, chunks, dtype=self.dtype)
         
-        self.field = delayed(read_field)(self.field_shape, self.field_chunks)
+        self.field = read_field(self.field_shape, self.field_chunks)
         
 
     def save(
@@ -520,13 +543,14 @@ class Field(Tunable, FieldMethods):
         """
         Initialize the field with zeros.
         """
-        from .tunable import delayed
+        from .tunable import tunable_function
         from dask.array import zeros
-        
+
+        @tunable_function
         def zero_field(*args, **kwargs):
             return zeros(*args, **kwargs)
         
-        self.field = delayed(zero_field)(
+        self.field = zero_field(
             shape = self.field_shape,
             chunks = self.field_chunks,
             dtype = self.dtype,
@@ -546,14 +570,4 @@ class Field(Tunable, FieldMethods):
         return normalize_token(
             (type(self), self.lattice, self.field_type, self._unique_id)
         )
-
     
-    def __getitem__(self, *labels):
-        assert all([label in self.labels for label in labels]), "Unknown label"
-        coords = {}
-        for label in labels:
-            coord = self._labels[label]
-            assert all([key not in coords or coords[key]==val for key, val in coord.items()])
-            coords.update(coord)
-            
-        return self.get(**coords)

@@ -13,7 +13,7 @@ def __init__(self, **kwargs):
     from ..tunable import Permutation
 
     if "dirs_order" not in self.tunable_options:
-        self.add_tunable_option("dirs_order", Permutation(list(self.dims.keys())))
+        self.add_option("dirs_order", Permutation(list(self.dims.keys())))
 
     for dir in self.dims.keys():
         self.label(dir, n_dims=[self.dirs_order.index(dir)])
@@ -29,6 +29,6 @@ def plaquette(self, dirs=None):
     for dir1 in dirs:
         for dir2 in dirs:
             if dir1!=dir2:
-                plaq += (self[dir1] @ self[dir2].shift(dir1, 1) @ \
-                         self[dir1].shift(dir2, 1).conj() @ self[dir2].conj()).sum()
+                plaq += (self[dir1] @ self[dir2].roll(dir1, 1) @ \
+                         self[dir1].roll(dir2, 1).H @ self[dir2].H).trace().sum()
     return plaq

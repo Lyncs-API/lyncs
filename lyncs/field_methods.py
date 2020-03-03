@@ -57,6 +57,28 @@ class FieldMethods:
             new_axes = [ax for ax,size in self.shape if ax!=axis]
             
         return Field(self, field_type=new_axes)
+    
+    
+    def __getitem__(self, coords):
+        from .field import Field
+        return Field(field=self, coords=coords)
+
+    
+    def get(self, *labels, **coords):
+        from .field import Field
+        coords = list(labels) + [coords]
+        return Field(field=self, coords=coords)
+
+
+    def __setitem__(self, coords, value):
+        if isinstance(coords, tuple):
+            return self.set(value, *coords)
+        else:
+            return self.set(value, coords)
+
+    
+    def set(self, value, *labels, **coords):
+        return Field(field=self, coords=coords)    
 
         
     @property
@@ -330,6 +352,7 @@ reductions = (
 
 def prepare(*fields):
     from .field import Field
+    from builtins import all
     assert all([isinstance(field, Field) for field in fields])
     if len(fields)==1:
         return fields, Field(fields[0])
@@ -342,15 +365,13 @@ def wrap_ufunc(ufunc):
     @wraps(ufunc)
     def wrapped(*args, **kwargs):
         from .field import Field
-        from .tunable import Delayed, delayed
-        import numpy as np
+        from .tunable import Delayed, tunable_function
+        from dask import array
         assert len(args)>0 and isinstance(args[0], Field), "First argument must be a field type"
         args = list(args)
-
         # Deducing the number of outputs and the output dtype
-        tmp_args = [np.array([1], dtype=arg.dtype) if isinstance(arg, Field) else arg for arg in args]
-        with np.errstate(all="ignore"):
-            trial = ufunc(*tmp_args, **kwargs)
+        tmp_args = [array.ones((1), dtype=arg.dtype) if isinstance(arg, Field) else arg for arg in args]
+        trial = ufunc(*tmp_args, **kwargs)
 
         # Uniforming the fields involved
         fields = [(i,arg) for i,arg in enumerate(args) if isinstance(arg, Field)]
@@ -360,21 +381,16 @@ def wrap_ufunc(ufunc):
             args[i] = new.field
         
         # Calling ufunc
-        delay = any([isinstance(arg, Delayed) for arg in args])
         if isinstance(trial, tuple):
             fields = tuple(Field(out_field, dtype=val.dtype) for val in trial)
-            if delay:
-                res = delayed(ufunc)(*args, **kwargs)
-                res._length = len(fields)
-            else:
-                res = ufunc(*args, **kwargs)
+            res = tunable_function(ufunc)(*args, **kwargs)
+            if isinstance(res, Delayed): res._length = len(fields)
             for i,field in enumerate(fields):
                 field.field = res[i] 
             return fields
         else:
             out_field.dtype = trial.dtype
-            if delay: out_field.field = delayed(ufunc)(*args, **kwargs)
-            else: out_field.field = ufunc(*args, **kwargs)
+            out_field.field = tunable_function(ufunc)(*args, **kwargs)
             return out_field
     return wrapped
 
@@ -383,8 +399,8 @@ def wrap_reduction(reduction):
     @wraps(reduction)
     def wrapped(field, *axes, **kwargs):
         from .field import Field
-        from .tunable import Delayed, delayed, tunable_property
-        import numpy as np
+        from .tunable import tunable_function
+        from dask import array
         
         assert isinstance(field, Field), "First argument must be a field type"
 
@@ -396,41 +412,40 @@ def wrap_reduction(reduction):
         tmp=kwargs.pop("axes",[])
         axes.extend([tmp] if isinstance(tmp,str) else tmp)
 
-        array = field.field
-        delay = isinstance(array, Delayed)
-        if not axes:
-            if delay: return delayed(reduction)(array, **kwargs)
-            else: return reduction(array, **kwargs)
-        else:
+        dtype = reduction(array.ones((1,), dtype=field.dtype), **kwargs).dtype
+        if axes:
             assert set(axes).issubset(field.dimensions)
-            dtype = reduction(np.array([1], dtype=field.dtype)).dtype
             axes = field._expand(axes)
             new_axes = field.axes
             for axis in set(axes):
                 while axis in new_axes:
                     new_axes.remove(axis)
 
-            @tunable_property
-            def get_axes(field):
-                old_axes = list(field.axes_order)
+            @tunable_function
+            def get_axes(old_axes):
                 axes = list(range(len(old_axes)))
                 for axis in new_axes:
                     axes.pop(old_axes.index(axis))
                     old_axes.remove(axis)
                 return tuple(axes)
                     
-            kwargs["axis"] = get_axes(field)
-            field = Field(field, field_type=new_axes, dtype=dtype)
-            if delay: field.field = delayed(reduction)(array, **kwargs)
-            else: field.field = reduction(array, **kwargs)
-            return field
+            kwargs["axis"] = get_axes(field.axes_order)
+            out = Field(field, field_type=new_axes, dtype=dtype, zeros_init=True)
+        else:
+            out = Field(field, field_type=[], dtype=dtype, zeros_init=True)
+        print(out)
+        out.field = tunable_function(reduction)(field.field, **kwargs)
+        return out
         
     return wrapped
 
 
 
+from functools import partial, update_wrapper
+
 for name, is_member in ufuncs:
     ufunc = getattr(dask,name)
+    if isinstance(ufunc, partial): update_wrapper(ufunc, ufunc.func)
     globals()[name] = wrap_ufunc(ufunc)
     __all__.append(name)
     if is_member:
@@ -439,10 +454,13 @@ for name, is_member in ufuncs:
 
 for name, in operators:
     ufunc = getattr(dask.Array,name)
+    if isinstance(ufunc, partial): update_wrapper(ufunc, ufunc.func)
     setattr(FieldMethods, name, wrap_ufunc(ufunc))
 
 for name, in reductions:
     ufunc = getattr(dask,name)
+    if isinstance(ufunc, partial): update_wrapper(ufunc, ufunc.func)
     globals()[name] = wrap_reduction(ufunc) 
     ufunc = getattr(dask.Array,name)
+    if isinstance(ufunc, partial): update_wrapper(ufunc, ufunc.func)
     setattr(FieldMethods, name, wrap_reduction(ufunc))

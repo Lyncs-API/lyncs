@@ -65,8 +65,6 @@ def zeros_like(
     """
 
     from .field import Field
-    lattice = kwargs.pop("lattice", field.lattice)
-    field_type = kwargs.pop("field_type", field.field_type)
-    # TODO: should connect also the tunable paramters and the distibution order.
+    kwargs["zeros_init"] = True
     
-    return Field(lattice=lattice, field_type=field_type, **kwargs)
+    return Field(field, **kwargs)

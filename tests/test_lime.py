@@ -8,7 +8,7 @@ def test_read_config():
 
     # without distribution
     conf.chunks = conf.dims
-    reference = conf.compute()
+    reference = conf.result()
     assert reference.shape == conf.field_shape
 
     from itertools import product
@@ -17,6 +17,6 @@ def test_read_config():
         chunk = dict(zip(['t','z','y','x'],chunk))
         conf = lyncs.load(conf_path)
         conf.chunks = chunk
-        read = conf.compute()
+        read = conf.result()
         assert numpy.all(read==reference)
     
