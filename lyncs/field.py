@@ -24,8 +24,6 @@ class Field(Tunable, FieldMethods):
             field_type = None,
             dtype = None,
             coords = {},
-            labels = {},
-            tunable_options = {},
             fixed_options = {},
             zeros_init = False,
             **kwargs
@@ -56,11 +54,6 @@ class Field(Tunable, FieldMethods):
            Coordinates of the field, i.e. range of values for any of the dimensions.
            If dictionary, keys must be dimensions of the field and value can be integer, range, slice.
            Otherwise, it can be a label or a list of labels/dictionaries.
-        labels: dict
-           Dictionary of labeled coordinates of the field, e.g. "source": dict(x=0, y=0, z=0, t=0)
-        tunable_options: dict
-           List of tunable parameters with default values.
-           Tunable options are attributes of the field and can be used to condition the computation. 
         fixed_options: dict
            Same as tunable options but with a fixed value.
         zeros_init: bool
@@ -87,9 +80,6 @@ class Field(Tunable, FieldMethods):
                 try: self.label(key, **val)
                 except AssertionError: pass
                 
-        for key,val in labels.items():
-            self.label(key, val)
-        
         if isinstance(field, Field):
             for coord in field.coords:
                 try: self.coords=coord
@@ -126,13 +116,12 @@ class Field(Tunable, FieldMethods):
                         setattr(self, attr, val)
             except ModuleNotFoundError:
                 pass
-            
-        for key,val in tunable_options.items():
-            self.add_option(key, val, user_defined=True)
 
+        fixed_options = fixed_options.copy()
+        
         # Considering the remaining kwargs as fixed options
         for key, val in kwargs.items():
-            assert key not in self.fixed_options, "Repeated fixed options %s" % key
+            assert key not in fixed_options, "Repeated fixed options %s" % key
             fixed_options[key] = val
             
         if "axes_order" in fixed_options:
@@ -377,8 +366,6 @@ class Field(Tunable, FieldMethods):
                     setattr(self, key, val)
                 elif key in self.fixed_options:
                     field = self.transform(key, field, val)
-                elif val._from_user==True:
-                    self.add_option(key,val)
                 
             # TODO implement other checks
 
@@ -411,8 +398,15 @@ class Field(Tunable, FieldMethods):
     def field_shape(self):
         @computable
         def field_shape(axes_order):
-            shape = {key:val for key,val in self.shape}
-            return tuple(shape[key] for key in axes_order)
+            shape = []
+            keys, vals = zip(*self.shape)
+            keys, vals = list(keys), list(vals)
+            for key in axes_order:
+                idx = keys.index(key)
+                shape.append(vals[idx])
+                keys.pop(idx)
+                vals.pop(idx)
+            return tuple(shape)
         
         return field_shape(self.axes_order)
 
@@ -421,8 +415,28 @@ class Field(Tunable, FieldMethods):
     def field_chunks(self):
         @computable
         def field_chunks(chunks, axes_order):
-            shape = {key:val for key,val in self.shape}
-            return tuple(self.chunks[key] if key in self.chunks else shape[key] for key in self.axes_order)
+            keys, vals = zip(*self.shape)
+            Skeys, Svals = list(keys), list(vals)
+            keys, vals = zip(*chunks)
+            Ckeys, Cvals = list(keys), list(vals)
+            chunks = []
+            for key in axes_order:
+                if key in Ckeys:
+                    idx = Ckeys.index(key)
+                    chunks.append(Cvals[idx])
+                    Ckeys.pop(idx)
+                    Cvals.pop(idx)
+                    idx = Skeys.index(key)
+                    Skeys.pop(idx)
+                    Svals.pop(idx)
+                else:
+                    idx = Skeys.index(key)
+                    chunks.append(Svals[idx])
+                    Skeys.pop(idx)
+                    Svals.pop(idx)
+                    
+            return tuple(chunks)
+
         return field_chunks(self.chunks, self.axes_order)
         
 

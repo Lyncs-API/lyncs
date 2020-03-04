@@ -51,14 +51,13 @@ class Tunable:
         return {key:val.value for key,val in self.options.items() if not val.tunable}
 
 
-    def add_option(self, key, opt, user_defined = False, transformer = None):
+    def add_option(self, key, opt, transformer = None):
         "Adds a tunable option where key is the name and opt is a TunableOption"
         assert key not in self.tunable_options, "A tunable options with the given name already exist."
         assert isinstance(opt, TunableOption), "The options must be a TunableOptions."
 
         if not hasattr(self, "_options"): self._options = {}
         opt.__name__ = key
-        opt._from_user = user_defined
         opt._transformer = transformer
         self._options[key] = opt
 
