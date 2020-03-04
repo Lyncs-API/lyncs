@@ -139,11 +139,8 @@ class Field(Tunable, FieldMethods):
 
     @property
     def lattice(self):
-        try:
-            # TODO: should return a copy of lattice
-            return self._lattice
-        except AttributeError:
-            return None
+        from copy import copy
+        return copy(self.__dict__.get("_lattice", None))
         
     @lattice.setter
     def	lattice(self, value):
