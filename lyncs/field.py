@@ -81,9 +81,7 @@ class Field(Tunable, FieldMethods):
                 except AssertionError: pass
                 
         if isinstance(field, Field):
-            for coord in field.coords:
-                try: self.coords=coord
-                except AssertionError: pass
+            self.coords=field.coords
         self.coords = coords
 
         from .tunable import Permutation, ChunksOf
@@ -159,10 +157,8 @@ class Field(Tunable, FieldMethods):
     def dtype(self, value):
         from numpy import dtype
         value = dtype(value)
-        if value != self.dtype:
-            self._dtype = value
-            if self.field is not None:
-                self.field = self.field.astype(value)
+        assert self.dtype is None or value == self.dtype, "dtype cannob be changed directly. Use astype."
+        self._dtype = value
 
 
     @property
@@ -357,6 +353,8 @@ class Field(Tunable, FieldMethods):
                 
                 field = getitem(field, value.axes_order, **coords)
 
+            if self.dtype != value.dtype:
+                field = field.astype(value)
                 
             for key,val in value.options.items():
                 if key in self.tunable_options:

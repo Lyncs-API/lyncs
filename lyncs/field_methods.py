@@ -26,6 +26,14 @@ class FieldMethods:
         return other.dot(self)
 
     
+    def astype(self, dtype):
+        """
+        Changes the dtype of the field.
+        """
+        from .field import Field
+        return Field(self, dtype=dtype)
+    
+    
     def reshape(self, *args, **kwargs):
         """
         *WARNING*: reshape not implemented.
