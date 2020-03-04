@@ -99,7 +99,7 @@ class Field(Tunable, FieldMethods):
         from .tunable import Permutation, ChunksOf
         from collections import Counter
 
-        self.add_option("axes_order", Permutation(self.axes))
+        self.add_option("axes_order", Permutation(self.axes), transformer=self._reorder)
         if len(set(self.axes))==1:
             self.axes_order = self.axes
 
@@ -132,7 +132,7 @@ class Field(Tunable, FieldMethods):
 
         # Considering the remaining kwargs as fixed options
         for key, val in kwargs.items():
-            assert key not in self.fixed_options, "Unknown options %s" % key
+            assert key not in self.fixed_options, "Repeated fixed options %s" % key
             fixed_options[key] = val
             
         if "axes_order" in fixed_options:
@@ -142,13 +142,6 @@ class Field(Tunable, FieldMethods):
             assert key in self.options, "Unknown options %s" % key
             setattr(self, key, val)
             
-        if isinstance(field, Field):
-            for key,val in field.options.items():
-                if key in self.tunable_options:
-                    setattr(self, key, val)
-                elif val._from_user==True:
-                    self.add_option(key,val)
-
         if zeros_init or field is None:
             self.zeros()
         else:
@@ -378,25 +371,14 @@ class Field(Tunable, FieldMethods):
                 
                 field = getitem(field, value.axes_order, **coords)
 
-            if self.axes_order != value.axes_order:
-
-                @computable
-                def reorder(field, new_axes_order, old_axes_order):
-                    from .tunable import Permutation
-                    axes_order = Permutation(new_axes_order)
-                    axes_order.value = old_axes_order
-                    old_axes_order = list(axes_order.value)
-                    old_indeces = list(range(len(old_axes_order)))
-                    axes = []
-                    for key in new_axes_order:
-                        idx = old_indeces[old_axes_order.index(key)]
-                        axes.append(idx)
-                        old_axes_order.remove(key)
-                        old_indeces.remove(idx)
-
-                    return field.transpose(*axes)
                 
-                field = reorder(field, self.axes_order, value.axes_order)
+            for key,val in value.options.items():
+                if key in self.tunable_options:
+                    setattr(self, key, val)
+                elif key in self.fixed_options:
+                    field = self.transform(key, field, val)
+                elif val._from_user==True:
+                    self.add_option(key,val)
                 
             # TODO implement other checks
 

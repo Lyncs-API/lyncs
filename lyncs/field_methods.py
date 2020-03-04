@@ -37,6 +37,31 @@ class FieldMethods:
         assert False, FieldMethods.reshape.__doc__
 
         
+    def _reorder(self, key, field, new_axes_order, old_axes_order):
+        from .tunable import computable
+        assert key == "axes_order", "Got wrong key! %s" % key
+        
+        @computable
+        def reorder(field, new_axes_order, old_axes_order):
+            from collections import Counter
+            assert Counter(new_axes_order) == Counter(old_axes_order), """
+            Got not compatible new_ and old_axes_order:
+            new_axes_order = %s
+            old_axes_order = %s
+            """ % (new_axes_order, old_axes_order)
+            old_indeces = list(range(len(old_axes_order)))
+            axes = []
+            for key in new_axes_order:
+                idx = old_indeces[old_axes_order.index(key)]
+                axes.append(idx)
+                old_axes_order.remove(key)
+                old_indeces.remove(idx)
+                
+            return field.transpose(*axes)
+        
+        return reorder(field, new_axes_order, old_axes_order)
+
+        
     def reorder(self, *axes_order):
         """
         Changes the axes_order of the field.
