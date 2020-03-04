@@ -2,7 +2,7 @@ __all__ = [
     "Field",
 ]
 
-from .tunable import Tunable, tunable_function
+from .tunable import Tunable, computable
 from .field_methods import FieldMethods
 from functools import wraps
 from .tunable import visualize, compute, persist
@@ -355,7 +355,7 @@ class Field(Tunable, FieldMethods):
 
     @field.setter
     def field(self, value):
-        from .tunable import Delayed, delayed, tunable_function
+        from .tunable import Delayed, delayed, computable
         from dask.array import Array
         
         if isinstance(value, Field):
@@ -365,7 +365,7 @@ class Field(Tunable, FieldMethods):
                 
                 coords = {key:val for key,val in self.coords.items() if key not in value.coords}
 
-                @tunable_function
+                @computable
                 def getitem(field, axes_order, **coords):
                     mask = [slice(None) for i in self.axes]
                     for key,val in coords.items():
@@ -404,7 +404,7 @@ class Field(Tunable, FieldMethods):
             
     @property
     def field_shape(self):
-        @tunable_function
+        @computable
         def field_shape(axes_order):
             shape = {key:val for key,val in self.shape}
             return tuple(shape[key] for key in axes_order)
@@ -414,7 +414,7 @@ class Field(Tunable, FieldMethods):
 
     @property
     def field_chunks(self):
-        @tunable_function
+        @computable
         def field_chunks(chunks, axes_order):
             shape = {key:val for key,val in self.shape}
             return tuple(self.chunks[key] if key in self.chunks else shape[key] for key in self.axes_order)
@@ -506,12 +506,12 @@ class Field(Tunable, FieldMethods):
         info: information needed to perform the reading.
         """
         from .io import file_manager
-        from .tunable import tunable_function
+        from .tunable import computable
         from dask.array import from_delayed
         
         io = file_manager(filename, format=format, field=self, **info)
 
-        @tunable_function
+        @computable
         def read_field(shape, chunks):
             from dask.highlevelgraph import HighLevelGraph
             from dask.array.core import normalize_chunks, Array
@@ -555,10 +555,10 @@ class Field(Tunable, FieldMethods):
         """
         Initialize the field with zeros.
         """
-        from .tunable import tunable_function
+        from .tunable import computable
         from dask.array import zeros
 
-        @tunable_function
+        @computable
         def zero_field(*args, **kwargs):
             return zeros(*args, **kwargs)
         

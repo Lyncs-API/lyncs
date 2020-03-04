@@ -48,9 +48,9 @@ def add_parameters_to_doc(doc, doc_params):
             
 
 def to_list(*args):
-    from .tunable import tunable_function, Delayed
+    from .tunable import computable, Delayed
     
-    @tunable_function
+    @computable
     def to_list(*args):
         return list(args)
     

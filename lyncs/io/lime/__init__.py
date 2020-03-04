@@ -117,7 +117,7 @@ def get_type(filename, lattice=None, field_type=None, **kwargs):
     return field
 
 
-from ...tunable import Tunable, tunable_function, delayed
+from ...tunable import Tunable, computable, delayed
 
 class file_manager(Tunable):
     
@@ -129,7 +129,7 @@ class file_manager(Tunable):
 
     @property
     def engine(self):
-        @tunable_function
+        @computable
         def engine(lime_engine):
             return get_engine(lime_engine)
         return engine(self.lime_engine)

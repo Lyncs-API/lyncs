@@ -7,7 +7,7 @@ __all__ = [
     "Delayed",
     "RaiseNotTuned",
     "Tunable",
-    "tunable_function",
+    "computable",
     "LyncsMethodsMixin",
 ]
 
@@ -118,7 +118,7 @@ def wrap_array(array):
             return self.array
     return delayed(wrapped(array))()
 
-def tunable_function(fnc):
+def computable(fnc):
     from functools import wraps
     @wraps(fnc)
     def _fnc(*args, **kwargs):
@@ -171,7 +171,7 @@ class TunableOption:
             if isinstance(value, TunableOption):
                 value = value.value
                 
-            self._value = tunable_function(self.format)(value)
+            self._value = computable(self.format)(value)
 
 
     def __call__(self, value=None):

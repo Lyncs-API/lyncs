@@ -365,7 +365,7 @@ def wrap_ufunc(ufunc):
     @wraps(ufunc)
     def wrapped(*args, **kwargs):
         from .field import Field
-        from .tunable import Delayed, tunable_function
+        from .tunable import Delayed, computable
         from dask import array
         assert len(args)>0 and isinstance(args[0], Field), "First argument must be a field type"
         args = list(args)
@@ -383,14 +383,14 @@ def wrap_ufunc(ufunc):
         # Calling ufunc
         if isinstance(trial, tuple):
             fields = tuple(Field(out_field, dtype=val.dtype) for val in trial)
-            res = tunable_function(ufunc)(*args, **kwargs)
+            res = computable(ufunc)(*args, **kwargs)
             if isinstance(res, Delayed): res._length = len(fields)
             for i,field in enumerate(fields):
                 field.field = res[i] 
             return fields
         else:
             out_field.dtype = trial.dtype
-            out_field.field = tunable_function(ufunc)(*args, **kwargs)
+            out_field.field = computable(ufunc)(*args, **kwargs)
             return out_field
     return wrapped
 
@@ -399,7 +399,7 @@ def wrap_reduction(reduction):
     @wraps(reduction)
     def wrapped(field, *axes, **kwargs):
         from .field import Field
-        from .tunable import tunable_function
+        from .tunable import computable
         from dask import array
         
         assert isinstance(field, Field), "First argument must be a field type"
@@ -421,7 +421,7 @@ def wrap_reduction(reduction):
                 while axis in new_axes:
                     new_axes.remove(axis)
 
-            @tunable_function
+            @computable
             def get_axes(old_axes):
                 axes = list(range(len(old_axes)))
                 for axis in new_axes:
@@ -434,7 +434,7 @@ def wrap_reduction(reduction):
         else:
             out = Field(field, field_type=[], dtype=dtype, zeros_init=True)
             
-        out.field = tunable_function(reduction)(field.field, **kwargs)
+        out.field = computable(reduction)(field.field, **kwargs)
         return out
         
     return wrapped
