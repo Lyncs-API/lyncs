@@ -24,13 +24,22 @@ class FieldMethods:
     
     def __rmatmul__(self, other):
         return other.dot(self)
+
     
-    
-    def reshape(self, *axes_order):
+    def reshape(self, *args, **kwargs):
+        """
+        *WARNING*: reshape not implemented.
+
+        Does it make sense to reshape a field?
+        If yes, please open a detailed issue on github.com/sbacchio/lyncs
+        and it will be discussed. Thanks! <sbacchio>
+        """
+        assert False, FieldMethods.reshape.__doc__
+
+        
+    def reorder(self, *axes_order):
         """
         Changes the axes_order of the field.
-        
-        *NOTE*: this is conceptually different from numpy.reshape.
         """
         from .field import Field
         return Field(self, axes_order=axes_order)

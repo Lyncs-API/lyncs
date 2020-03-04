@@ -13,15 +13,15 @@ def __init__(self, **kwargs):
     from ..tunable import Permutation
 
     if "dirs_order" not in self.tunable_options:
-        self.add_option("dirs_order", Permutation(list(self.dims.keys())))
+        self.add_option("dirs_order", Permutation(list(self.dims)))
 
-    for dir in self.dims.keys():
+    for dir in self.dims:
         self.label(dir, n_dims=self.dirs_order.index(dir))
     
 
 
 def plaquette(self, dirs=None):
-    dirs = set(dirs or self.dims.keys())
+    dirs = set(dirs or self.dims)
     assert dirs.issubset(self.dims), "Dims not part of the field"
     assert len(dirs) > 1, "At least two dims needed for computing plaquette"
 

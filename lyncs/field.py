@@ -99,10 +99,8 @@ class Field(Tunable, FieldMethods):
         from .tunable import Permutation, ChunksOf
         from collections import Counter
 
-        counts = Counter(self.axes)
-        if len(counts)>1:
-            self.add_option("axes_order", Permutation(self.axes))
-        else:
+        self.add_option("axes_order", Permutation(self.axes))
+        if len(set(self.axes))==1:
             self.axes_order = self.axes
 
         for key,count in Counter(self.axes).items():
@@ -110,10 +108,10 @@ class Field(Tunable, FieldMethods):
                 self.add_option(key+"_order", Permutation(list(range(count))))
 
         from numpy import prod
-        if prod([v for v in self.dims.values()])>1:
-            self.add_option("chunks", ChunksOf(self.dims))
-        else:
-            self.chunks = self.dims
+        chunks = [(key,val) for key, val in self.shape if val>1 and key in self.dims]
+        self.add_option("chunks", ChunksOf(chunks))
+        if prod([val for key,val in chunks])==1:
+            self.chunks = chunks
 
         # Loading dynamically methods and attributed from the field types in fields
         from importlib import import_module
@@ -132,12 +130,15 @@ class Field(Tunable, FieldMethods):
         for key,val in tunable_options.items():
             self.add_option(key, val, user_defined=True)
 
-        for key, val in fixed_options.items():
-            assert key in self.options, "Unknown options %s" % key
-            setattr(self, key, val)
-
-        # Considering the remaining kwargs as tunable options
+        # Considering the remaining kwargs as fixed options
         for key, val in kwargs.items():
+            assert key not in self.fixed_options, "Unknown options %s" % key
+            fixed_options[key] = val
+            
+        if "axes_order" in fixed_options:
+            fixed_options["axes_order"] = self._expand(fixed_options["axes_order"])
+            
+        for key, val in fixed_options.items():
             assert key in self.options, "Unknown options %s" % key
             setattr(self, key, val)
             
@@ -187,12 +188,12 @@ class Field(Tunable, FieldMethods):
 
     @property
     def dims(self):
-        return {key:size for key,size in self.shape if key in self.lattice.dims}
+        return [key for key in self.axes if key in self.lattice.dims]
 
     
     @property
     def dofs(self):
-        return {key:size for key,size in self.shape if key in self.lattice.dofs}
+        return [key for key in self.axes if key not in self.lattice.dims]
 
 
     def _expand(self, prop):
@@ -203,7 +204,9 @@ class Field(Tunable, FieldMethods):
             elif prop in self.lattice and isinstance(self.lattice[prop], int):
                 return prop
             else:
-                if prop in self.lattice:
+                if prop in ["dims", "dofs"] and self.field_type is not None:
+                    return " ".join([__expand(key) for key in getattr(self,prop)])
+                elif prop in self.lattice:
                     return " ".join([__expand(key) for key in self.lattice[prop]])
                 else:
                     return " ".join([__expand(key) for key in self._field_types[prop]])
@@ -242,7 +245,7 @@ class Field(Tunable, FieldMethods):
         """
         Returns the list of fundamental dimensions. The order is not significant.
         """
-        return self._expand(self.field_type)
+        return self.__dict__.get("_axes", [])
     
     
     @property
@@ -286,7 +289,8 @@ class Field(Tunable, FieldMethods):
                         break
                 except:
                     pass
-                    
+
+        self._axes = self._expand(value)
         self._field_type = value
 
 
@@ -370,11 +374,30 @@ class Field(Tunable, FieldMethods):
                     mask = [slice(None) for i in self.axes]
                     for key,val in coords.items():
                         mask[axes_order.index(key)] = val
-                    print(mask)
                     return field[tuple(mask)]
                 
                 field = getitem(field, value.axes_order, **coords)
 
+            if self.axes_order != value.axes_order:
+
+                @computable
+                def reorder(field, new_axes_order, old_axes_order):
+                    from .tunable import Permutation
+                    axes_order = Permutation(new_axes_order)
+                    axes_order.value = old_axes_order
+                    old_axes_order = list(axes_order.value)
+                    old_indeces = list(range(len(old_axes_order)))
+                    axes = []
+                    for key in new_axes_order:
+                        idx = old_indeces[old_axes_order.index(key)]
+                        axes.append(idx)
+                        old_axes_order.remove(key)
+                        old_indeces.remove(idx)
+
+                    return field.transpose(*axes)
+                
+                field = reorder(field, self.axes_order, value.axes_order)
+                
             # TODO implement other checks
 
             self.field = field
