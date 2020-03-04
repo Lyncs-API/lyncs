@@ -16,7 +16,7 @@ def __init__(self, **kwargs):
         self.add_option("dirs_order", Permutation(list(self.dims.keys())))
 
     for dir in self.dims.keys():
-        self.label(dir, n_dims=[self.dirs_order.index(dir)])
+        self.label(dir, n_dims=self.dirs_order.index(dir))
     
 
 
