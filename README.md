@@ -1,3 +1,6 @@
+
+![alt text](https://github.com/sbacchio/lyncs/blob/master/logo.png "Lyncs")
+
 # Lyncs
 
 ## A python API for Lattice QCD applications
