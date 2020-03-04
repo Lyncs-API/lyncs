@@ -109,7 +109,14 @@ class Tunable:
         from .utils import default_repr
         return default_repr(self)
         
-
+def wrap_array(array):
+    class wrapped:
+        def __init__(self, array):
+            self.array = array
+            self.__name__ = array.name
+        def __call__(self):
+            return self.array
+    return delayed(wrapped(array))()
 
 def tunable_function(fnc):
     from functools import wraps
@@ -117,6 +124,14 @@ def tunable_function(fnc):
     def _fnc(*args, **kwargs):
         if any((isinstance(v, Delayed) for v in args)) or \
            any((isinstance(v, Delayed) for v in kwargs.values())):
+            
+            from dask.array import Array
+            
+            args = list(args)
+            for i,val in enumerate(args):
+                if isinstance(val, Array):
+                    args[i] = wrap_array(val)
+            
             return delayed(_fnc)(*args, **kwargs)
         else:
             return fnc(*args, **kwargs)
@@ -149,10 +164,14 @@ class TunableOption:
         assert not hasattr(self,"_value") or self._value == format(value), """
         The value of a fixed option cannot be changed.
         """
-        if isinstance(value, TunableOption):
-            value = value.value
-        
-        self._value = tunable_function(self.format)(value)
+        if type(value) == type(self) and self.source == value.source:
+            self._value = value.value
+            
+        else:
+            if isinstance(value, TunableOption):
+                value = value.value
+                
+            self._value = tunable_function(self.format)(value)
 
 
     def __call__(self, value=None):

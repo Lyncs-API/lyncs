@@ -143,7 +143,7 @@ class Field(Tunable, FieldMethods):
             
         if isinstance(field, Field):
             for key,val in field.options.items():
-                if key in self.options:
+                if key in self.tunable_options:
                     setattr(self, key, val)
                 elif val._from_user==True:
                     self.add_option(key,val)
@@ -322,7 +322,8 @@ class Field(Tunable, FieldMethods):
                 try:
                     assert len(list(val)) > 0, "Empty list not allowed"
                 except TypeError:
-                    val = [val]
+                    from .utils import to_list
+                    val = to_list(val)
                     
                 _coords[dim]=val
                 
@@ -354,25 +355,30 @@ class Field(Tunable, FieldMethods):
 
     @field.setter
     def field(self, value):
-        from .tunable import Delayed, tunable_function
+        from .tunable import Delayed, delayed, tunable_function
         from dask.array import Array
         
         if isinstance(value, Field):
-            self._field = value.field
+            field = value.field
             
             if self.coords != value.coords:
-                field_coords = value.coords if hasattr(value, "_coords") else {}
-                coords = {key:val for key,val in self.coords.items() if key not in field_coords}
+                
+                coords = {key:val for key,val in self.coords.items() if key not in value.coords}
 
                 @tunable_function
-                def get_coord(axes_order):
-                    mask = [slice(None) for i in self.shape]
+                def getitem(field, axes_order, **coords):
+                    mask = [slice(None) for i in self.axes]
                     for key,val in coords.items():
                         mask[axes_order.index(key)] = val
-                    return tuple(mask)
+                    print(mask)
+                    return field[tuple(mask)]
                 
-                self._field = self._field[get_coord(value.axes_order)]
-                
+                field = getitem(field, value.axes_order, **coords)
+
+            # TODO implement other checks
+
+            self.field = field
+            
         elif isinstance(value, Delayed):
             self._field = value
 
