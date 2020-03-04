@@ -97,7 +97,7 @@ class Field(Tunable, FieldMethods):
 
         from numpy import prod
         chunks = [(key,val) for key, val in self.shape if val>1 and key in self.dims]
-        self.add_option("chunks", ChunksOf(chunks))
+        self.add_option("chunks", ChunksOf(chunks), transformer=self._rechunk)
         if prod([val for key,val in chunks])==1:
             self.chunks = chunks
 

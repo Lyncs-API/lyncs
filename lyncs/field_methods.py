@@ -46,6 +46,7 @@ class FieldMethods:
 
         
     def _reorder(self, key, field, new_axes_order, old_axes_order):
+        "Transformation for changing axes_order"
         from .tunable import computable
         assert key == "axes_order", "Got wrong key! %s" % key
         
@@ -78,6 +79,18 @@ class FieldMethods:
         return Field(self, axes_order=axes_order)
     
     
+    def _rechunk(self, key, field, new_chunks, old_chunks):
+        "Transformation for changing chunks"
+        from .tunable import computable
+        assert key == "chunks", "Got wrong key! %s" % key
+        
+        @computable
+        def rechunk(field, field_chunks):
+            return field.rechunk(field_chunks)
+        
+        return rechunk(field, self.field_chunks)
+
+        
     def rechunk(self, **chunks):
         """
         Changes the chunks of the field.

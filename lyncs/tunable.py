@@ -56,7 +56,8 @@ class Tunable:
         assert key not in self.tunable_options, "A tunable options with the given name already exist."
         assert isinstance(opt, TunableOption), "The options must be a TunableOptions."
 
-        if not hasattr(self, "_options"): self._options = {}
+        from collections import OrderedDict
+        if not hasattr(self, "_options"): self._options = OrderedDict()
         opt.__name__ = key
         opt._transformer = transformer
         self._options[key] = opt
