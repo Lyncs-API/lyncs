@@ -81,7 +81,11 @@ class Field(Tunable, FieldMethods):
                 except AssertionError: pass
                 
         if isinstance(field, Field):
-            self.coords=field.coords
+            field_coords = field.coords
+            for key in list(field_coords):
+                if key not in self.axes:
+                    field_coords.pop(key)
+            self.coords = field_coords
         self.coords = coords
 
         from .tunable import Permutation, ChunksOf
@@ -151,7 +155,8 @@ class Field(Tunable, FieldMethods):
 
     @property
     def dtype(self):
-        return self.__dict__.get("_dtype", None)
+        from copy import copy
+        return copy(self.__dict__.get("_dtype", None))
     
     @dtype.setter
     def dtype(self, value):
@@ -220,7 +225,7 @@ class Field(Tunable, FieldMethods):
         """
         Returns the list of fundamental dimensions. The order is not significant.
         """
-        return self.__dict__.get("_axes", [])
+        return list(self.__dict__.get("_axes", []))
     
     
     @property
@@ -239,12 +244,13 @@ class Field(Tunable, FieldMethods):
     
     @property
     def field_type(self):
-        return self.__dict__.get("_field_type", None)
+        from copy import copy
+        return copy(self.__dict__.get("_field_type", None))
     
 
     @field_type.setter
     def	field_type(self, value):
-        assert self.field_type is None, "Not allowed to change field_type, if needed ask to implement it"
+        assert self.field_type is None, "Not allowed to change field_type"
         def is_known(self, key):
             if isinstance(key, (list, tuple)):
                 return all(is_known(self,k) for k in key)
@@ -271,12 +277,12 @@ class Field(Tunable, FieldMethods):
 
     @property
     def coords(self):
-        return self.__dict__.get("_coords", {})
+        return dict(self.__dict__.get("_coords", {}))
 
     
     @coords.setter
     def coords(self, coords):
-
+        assert self.field is None, "Not allowed to change coords. Use get."
         _coords = {}
         def unpack(coords):
             if isinstance(coords, (tuple, list)):
@@ -341,17 +347,11 @@ class Field(Tunable, FieldMethods):
             field = value.field
             
             if self.coords != value.coords:
-                
-                coords = {key:val for key,val in self.coords.items() if key not in value.coords}
+                field = self._getitem(field, self.coords, value.coords, value.axes_order)
 
-                @computable
-                def getitem(field, axes_order, **coords):
-                    mask = [slice(None) for i in self.axes]
-                    for key,val in coords.items():
-                        mask[axes_order.index(key)] = val
-                    return field[tuple(mask)]
-                
-                field = getitem(field, value.axes_order, **coords)
+            from collections import Counter
+            if Counter(self.axes) != Counter(value.axes):
+                field = self._squeeze(field, self.axes, value.axes_order, value.field_shape)
 
             if self.dtype != value.dtype:
                 field = field.astype(value)
@@ -362,8 +362,6 @@ class Field(Tunable, FieldMethods):
                 elif key in self.fixed_options:
                     field = self.transform(key, field, val)
                 
-            # TODO implement other checks
-
             self.field = field
             
         elif isinstance(value, Delayed):
@@ -455,7 +453,7 @@ class Field(Tunable, FieldMethods):
     
     @property
     def labels(self):
-        return self.__dict__.get("_labels",{})
+        return dict(self.__dict__.get("_labels",{}))
 
     
     def label(self, name, **coords):

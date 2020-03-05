@@ -99,19 +99,57 @@ class FieldMethods:
         return Field(self, chunks=chunks)
     
     
+    def _squeeze(self, field, new_axes, old_axes_order, old_field_shape):
+        "Transformation for squeezing axes"
+        from .tunable import computable
+        
+        @computable
+        def squeeze(field, new_axes, old_axes_order, old_field_shape):
+            from collections import Counter
+            axes = []
+            for i, (axis, size) in enumerate(zip(list(old_axes_order), old_field_shape)):
+                if axis in new_axes and size>1:
+                    continue
+                elif axis in new_axes and new_axes.count(axis) == old_axes_order.count(axis):
+                    continue
+            
+                assert size==1, "Trying to squeeze axis (%s) with size (%s) larger than one" % (axis,size)
+                old_axes_order.remove(axis)
+                axes.append(i)
+            assert Counter(new_axes) == Counter(old_axes_order), "This should not happen"
+            return field.squeeze(axis=tuple(axes))
+        
+        return squeeze(field, new_axes, old_axes_order, old_field_shape)
+            
+    
     def squeeze(self, axis=None):
         """
         Removes axes with size one. (E.g. axes where a coordinate has been selected)
         """
+        from .field import Field
         if axis is None:
             new_axes = [axis for axis,size in self.shape if size>1]
         else:
-            shape = {axis:size for axis,size in self.shape}
-            assert axis in shape
-            assert shape[axis]==1
-            new_axes = [ax for ax,size in self.shape if ax!=axis]
+            axes = self._expand(axis)
+            new_axes = [axis for axis,size in self.shape if size>1 or axis not in axes]
             
         return Field(self, field_type=new_axes)
+
+
+    def _getitem(self, field, new_coords, old_coords, old_axes_order):
+        "Transformation for getitem"
+        from .tunable import computable        
+        coords = {key:val for key,val in new_coords.items() if key not in old_coords or val is not old_coords[key]}
+        if not coords: return field
+        
+        @computable
+        def getitem(field, axes_order, **coords):
+            mask = [slice(None) for i in self.axes]
+            for key,val in coords.items():
+                mask[axes_order.index(key)] = val
+            return field[tuple(mask)]
+        
+        return getitem(field, old_axes_order, **coords)
     
     
     def __getitem__(self, coords):
