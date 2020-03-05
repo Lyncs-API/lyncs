@@ -327,7 +327,7 @@ class FieldMethods:
                 if self.axes.count(axis) == 2:
                     axes.append(axis)
         else:
-            # TODO should work also for non-fundamental axes
+            # should it work also for non-fundamental axes?
             for	axis in	axes:
                 assert self.axes.count(axis) == 2, "Only matrix indeces can be traced"
                 
@@ -336,7 +336,7 @@ class FieldMethods:
             while axis in new_axes:
                 new_axes.remove(axis)
             
-        new_field = Field(self, field_type = new_axes)
+        new_field = Field(self, field_type=new_axes, zeros_init=True)
         
         if len(axes) == 1:
             new_field.field = self.field #TODO
@@ -495,15 +495,15 @@ reductions = (
 )
 
 
-def prepare(*fields):
+def prepare(*fields, **kwargs):
     from .field import Field
     from builtins import all
     assert all([isinstance(field, Field) for field in fields])
     if len(fields)==1:
-        return fields, Field(fields[0])
+        return fields, Field(fields[0], **kwargs)
     
     # TODO
-    return fields, Field(fields[0])
+    return fields, Field(fields[0], **kwargs)
 
 
 def wrap_ufunc(ufunc):
@@ -515,26 +515,31 @@ def wrap_ufunc(ufunc):
         assert len(args)>0 and isinstance(args[0], Field), "First argument must be a field type"
         args = list(args)
         # Deducing the number of outputs and the output dtype
-        tmp_args = [array.ones((1), dtype=arg.dtype) if isinstance(arg, Field) else arg for arg in args]
+        tmp_args = (array.ones((1), dtype=arg.dtype) if isinstance(arg, Field) else arg for arg in args)
         trial = ufunc(*tmp_args, **kwargs)
 
+        if isinstance(trial, tuple):
+            dtype = trial[0].dtype
+        else:
+            dtype = trial.dtype
+            
         # Uniforming the fields involved
-        fields = [(i,arg) for i,arg in enumerate(args) if isinstance(arg, Field)]
-        new_fields, out_field = prepare(*[field for i,field in fields])
-        for (i,old), new in zip(fields, new_fields):
-            assert args[i] is old, "Trivial assertion" % (old, args[i])
-            args[i] = new.field
+        fields = (arg for arg in args if isinstance(arg, Field))
+        idxs = (i for i,arg in enumerate(args) if isinstance(arg, Field))
+        new_fields, out_field = prepare(*fields, dtype=dtype)
         
+        for i,new in zip(idxs, new_fields):
+            args[i] = new.field
+            
         # Calling ufunc
         if isinstance(trial, tuple):
-            fields = tuple(Field(out_field, dtype=val.dtype) for val in trial)
+            fields = (out_field,) + tuple(Field(out_field, dtype=val.dtype) for val in trial[1:])
             res = computable(ufunc)(*args, **kwargs)
             if isinstance(res, Delayed): res._length = len(fields)
             for i,field in enumerate(fields):
                 field.field = res[i] 
             return fields
         else:
-            out_field.dtype = trial.dtype
             out_field.field = computable(ufunc)(*args, **kwargs)
             return out_field
     return wrapped
