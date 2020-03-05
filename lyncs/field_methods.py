@@ -200,6 +200,42 @@ class FieldMethods:
         return self.transpose()
     
     
+    def _transpose(self, key, field, new_order, old_order):
+        "Transformation for transposing"
+        from .tunable import computable
+        assert key.endswith("_order") and key[:-6] in self.axes, "Got wrong key! %s" % key
+        
+        @computable
+        def transpose(field, axis, axes_order, new_order, old_order):
+            assert axes_order.count(axis) == len(new_order) and len(new_order) == len(old_order) and \
+                len(new_order) == len(set(new_order)) and set(new_order) == set(old_order), """
+            Got wrong parameters for performing transpose.
+                axis: %s
+                axes_order: %s
+                new_order: %s
+                old_order: %s
+            """ % (axis, axes_order, new_order, old_order)
+            old_axes_order = list(axes_order)
+            new_axes_order = list(axes_order)
+            for new, old in zip(new_order,old_order):
+                idx = old_axes_order.index(axis)
+                old_axes_order[idx] = axis+str(old)
+                new_axes_order[idx] = axis+str(new)
+                
+            axes = []
+            indeces = list(range(len(axes_order)))
+            for axis in new_axes_order:
+                idx = indeces[old_axes_order.index(axis)]
+                axes.append(idx)
+                old_axes_order.remove(axis)
+                indeces.remove(idx)
+                
+            return field.transpose(*axes)
+        
+        return transpose(field, key[:-6], self.axes_order, new_order, old_order)
+        
+        
+        
     def transpose(self, *axes, **axes_order):
         """
         Transposes the matrix/tensor indeces, i.e. the dimensions that are repeated.
@@ -214,6 +250,8 @@ class FieldMethods:
         axes_order: dict
             Same as axes, but specifying the reordering of the indeces. The keys must be "*axis*_order".
         """
+        from .field import Field
+        from .tunable import computable
         
         axes = list(axes)
         if not axes and not axes_order:
@@ -242,10 +280,14 @@ class FieldMethods:
                     if count > 1:
                         new_order[key2+"_order"] = axes_order[key+"_order"]
                 elif count > 1:
-                    new_order[key2+"_order"] = reversed(getattr(self, key2+"_order"))
+                    new_order[key2+"_order"] = computable(reversed)(getattr(self, key2+"_order"))
 
         if new_order:
-            return Field(self, **new_order)
+            ret = Field(self, **new_order)
+            # restoring previous order
+            for key in new_order:
+                ret.options[key].set(self.options[key], force=True)
+            return ret
         else:
             return self
 
@@ -267,7 +309,7 @@ class FieldMethods:
         axes_order: dict
             Same as axes, but specifying the reordering of the indeces. The keys must be "*axis*_order".
         """
-        return self.transpose(*axes, **axes_order).conj()
+        return self.conj().transpose(*axes, **axes_order)
 
     
     def trace(self, *axes):

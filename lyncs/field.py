@@ -97,7 +97,7 @@ class Field(Tunable, FieldMethods):
 
         for key,count in Counter(self.axes).items():
             if count > 1:
-                self.add_option(key+"_order", Permutation(list(range(count))))
+                self.add_option(key+"_order", Permutation(list(range(count))), transformer=self._transpose)
 
         from numpy import prod
         chunks = [(key,val) for key, val in self.shape if val>1 and key in self.dims]

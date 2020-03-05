@@ -174,9 +174,13 @@ class TunableOption:
         
     @value.setter
     def value(self, value):
-        assert not hasattr(self,"_value") or self._value == format(value), """
-        The value of a fixed option cannot be changed.
-        """
+        self.set(value)
+
+    def set(self, value, force=False):
+        if not force:
+            assert not hasattr(self,"_value") or self._value == format(value), """
+            The value of a fixed option cannot be changed.
+            """
         if type(value) == type(self) and self.source == value.source:
             self._value = value.value
             
@@ -252,6 +256,7 @@ class Permutation(TunableOption):
         
     def format(self, value):
         from collections import Counter
+        value = list(value)
         assert all((value.count(key)==val for key,val in Counter(self.source).items())), """
             Permutation: %s
             Given value: %s
