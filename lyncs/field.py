@@ -134,7 +134,7 @@ class Field(Tunable, FieldMethods):
             setattr(self, key, val)
             
         if zeros_init or field is None:
-            self.zeros()
+            self.zeros(field if isinstance(field, Field) else None)
         else:
             self.field = field
         
@@ -563,13 +563,23 @@ class Field(Tunable, FieldMethods):
         save(self, filename, format=format, field=overwrite)
 
 
-    def zeros(self):
+    def zeros(self, field=None):
         """
         Initialize the field with zeros.
+
+        Parameters
+        ----------
+        field: Field
+            If field is given then tunable options are transfered where possible.
         """
         from .tunable import computable
         from dask.array import zeros
-
+        
+        if field is not None:
+            for key,val in field.options.items():
+                if key in self.tunable_options:
+                    setattr(self, key, val)
+                    
         @computable
         def zero_field(*args, **kwargs):
             return zeros(*args, **kwargs)

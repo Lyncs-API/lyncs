@@ -499,6 +499,9 @@ def prepare(*fields, **kwargs):
     from .field import Field
     from builtins import all
     assert all([isinstance(field, Field) for field in fields])
+    
+    kwargs["zeros_init"] = True
+    
     if len(fields)==1:
         return fields, Field(fields[0], **kwargs)
     
@@ -580,9 +583,9 @@ def wrap_reduction(reduction):
                 return tuple(axes)
                     
             kwargs["axis"] = get_axes(field.axes_order)
-            out = Field(field, field_type=new_axes, dtype=dtype, zeros_init=True)
+            _, out = prepare(field, field_type=new_axes, dtype=dtype)
         else:
-            out = Field(field, field_type=[], dtype=dtype, zeros_init=True)
+            _, out = prepare(field, field_type=[], dtype=dtype)
             
         out.field = computable(reduction)(field.field, **kwargs)
         return out
