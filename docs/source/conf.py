@@ -18,7 +18,7 @@
 # -- Project information -----------------------------------------------------
 
 project = 'Lyncs'
-copyright = '2020, Simone Bacchio'
+copyright = '2019, Simone Bacchio'
 author = 'Simone Bacchio'
 
 # The full version, including alpha/beta/rc tags
@@ -31,6 +31,7 @@ release = '0.0.0'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
+    'sphinx.ext.autosectionlabel',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -54,8 +55,11 @@ html_theme = 'alabaster'
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
 
+html_favicon = '_static/icon.png'
+
 html_theme_options = {
     'logo': 'logo.png',
     'github_user': 'sbacchio',
     'github_repo': 'lyncs',
+    'touch_icon': 'icon.png',
 }

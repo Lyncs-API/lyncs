@@ -2,6 +2,7 @@
 Lyncs
 =====
 
+
 Lyncs, a python API for lattice QCD applications
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -12,6 +13,23 @@ Lyncs, a python API for lattice QCD applications
    :caption: Getting Started
 	     
    install.rst
+
+
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+   :caption: User Guide
+	     
+
+
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+   :caption: Help & Reference
+
+   faqs.rst
+   contacts.rst
+   license.rst
 
 
 Indices and tables
