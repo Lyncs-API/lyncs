@@ -136,20 +136,26 @@ class FieldMethods:
         return Field(self, field_type=new_axes)
 
 
-    def _getitem(self, field, new_coords, old_coords, old_axes_order):
+    def _getitem(self, field, new_coords, old_coords, old_axes_order, setitem=None):
         "Transformation for getitem"
-        from .tunable import computable        
+        from .tunable import computable
         coords = {key:val for key,val in new_coords.items() if key not in old_coords or val is not old_coords[key]}
         if not coords: return field
         
         @computable
-        def getitem(field, axes_order, **coords):
+        def getitem(field, setitem, axes_order, **coords):
             mask = [slice(None) for i in self.axes]
             for key,val in coords.items():
                 mask[axes_order.index(key)] = val
+                
+            if setitem is not None:
+                field[tuple(mask)] = setitem
+                return field
+            
             return field[tuple(mask)]
-        
-        return getitem(field, old_axes_order, **coords)
+
+        if setitem is not None: getitem.__name__ = "setitem"
+        return getitem(field, setitem, old_axes_order, **coords)
     
     
     def __getitem__(self, coords):
@@ -171,7 +177,11 @@ class FieldMethods:
 
     
     def set(self, value, *labels, **coords):
-        return Field(field=self, coords=coords)    
+        from .field import Field
+        coords = list(labels) + [coords]
+        tmp = Field(field=self, coords=coords)
+        tmp.field = value
+        self.field = self._getitem(self.field, coords, self.coords, self.axes_order, setitem = tmp.field)
 
         
     @property
