@@ -29,6 +29,9 @@ Lyncs, a python API for lattice QCD applications
 
    faqs.rst
    contacts.rst
+   citing.rst
+   publications.rst
+   fundings.rst
    license.rst
 
 

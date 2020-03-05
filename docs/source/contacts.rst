@@ -5,7 +5,7 @@ For any help on Lyncs, please refer to this :ref:`documentation <Lyncs>`.
 
 FAQs are collected in :ref:`FAQs <FAQs>`.
 
-If you are facing any issue on running Lyncs, please open an issue on the GitHub page `Issues <https://github.com/sbacchio/lyncs/issues>`_.
+If you are facing any issue running Lyncs, please open an issue on the GitHub page `Issues <https://github.com/sbacchio/lyncs/issues>`_.
 
 Authors
 -------

@@ -10,8 +10,8 @@ released version expected by the end of Q2 of 2020. Lyncs aims to bring several 
 libraries for Lattice QCD under a common framework. Lyncs will interface with libraries for
 GPUs and CPUs in a way that can accommodate additional computing architectures as these
 arise, achieving the best performance for the calculations while maintaining the same high-
-level workflow. Lyncs is one of 10 applications supported by PRACE-6IP, WP8 ``Forward
-Looking Software Solutions''.
+level workflow. Lyncs is one of 10 applications supported by PRACE-6IP, WP8 "Forward
+Looking Software Solutions".
 
 Lyncs distributes calculations using Dask, with bindings to the libraries performed
 automatically via Cppyy. Multiple distributed tasks can be executed in parallel and different
@@ -72,7 +72,7 @@ python3 setup.py develop --user
 - dask-labextension: utils for profiling the task execution in Jupyter lab
 
 
-## Founding:
+## Fundings:
 
 - PRACE-6IP, Grant agreement ID: 823767, Project name: LyNcs.
 
