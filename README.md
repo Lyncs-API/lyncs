@@ -1,5 +1,5 @@
 
-![alt text](https://github.com/sbacchio/lyncs/blob/master/logo.png "Lyncs")
+![alt text](https://github.com/sbacchio/lyncs/blob/master/docs/source/_static/logo.png "Lyncs")
 
 # Lyncs
 
