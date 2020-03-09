@@ -108,6 +108,7 @@ class Field(Tunable, FieldMethods):
 
         # Loading dynamically methods and attributed from the field types in fields
         from importlib import import_module
+        from types import MethodType
         for name in self.dimensions:
             try:
                 module = import_module(".fields.%s"%name, package="lyncs")
@@ -115,6 +116,8 @@ class Field(Tunable, FieldMethods):
                     val = getattr(module, attr)
                     if attr == "__init__":
                         val(self, **kwargs)
+                    elif callable(val):
+                        setattr(self, attr, MethodType(val,self))
                     else:
                         setattr(self, attr, val)
             except ModuleNotFoundError:
