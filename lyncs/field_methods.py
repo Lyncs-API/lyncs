@@ -10,21 +10,234 @@ import numpy
 
 __all__ = [
     "FieldMethods",
+    "dot",
+    "einsum",
+    "trace",
+    "transpose",
+    "dagger",
 ]
+
+
+def dot(*fields, axes=None, close_indeces=None, open_indeces=None):
+    """
+    Performs the dot product between fields.
+    
+    Default behaviors:
+    ------------------
+    
+    Contractions are performed between only degree of freedoms of the fields, e.g. field.dofs.
+    For each field, indeces are always contracted in pairs combining the outer-most free index
+    of the left with the inner-most of the right.
+    
+    I.e. dot(*fields) = dot(*fields, axes="dofs")
+
+    Parameters:
+    -----------
+    fields: Field
+        List of fields to perform dot product between.
+    axes: str, list
+        Axes where the contraction is performed on. 
+        Indeces are contracted in pairs combining the outer-most free index
+        of the left with the inner-most of the right.
+    close_indeces: str, list
+        Same as axes.
+    open_indeces: str, list
+        Opposite of close indeces, i.e. the indeces of these axes are left open.
+    
+    Examples:
+    ---------
+    dot(vector, vector, axes="color")
+      [x,y,z,t,spin,color] x [x,y,z,t,spin,color] -> [x,y,z,t,spin]
+      [X,Y,Z,T, mu , c_0 ] x [X,Y,Z,T, mu , c_0 ] -> [X,Y,Z,T, mu ]
+
+    dot(vector, vector, close_indeces="color", open_indece="spin")
+      [x,y,z,t,spin,color] x [x,y,z,t,spin,color] -> [x,y,z,t,spin,spin]
+      [X,Y,Z,T, mu , c_0 ] x [X,Y,Z,T, nu , c_0 ] -> [X,Y,Z,T, mu , nu ]    
+    """
+    from builtins import all
+    from .field import Field
+    from collections import Counter
+    assert not (axes is not None and close_indeces is not None), """
+    Only one between axes or close_indeces can be used. They are the same parameter."""
+    assert all((isinstance(field, Field) for field in fields)), "All fields must be of type field."
+
+    close_indeces = axes if close_indeces is None else close_indeces
+    
+    if close_indeces is None and open_indeces is None:
+        close_indeces = "dofs"
+
+    same_indeces = set()
+    for field in fields:
+        same_indeces.update(field.axes)
+    
+    if close_indeces is not None:
+        if isinstance(close_indeces, str):
+            close_indeces = [close_indeces]
+        tmp = set()
+        for axis in close_indeces:
+            for field in fields:
+                tmp.update(field._expand(axis))
+            
+        close_indeces = tmp
+        assert close_indeces.issubset(same_indeces), "Trivial assertion."
+        same_indeces = same_indeces.difference(close_indeces)
+    else:
+         close_indeces = set()
+
+    if open_indeces is not None:
+        if isinstance(open_indeces, str):
+            open_indeces = [open_indeces]
+        tmp = set()
+        for axis in open_indeces:
+            for field in fields:
+                tmp.update(field._expand(axis))
+            
+        open_indeces = tmp
+        assert open_indeces.issubset(same_indeces), "Close and open indeces cannot have axes in common."
+        same_indeces = same_indeces.difference(open_indeces)
+    else:
+         open_indeces = set()
+
+    _i=0
+    field_indeces = []
+    new_field_indeces = {}
+    for field in fields:
+        field_indeces.append({})
+        for key, count in Counter(field.axes).items():
+            
+            if key in same_indeces:
+                if key not in new_field_indeces:
+                    new_field_indeces[key] = tuple(_i+i for i in range(count))
+                    _i+=count
+                else:
+                    assert len(new_field_indeces[key]) == count, """
+                    Axes %s has count %s while was found %s for other field(s).
+                    Axes that are neither close or open, must have the same count between all fields.
+                    """ % (key, count, new_field_indeces[key])
+                field_indeces[-1][key] = tuple(new_field_indeces[key])
+                
+            elif key in open_indeces:
+                field_indeces[-1][key] = tuple(_i+i for i in range(count))
+                _i+=count
+                if key not in new_field_indeces:
+                    new_field_indeces[key] = field_indeces[-1][key]
+                else:
+                    new_field_indeces[key] += field_indeces[-1][key]
+                
+            else:
+                assert key in close_indeces, "Trivial assertion."
+                if key not in new_field_indeces:
+                    new_field_indeces[key] = tuple(_i+i for i in range(count))
+                    _i+=count
+                    field_indeces[-1][key] = tuple(new_field_indeces[key])
+                else:
+                    assert len(new_field_indeces[key]) > 0, "Trivial assertion."
+                    field_indeces[-1][key] = (new_field_indeces[key][-1],) + tuple(_i+i for i in range(count-1))
+                    new_field_indeces[key] = new_field_indeces[key][:-1] + tuple(_i+i for i in range(count-1))
+                    _i+=count-1
+                    if len(new_field_indeces[key]) == 0:
+                        del new_field_indeces[key]
+                    
+    field_indeces.append(new_field_indeces)
+
+    return einsum(*fields, indeces=field_indeces)
+
+
+einsum_symbols = list("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+def einsum(*fields, indeces=None):
+    """
+    Performs the einsum product between fields.
+    
+    Parameters:
+    -----------
+    fields: Field
+        List of fields to perform the einsum between.
+    indeces: list of dicts of indeces
+        List of dictionaries for each field plus the output field if not scalar.
+        Each dictionary should have a key per axis of the field.
+        Every key should have a list of indeces for every repetition of the axis in the field.
+        Indeces must be integers.
+
+    Examples:
+    ---------
+    einsum(vector, vector, indeces=[{'x':0,'y':1,'z':2,'t':3,'spin':4,'color':5},
+                                    {'x':0,'y':1,'z':2,'t':3,'spin':4,'color':6},
+                                    {'x':0,'y':1,'z':2,'t':3,'color':(5,6)} ])
+
+      [x,y,z,t,spin,color] x [x,y,z,t,spin,color] -> [x,y,z,t,color,color]
+      [0,1,2,3, 4  ,  5  ] x [0,1,2,3, 4  ,  6  ] -> [0,1,2,3,  5  ,  6  ]
+    """
+    from .field import Field
+    from .tunable import computable
+    from builtins import all
+    from dask.array import einsum
+    from collections import Counter
+
+    fields = tuple(fields)
+    
+    if isinstance(indeces, dict):
+        indeces = [indeces]
+    elif isinstance(indeces, tuple):
+        indeces = list(indeces)
+    if len(indeces) == len(fields):
+        indeces.append({})
+        
+    assert isinstance(indeces, list), "Indeces must be either list, tuple or dict (for one field only)."
+    assert len(indeces) == len(fields)+1, "The length of indeces must be equal or plus one to the number of fields."
+    assert all((isinstance(field, Field) for field in fields)), "All the fields must be of Field type."
+    assert all((isinstance(idxs, dict) for idxs in indeces)), "Each element of the indeces list must be a dictionary"
+
+    for idxs, field in zip(indeces, fields):
+        assert set(idxs.keys()) == set(field.axes), "Indeces must be specified for all the axes."
+        for key,val in idxs.items():
+            if isinstance(val, int):
+                idxs[key] = (val,)
+            idxs[key] = tuple(val)
+            assert len(idxs[key])==field.axes.count(key), "Indeces must be given for all the repetion of the axis"
+
+    for key,val in indeces[-1].items():
+        if isinstance(val, int):
+            indeces[-1][key] = (val,)
+        indeces[-1][key] = tuple(val)
+        
+    out_axes = []
+    for key, idxs in indeces[-1].items():
+        out_axes += [key]*len(idxs)
+
+    raw_fields, out = prepare(*fields, elemwise=False, field_type = out_axes)
+
+    @computable
+    def get_indeces(indeces, axes_order, **kwargs):
+        field_indeces = list(axes_order)
+        for key, val in indeces.items():
+            if len(val)>1:
+                axis_order = kwargs[key+"_order"]
+            else:
+                axis_order = [0]
+            for idx in axis_order:
+                field_indeces[field_indeces.index(key)] = einsum_symbols[val[idx]]
+        return "".join(field_indeces)
+    
+    field_indeces = []
+    for field, idxs in zip(fields+(out,), indeces):
+        kwargs = {key+"_order": getattr(field, key+"_order") for key,val in Counter(field.axes).items() if val>1}
+        field_indeces.append(get_indeces(idxs, field.axes_order, **kwargs))
+
+    @computable
+    def to_string(*field_indeces):
+        field_indeces = list(field_indeces)
+        return ",".join(field_indeces[:-1]) + "->"+ field_indeces[-1]
+        
+    out.field = computable(einsum)(to_string(*field_indeces), *raw_fields, optimize="optimal")
+    
+    return out
 
 
 class FieldMethods:
     def __pos__(self):
         return self
     
-    
-    def __matmul__(self, other):
-        return self.dot(other)
-    
-    
-    def __rmatmul__(self, other):
-        return other.dot(self)
-
     
     def astype(self, dtype):
         """
@@ -240,7 +453,7 @@ class FieldMethods:
         """
         Transposes the matrix/tensor indeces, i.e. the dimensions that are repeated.
         
-        *NOTE*: this is conceptually different from numpy.transpose.
+        *NOTE*: this is conceptually different from numpy.transpose where all the axes are transposed.
         
         Parameters
         ----------
@@ -314,45 +527,109 @@ class FieldMethods:
     
     def trace(self, *axes):
         """
-        Performs the trace over the matrix axes.
+        Performs the trace over repeated axes contracting the outer-most index with the inner-most.
         
         Parameters
         ----------
         axes: str
             If given, only the listed axes are traced.
         """
+        from .tunable import computable
         axes = list(axes)
         if not axes:
-            for axis in set(self.axes):
-                if self.axes.count(axis) == 2:
-                    axes.append(axis)
-        else:
-            # should it work also for non-fundamental axes?
-            for	axis in	axes:
-                assert self.axes.count(axis) == 2, "Only matrix indeces can be traced"
-                
-        new_axes = self.axes
-        for axis in axes:
-            while axis in new_axes:
-                new_axes.remove(axis)
+            axes = "all"
             
-        new_field = Field(self, field_type=new_axes, zeros_init=True)
-        
+        axes = [axis for axis in set(self._expand(axes)) if self.axes.count(axis) > 1]
+            
         if len(axes) == 1:
-            new_field.field = self.field #TODO
-        else:
-            #TODO
-            pass
 
-        return new_field
-    
-    
-    def dot(self, *axes):
-        pass
+            axis = axes[0]
+            new_axes = self.axes
+            new_axes.remove(axis)
+            new_axes.remove(axis)
+
+            @computable
+            def axes_order(axes_order, axis_order):
+                axis_indeces = []
+                last_index = 0
+                count = axes_order.count(axis)
+                for i in range(count):
+                    axis_indeces.append(axes_order.index(axis, last_index+1))
+                    last_index = axis_indeces[-1]
+                to_remove = axis_indeces[axis_order.index(0)], axis_indeces[axis_order.index(count-1)]
+                return [i for j, i in enumerate(axes_order) if j not in to_remove]
+
+            axes_order = axes_order(self.axes_order, getattr(self, axis+"_order"))
+            raw_fields, out = prepare(self, elemwise=False, field_type=new_axes, axes_order=axes_order)
+            
+            @computable
+            def trace(field, axes_order, axis_order):
+                axis_indeces = []
+                last_index = 0
+                count = axes_order.count(axis)
+                for i in range(count):
+                    axis_indeces.append(axes_order.index(axis, last_index+1))
+                    last_index = axis_indeces[-1]
+                axis1 = axis_indeces[axis_order.index(0)]
+                axis2 = axis_indeces[axis_order.index(count-1)]
+                return field.trace(axis1=axis1, axis2=axis2)
+            
+            out.field = trace(raw_fields[0], self.axes_order, getattr(self, axis+"_order"))
+            
+            return out
         
-
+        else:
+            _i=0
+            indeces = [{}, {}]
+            for axis in set(self.axes):
+                count = self.axes.count(axis) 
+                if axis in axes:
+                    indeces[0][axis] = tuple(_i+i for i in range(count-1)) + (_i,)
+                    _i+=count-1
+                    if len(indeces[0][axis]) > 2:
+                        indeces[-1][axis] = indeces[0][axis][1:-1]
+                else:
+                    indeces[0][axis] = tuple(_i+i for i in range(count))
+                    _i+=count
+                    indeces[-1][axis] = tuple(indeces[0][axis])
+                    
+            return einsum(self, indeces=indeces)
+        
+        
+    @wraps(dot)
+    def dot(self, *fields, **kwargs):
+        return dot(self, *fields, **kwargs)
 
     
+    def __matmul__(self, other):
+        return self.dot(other)
+    
+    
+    def __rmatmul__(self, other):
+        return other.dot(self)
+
+
+@wraps(FieldMethods.transpose)
+def transpose(field, *args, **kwargs):
+    from .field import Field
+    assert isinstance(field, Field), "field must be a Field type"
+    return field.transpose(*args, **kwargs)
+
+
+@wraps(FieldMethods.dagger)
+def dagger(field, *args, **kwargs):
+    from .field import Field
+    assert isinstance(field, Field), "field must be a Field type"
+    return field.dagger(*args, **kwargs)
+
+
+@wraps(FieldMethods.trace)
+def trace(field, *args, **kwargs):
+    from .field import Field
+    assert isinstance(field, Field), "field must be a Field type"
+    return field.trace(*args, **kwargs)
+
+
 # The following are simple universal functions and they are dynamically wrapped
 
 ufuncs = (
@@ -495,18 +772,44 @@ reductions = (
 )
 
 
-def prepare(*fields, **kwargs):
+def prepare(*fields, elemwise=True, **kwargs):
+    """
+    Prepares a set of fields for a calculation and 
+    creates the field where to store the output.
+
+    Returns:
+    --------
+    raw_fields, out_field
+    where raw_fields is a tuple of the raw fields (e.g. field.field)
+    to be used in the calculation and out_field is a Field type where
+    to store the result (e.g. out_field.field = add(*raw_fields))
+
+    Parameters
+    ----------
+    fields: Field(s)
+       List of fields involved in the calculation.
+    elemwise: bool
+       Wether the calculation is performed element-wise,
+       i.e. all the fields must have the common axes in the same order
+       and the other axes with shape 1.
+    kwargs: dict
+       List of parameters to use for the creation of the new field
+    """
     from .field import Field
     from builtins import all
     assert all([isinstance(field, Field) for field in fields])
     
     kwargs["zeros_init"] = True
+    raw_fields = tuple(field.field for field in fields)
     
     if len(fields)==1:
-        return fields, Field(fields[0], **kwargs)
+        return raw_fields, Field(fields[0], **kwargs)
     
     # TODO
-    return fields, Field(fields[0], **kwargs)
+    # - should compute the final dtype if not given
+    # - should reshape the fields in case of element-wise operation
+    # - should take into account coords
+    return raw_fields, Field(fields[0], **kwargs)
 
 
 def wrap_ufunc(ufunc):
@@ -529,10 +832,10 @@ def wrap_ufunc(ufunc):
         # Uniforming the fields involved
         fields = (arg for arg in args if isinstance(arg, Field))
         idxs = (i for i,arg in enumerate(args) if isinstance(arg, Field))
-        new_fields, out_field = prepare(*fields, dtype=dtype)
+        raw_fields, out_field = prepare(*fields, dtype=dtype)
         
-        for i,new in zip(idxs, new_fields):
-            args[i] = new.field
+        for i,field in zip(idxs, raw_fields):
+            args[i] = field
             
         # Calling ufunc
         if isinstance(trial, tuple):
@@ -583,11 +886,11 @@ def wrap_reduction(reduction):
                 return tuple(axes)
                     
             kwargs["axis"] = get_axes(field.axes_order)
-            _, out = prepare(field, field_type=new_axes, dtype=dtype)
+            raw_fields, out = prepare(field, field_type=new_axes, dtype=dtype)
         else:
-            _, out = prepare(field, field_type=[], dtype=dtype)
+            raw_fields, out = prepare(field, field_type=[], dtype=dtype)
             
-        out.field = computable(reduction)(field.field, **kwargs)
+        out.field = computable(reduction)(raw_fields[0], **kwargs)
         return out
         
     return wrapped
