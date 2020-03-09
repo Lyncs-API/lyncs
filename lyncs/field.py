@@ -102,6 +102,7 @@ class Field(Tunable, FieldMethods):
         from numpy import prod
         chunks = [(key,val) for key, val in self.shape if val>1 and key in self.dims]
         self.add_option("chunks", ChunksOf(chunks), transformer=self._rechunk)
+        
         if prod([val for key,val in chunks])==1:
             self.chunks = chunks
 
@@ -177,12 +178,18 @@ class Field(Tunable, FieldMethods):
 
 
     def _expand(self, prop):
-        "Expands a lattice/field property into the fundamental dimensions"
+        "Expands a lattice/field property into the fundamental dimensions of the field"
+
+        if prop == "all": return self.axes
+        
         def __expand(prop):
             if isinstance(prop,(list,tuple,set)):
                 return " ".join([__expand(key) for key in prop])
             elif prop in self.lattice and isinstance(self.lattice[prop], int):
-                return prop
+                if self.field_type is None or prop in self.axes:
+                    return prop
+                else:
+                    return ""
             else:
                 if prop in ["dims", "dofs"] and self.field_type is not None:
                     return " ".join([__expand(key) for key in getattr(self,prop)])
@@ -199,7 +206,7 @@ class Field(Tunable, FieldMethods):
         """
         Returns all the possible dimensions valid for the field.
         """
-        dims = set()
+        dims = set(["dims","dofs"])
         
         def add(key):
             if isinstance(key, (list, tuple, dict)):
