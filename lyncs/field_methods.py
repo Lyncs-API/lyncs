@@ -609,6 +609,74 @@ class FieldMethods:
         return other.dot(self)
 
 
+    def roll(self, axis, shift):
+        """
+        Rolls axis of shift.
+        
+        Parameters:
+        -----------
+        axis: str or list of str
+            Axis/axes to roll of shift amount.
+        shift: int or list of int
+            The number of places by which elements are shifted.
+        """
+        from .field import Field
+        from .tunable import computable
+        
+        if isinstance(shift, (list,tuple)):
+            assert isinstance(axis, (list,tuple)) and len(shift) == len(axis), """
+            If shift is a list then also axis must be a list and the length must match.
+            """
+            axes, shifts = list(zip(*[(ax,sh) for ax, sh in zip(axis, shift) for ax in self._expand(ax)]))
+        else:
+            axes = self._expand(axis)
+            shifts = [shift]*len(axis)
+
+        to_roll = {}
+        for axis, shift in zip(axes, shifts):
+            if axis in to_roll:
+                to_roll[axis].append(shift)
+            else:
+                to_roll[axis] = [shift]
+
+        kwargs = {}
+        for axis, shift in to_roll.items():
+            count = self.axes.count(axis)
+            assert len(shift)==1 or len(shift)==count, """
+            If an axis is repeated then a shift must be given for all the repetitions.
+            """
+            if len(shift)==1:
+                to_roll[axis] = [shift[0]]*count
+            if count>1:
+                kwargs[axis+"_order"] = getattr(self, axis+"_order")
+                
+        @computable
+        def roll(field, axes_order, **kwargs):
+            from dask.array import roll
+            indeces = []
+            shifts = []
+            for axis, shift in to_roll.items():
+                axis_indeces = []
+                last_index = 0
+                count = axes_order.count(axis)
+                for i in range(count):
+                    axis_indeces.append(axes_order.index(axis, last_index+1))
+                    last_index = axis_indeces[-1]
+                if count>1:
+                    axis_order = kwargs[key+"_order"]
+                else:
+                    axis_order = [0]
+                for idx,pos in zip(axis_indeces, axis_order):
+                    indeces.append(idx)
+                    shifts.append(shift[pos])
+
+            return roll(field, tuple(shifts), axis=tuple(indeces))
+        
+        raw_fields, out = prepare(self)
+        out.field = roll(raw_fields[0], self.axes_order, **kwargs)
+        return out
+        
+            
 @wraps(FieldMethods.transpose)
 def transpose(field, *args, **kwargs):
     from .field import Field
@@ -628,6 +696,13 @@ def trace(field, *args, **kwargs):
     from .field import Field
     assert isinstance(field, Field), "field must be a Field type"
     return field.trace(*args, **kwargs)
+
+
+@wraps(FieldMethods.roll)
+def roll(field, *args, **kwargs):
+    from .field import Field
+    assert isinstance(field, Field), "field must be a Field type"
+    return field.roll(*args, **kwargs)
 
 
 # The following are simple universal functions and they are dynamically wrapped
@@ -727,6 +802,8 @@ ufuncs = (
     ("i0", False, ),
     ("sinc", False, ),
     ("nan_to_num", True, ),
+    ("isclose", True, ),
+    ("allclose", True, ),
 )
 
 
