@@ -307,6 +307,8 @@ class ChunksOf(TunableOption):
 
         
     def format(self, value):
+        if not self.source and not value:
+            return value
         if isinstance(value, dict):
             value = list(value.items())
         keys,vals = zip(*value)

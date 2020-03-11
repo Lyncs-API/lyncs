@@ -399,6 +399,9 @@ class Field(Tunable, FieldMethods):
             
     @property
     def field_shape(self):
+        if not self.axes:
+            return ()
+        
         @computable
         def field_shape(axes_order):
             shape = []
@@ -416,6 +419,9 @@ class Field(Tunable, FieldMethods):
 
     @property
     def field_chunks(self):
+        if not self.axes:
+            return ()
+        
         @computable
         def field_chunks(chunks, axes_order):
             keys, vals = zip(*self.shape)

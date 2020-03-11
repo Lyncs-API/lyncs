@@ -373,7 +373,7 @@ class FieldMethods:
     
     def __getitem__(self, coords):
         from .field import Field
-        return Field(field=self, coords=coords)
+        return Field(field=self, coords=coords).squeeze()
 
     
     def get(self, *labels, **coords):
@@ -551,7 +551,7 @@ class FieldMethods:
             @computable
             def axes_order(axes_order, axis_order):
                 axis_indeces = []
-                last_index = 0
+                last_index = -1
                 count = axes_order.count(axis)
                 for i in range(count):
                     axis_indeces.append(axes_order.index(axis, last_index+1))
@@ -565,7 +565,7 @@ class FieldMethods:
             @computable
             def trace(field, axes_order, axis_order):
                 axis_indeces = []
-                last_index = 0
+                last_index = -1
                 count = axes_order.count(axis)
                 for i in range(count):
                     axis_indeces.append(axes_order.index(axis, last_index+1))
@@ -657,7 +657,7 @@ class FieldMethods:
             shifts = []
             for axis, shift in to_roll.items():
                 axis_indeces = []
-                last_index = 0
+                last_index = -1
                 count = axes_order.count(axis)
                 for i in range(count):
                     axis_indeces.append(axes_order.index(axis, last_index+1))
