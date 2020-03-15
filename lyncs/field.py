@@ -396,6 +396,22 @@ class Field(Tunable, FieldMethods):
             # TODO specialize
             assert False, "Not implemented yet"
 
+        if hasattr(self._field, "tunable_options"):
+            for key, val in self._field.tunable_options.items():
+                skip = False
+                for _val in self.options.values():
+                    if val is _val:
+                        skip = True
+                        break
+                if skip: continue
+
+                short_key = key.split("-")
+                assert len(short_key)>1, "keys should be always tokens"
+                short_key = "-".join(short_key[:-1])
+                if short_key not in self.options:
+                    key = short_key
+                self.add_option(key, val)
+                
             
     @property
     def field_shape(self):
@@ -475,8 +491,8 @@ class Field(Tunable, FieldMethods):
         Returns the size of the field in bytes
         """
         return self.size*self.dtype.itemsize
-    
-    
+
+
     @property
     def labels(self):
         return dict(self.__dict__.get("_labels",{}))
