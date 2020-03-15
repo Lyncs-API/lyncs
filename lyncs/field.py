@@ -331,21 +331,10 @@ class Field(Tunable, FieldMethods):
 
     @property
     def field(self):
-        try:
-            from dask.array import Array
-            from .tunable import LyncsMethodsMixin
-            if not isinstance(self._field, Array):
-                self._field = self._field.compute(tune=False)
-            elif isinstance(self._field, Array):
-                import warnings
-                if self._field.shape != self.field_shape:
-                    warnings.warn("Mistmatch between computed and real field shape")
-                if self._field.chunksize != self.field_chunks:
-                    warnings.warn("Mistmatch between computed and real field chunks")
-                if self._field.dtype != self.dtype:
-                    warnings.warn("Mistmatch between computed %s and real field %s" % (self.dtype, self._field.dtype))
+        if hasattr(self, "_field"):
+            self.update()
             return self._field
-        except AttributeError:
+        else:
             return None
 
     @field.setter
@@ -413,6 +402,26 @@ class Field(Tunable, FieldMethods):
                 self.add_option(key, val)
                 
             
+    def update(self):
+        from dask.array import Array
+        last_update = self.__dict__.get("_last_update", [])
+        if list(self.tunable_options.keys()) == last_update:
+            return
+        else:
+            self._last_update = list(self.tunable_options.keys())
+        
+        if not isinstance(self._field, Array):
+            self._field = self._field.compute(tune=False)
+        if isinstance(self._field, Array):
+            import warnings
+            if self._field.shape != self.field_shape:
+                warnings.warn("Mistmatch between computed and real field shape")
+            if self._field.chunksize != self.field_chunks:
+                warnings.warn("Mistmatch between computed and real field chunks")
+            if self._field.dtype != self.dtype:
+                warnings.warn("Mistmatch between computed %s and real field %s" % (self.dtype, self._field.dtype))
+
+                
     @property
     def field_shape(self):
         if not self.axes:
