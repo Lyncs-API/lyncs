@@ -131,6 +131,7 @@ def wrap_array(array):
             return self.array
     return delayed(wrapped(array))()
 
+
 def computable(fnc):
     from functools import wraps
     @wraps(fnc)
@@ -233,6 +234,16 @@ class TunableOption:
     def __len__(self):
         return len(self._source)
 
+    
+    def __dask_tokenize__(self):
+        import uuid
+        from dask.base import normalize_token
+        if not hasattr(self, "_unique_id"): self._unique_id = str(uuid.uuid4())
+            
+        return normalize_token(
+            (type(self), self.source, self._unique_id)
+        )
+    
 
 class Choice(TunableOption):
     "One element of iterable"
