@@ -123,7 +123,8 @@ class file_manager(Tunable):
     
     def __init__(self, filename, field=None, **kwargs):
         from ...tunable import Choice
-        self.filename = filename
+        from os.path import abspath
+        self.filename = abspath(filename)
         self.field = field
         self.add_option("lime_engine",Choice(engines))
 
@@ -134,13 +135,16 @@ class file_manager(Tunable):
             return get_engine(lime_engine)
         return engine(self.lime_engine)
 
-    
-    def read(self, chunk_id=None):
-        return delayed(self.engine.read)(self.filename,
-                                         shape=self.field.field_shape,
-                                         dtype=self.field.dtype,
-                                         chunks=self.field.field_chunks,
-                                         chunk_id=chunk_id)
+    @property
+    def get_reader(self):
+        @computable
+        def reader(engine, shape, chunks):
+            return lambda chunk_id: engine.read(self.filename,
+                                                shape=shape,
+                                                dtype=self.field.dtype,
+                                                chunks=chunks,
+                                                chunk_id=chunk_id)
+        return reader(self.engine, self.field.field_shape, self.field.field_chunks)
 
     
     def __dask_tokenize__(self):

@@ -402,6 +402,9 @@ class Field(Tunable, FieldMethods):
         if not self.axes:
             return ()
         
+        if hasattr(self, "_field_shape"):
+            return self._field_shape(self.axes_order)
+        
         @computable
         def field_shape(axes_order):
             shape = []
@@ -414,13 +417,18 @@ class Field(Tunable, FieldMethods):
                 vals.pop(idx)
             return tuple(shape)
         
-        return field_shape(self.axes_order)
+        self._field_shape = field_shape
+
+        return self.field_shape
 
 
     @property
     def field_chunks(self):
         if not self.axes:
             return ()
+
+        if hasattr(self, "_field_chunks"):
+            return self._field_chunks(self.chunks, self.axes_order)
         
         @computable
         def field_chunks(chunks, axes_order):
@@ -446,7 +454,9 @@ class Field(Tunable, FieldMethods):
                     
             return tuple(chunks)
 
-        return field_chunks(self.chunks, self.axes_order)
+        self._field_chunks = field_chunks
+        
+        return self.field_chunks
         
 
     @property
@@ -534,13 +544,13 @@ class Field(Tunable, FieldMethods):
         info: information needed to perform the reading.
         """
         from .io import file_manager
-        from .tunable import computable
+        from .tunable import computable, delayed
         from dask.array import from_delayed
         
         io = file_manager(filename, format=format, field=self, **info)
 
         @computable
-        def read_field(shape, chunks):
+        def read_field(shape, chunks, reader):
             from dask.highlevelgraph import HighLevelGraph
             from dask.array.core import normalize_chunks, Array
             from itertools import product
@@ -548,7 +558,7 @@ class Field(Tunable, FieldMethods):
             chunks = normalize_chunks(chunks, shape=shape)
             chunks_id = list(product(*[range(len(bd)) for bd in chunks]))
 
-            reads = [io.read(chunk_id) for chunk_id in chunks_id]
+            reads = [delayed(reader)(chunk_id) for chunk_id in chunks_id]
             
             keys = [(filename, *chunk_id) for chunk_id in chunks_id]
             vals = [read.key for read in reads]
@@ -558,7 +568,7 @@ class Field(Tunable, FieldMethods):
 
             return Array(graph, filename, chunks, dtype=self.dtype)
         
-        self.field = read_field(self.field_shape, self.field_chunks)
+        self.field = read_field(self.field_shape, self.field_chunks, io.get_reader)
         
 
     def save(
