@@ -39,6 +39,15 @@ def field_chunks(shape, chunks, axes_order):
 
 
 @computable
+def num_workers(shape, chunks):
+    from math import ceil
+    num_workers = 1
+    for num, den in zip(shape, chunks):
+        num_workers *= ceil(num/den)
+        
+    return num_workers
+
+@computable
 def getitem(field, axes, axes_order, **coords):
     mask = [slice(None) for i in axes]
     for key,val in coords.items():

@@ -436,7 +436,13 @@ class Field(Tunable, FieldMethods):
             return ()
         from .field_computables import field_chunks
         return field_chunks(self.shape, self.chunks, self.axes_order)
-                
+
+
+    @property
+    def num_workers(self):
+        from .field_computables import num_workers
+        return num_workers(self.field_shape, self.field_chunks)
+
 
     @property
     def size(self):
