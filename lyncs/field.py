@@ -426,63 +426,17 @@ class Field(Tunable, FieldMethods):
     def field_shape(self):
         if not self.axes:
             return ()
-        
-        if hasattr(self, "_field_shape"):
-            return self._field_shape(self.axes_order)
-        
-        @computable
-        def field_shape(axes_order):
-            shape = []
-            keys, vals = zip(*self.shape)
-            keys, vals = list(keys), list(vals)
-            for key in axes_order:
-                idx = keys.index(key)
-                shape.append(vals[idx])
-                keys.pop(idx)
-                vals.pop(idx)
-            return tuple(shape)
-        
-        self._field_shape = field_shape
-
-        return self.field_shape
+        from .field_computables import field_shape
+        return field_shape(self.shape, self.axes_order)
 
 
     @property
     def field_chunks(self):
         if not self.axes:
             return ()
-
-        if hasattr(self, "_field_chunks"):
-            return self._field_chunks(self.chunks, self.axes_order)
-        
-        @computable
-        def field_chunks(chunks, axes_order):
-            keys, vals = zip(*self.shape)
-            Skeys, Svals = list(keys), list(vals)
-            keys, vals = zip(*chunks)
-            Ckeys, Cvals = list(keys), list(vals)
-            chunks = []
-            for key in axes_order:
-                if key in Ckeys:
-                    idx = Ckeys.index(key)
-                    chunks.append(Cvals[idx])
-                    Ckeys.pop(idx)
-                    Cvals.pop(idx)
-                    idx = Skeys.index(key)
-                    Skeys.pop(idx)
-                    Svals.pop(idx)
-                else:
-                    idx = Skeys.index(key)
-                    chunks.append(Svals[idx])
-                    Skeys.pop(idx)
-                    Svals.pop(idx)
-                    
-            return tuple(chunks)
-
-        self._field_chunks = field_chunks
-        
-        return self.field_chunks
-        
+        from .field_computables import field_chunks
+        return field_chunks(self.shape, self.chunks, self.axes_order)
+                
 
     @property
     def size(self):

@@ -260,27 +260,8 @@ class FieldMethods:
         
     def _reorder(self, key, field, new_axes_order, old_axes_order):
         "Transformation for changing axes_order"
-        from .tunable import computable
+        from .field_computables import reorder
         assert key == "axes_order", "Got wrong key! %s" % key
-        
-        @computable
-        def reorder(field, new_axes_order, old_axes_order):
-            from collections import Counter
-            assert Counter(new_axes_order) == Counter(old_axes_order), """
-            Got not compatible new_ and old_axes_order:
-            new_axes_order = %s
-            old_axes_order = %s
-            """ % (new_axes_order, old_axes_order)
-            old_indeces = list(range(len(old_axes_order)))
-            axes = []
-            for key in new_axes_order:
-                idx = old_indeces[old_axes_order.index(key)]
-                axes.append(idx)
-                old_axes_order.remove(key)
-                old_indeces.remove(idx)
-                
-            return field.transpose(*axes)
-        
         return reorder(field, new_axes_order, old_axes_order)
 
         
@@ -294,15 +275,9 @@ class FieldMethods:
     
     def _rechunk(self, key, field, new_chunks, old_chunks):
         "Transformation for changing chunks"
-        from .tunable import computable
+        from .field_computables import rechunk
         assert key == "chunks", "Got wrong key! %s" % key
-        
-        @computable
-        def rechunk(field, field_chunks):
-            return field.rechunk(field_chunks)
-        
         return rechunk(field, self.field_chunks)
-
         
     def rechunk(self, **chunks):
         """
@@ -314,24 +289,7 @@ class FieldMethods:
     
     def _squeeze(self, field, new_axes, old_axes_order, old_field_shape):
         "Transformation for squeezing axes"
-        from .tunable import computable
-        
-        @computable
-        def squeeze(field, new_axes, old_axes_order, old_field_shape):
-            from collections import Counter
-            axes = []
-            for i, (axis, size) in enumerate(zip(list(old_axes_order), old_field_shape)):
-                if axis in new_axes and size>1:
-                    continue
-                elif axis in new_axes and new_axes.count(axis) == old_axes_order.count(axis):
-                    continue
-            
-                assert size==1, "Trying to squeeze axis (%s) with size (%s) larger than one" % (axis,size)
-                old_axes_order.remove(axis)
-                axes.append(i)
-            assert Counter(new_axes) == Counter(old_axes_order), "This should not happen"
-            return field.squeeze(axis=tuple(axes))
-        
+        from .field_computables import squeeze
         return squeeze(field, new_axes, old_axes_order, old_field_shape)
             
     
@@ -349,26 +307,13 @@ class FieldMethods:
         return Field(self, field_type=new_axes)
 
 
-    def _getitem(self, field, new_coords, old_coords, old_axes_order, setitem=None):
+    def _getitem(self, field, new_coords, old_coords, old_axes_order):
         "Transformation for getitem"
-        from .tunable import computable
+        from .field_computables import getitem
         coords = {key:val for key,val in new_coords.items() if key not in old_coords or val is not old_coords[key]}
         if not coords: return field
         
-        @computable
-        def getitem(field, setitem, axes_order, **coords):
-            mask = [slice(None) for i in self.axes]
-            for key,val in coords.items():
-                mask[axes_order.index(key)] = val
-                
-            if setitem is not None:
-                field[tuple(mask)] = setitem
-                return field
-            
-            return field[tuple(mask)]
-
-        if setitem is not None: getitem.__name__ = "setitem"
-        return getitem(field, setitem, old_axes_order, **coords)
+        return getitem(field, self.axes, old_axes_order, **coords)
     
     
     def __getitem__(self, coords):
@@ -394,7 +339,8 @@ class FieldMethods:
         coords = list(labels) + [coords]
         tmp = Field(field=self, coords=coords)
         tmp.field = value
-        self.field = self._getitem(self.field, coords, self.coords, self.axes_order, setitem = tmp.field)
+        coords = {key:val for key,val in tmp.coords.items() if key not in self.coords or val is not self.coords[key]}
+        self.field = setitem(self.field, tmp.field, self.axes, self.axes_order, **coords)
 
         
     @property
@@ -415,36 +361,9 @@ class FieldMethods:
     
     def _transpose(self, key, field, new_order, old_order):
         "Transformation for transposing"
-        from .tunable import computable
+        from .field_computables import transpose
         assert key.endswith("_order") and key[:-6] in self.axes, "Got wrong key! %s" % key
-        
-        @computable
-        def transpose(field, axis, axes_order, new_order, old_order):
-            assert axes_order.count(axis) == len(new_order) and len(new_order) == len(old_order) and \
-                len(new_order) == len(set(new_order)) and set(new_order) == set(old_order), """
-            Got wrong parameters for performing transpose.
-                axis: %s
-                axes_order: %s
-                new_order: %s
-                old_order: %s
-            """ % (axis, axes_order, new_order, old_order)
-            old_axes_order = list(axes_order)
-            new_axes_order = list(axes_order)
-            for new, old in zip(new_order,old_order):
-                idx = old_axes_order.index(axis)
-                old_axes_order[idx] = axis+str(old)
-                new_axes_order[idx] = axis+str(new)
                 
-            axes = []
-            indeces = list(range(len(axes_order)))
-            for axis in new_axes_order:
-                idx = indeces[old_axes_order.index(axis)]
-                axes.append(idx)
-                old_axes_order.remove(axis)
-                indeces.remove(idx)
-                
-            return field.transpose(*axes)
-        
         return transpose(field, key[:-6], self.axes_order, new_order, old_order)
         
         
@@ -621,7 +540,7 @@ class FieldMethods:
             The number of places by which elements are shifted.
         """
         from .field import Field
-        from .tunable import computable
+        from .field_computables import roll
         
         if isinstance(shift, (list,tuple)):
             assert isinstance(axis, (list,tuple)) and len(shift) == len(axis), """
@@ -650,30 +569,9 @@ class FieldMethods:
             if count>1:
                 kwargs[axis+"_order"] = getattr(self, axis+"_order")
                 
-        @computable
-        def roll(field, axes_order, **kwargs):
-            from dask.array import roll
-            indeces = []
-            shifts = []
-            for axis, shift in to_roll.items():
-                axis_indeces = []
-                last_index = -1
-                count = axes_order.count(axis)
-                for i in range(count):
-                    axis_indeces.append(axes_order.index(axis, last_index+1))
-                    last_index = axis_indeces[-1]
-                if count>1:
-                    axis_order = kwargs[key+"_order"]
-                else:
-                    axis_order = [0]
-                for idx,pos in zip(axis_indeces, axis_order):
-                    indeces.append(idx)
-                    shifts.append(shift[pos])
-
-            return roll(field, tuple(shifts), axis=tuple(indeces))
         
         raw_fields, out = prepare(self)
-        out.field = roll(raw_fields[0], self.axes_order, **kwargs)
+        out.field = roll(raw_fields[0], to_roll, self.axes_order, **kwargs)
         return out
         
             
