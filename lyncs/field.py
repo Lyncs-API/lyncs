@@ -411,7 +411,7 @@ class Field(Tunable, FieldMethods):
             self._last_update = list(self.tunable_options.keys())
         
         if not isinstance(self._field, Array):
-            self._field = self._field.compute(tune=False)
+            self._field = self._field.compute_locally(tune=False)
         if isinstance(self._field, Array):
             import warnings
             if self._field.shape != self.field_shape:
@@ -493,7 +493,8 @@ class Field(Tunable, FieldMethods):
         "NOTE: here we follow the dask.delayed convention. I.e. compute=persist and result=compute"
         self.tune(**kwargs.pop("tune_kwargs",{}))
         self.field = self.field.persist(**kwargs)
-        
+        return self
+    
         
     @wraps(compute)
     def result(self, **kwargs):

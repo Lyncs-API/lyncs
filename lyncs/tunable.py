@@ -169,7 +169,7 @@ class TunableOption:
             value._length = self._length
             return value
         elif isinstance(self._value, Delayed):
-            self._value = self._value.compute(tune=False)
+            self._value = self._value.compute_locally(tune=False)
         return copy(self._value)
     
         
@@ -421,7 +421,13 @@ compute.__doc__ = add_parameters_to_doc(dask_compute.__doc__, """
             Kwargs that will be passed to the tune function.
     """)
 
-LyncsMethodsMixin.compute = compute
+
+def compute_locally(self, *args, **kwargs):
+    "Same as compute but the scheduler is fixed to be local."
+    kwargs["scheduler"] = "sync"
+    return compute(self, *args, **kwargs)
+    
+LyncsMethodsMixin.compute_locally = compute_locally
 
 
 # In perist, we tune and then persist
