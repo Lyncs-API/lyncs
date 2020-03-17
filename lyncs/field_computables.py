@@ -1,7 +1,10 @@
 from .tunable import computable
 
 @computable
-def field_shape(shape, axes_order):
+def field_shape(field, shape, axes_order):
+    if hasattr(field, "_field_shape"):
+        return tuple(field._field_shape)
+    
     keys, vals = zip(*shape)
     keys, vals = list(keys), list(vals)
     shape = []
@@ -10,11 +13,16 @@ def field_shape(shape, axes_order):
         shape.append(vals[idx])
         keys.pop(idx)
         vals.pop(idx)
+        
+    field._field_shape = shape
     return tuple(shape)
 
 
 @computable
-def field_chunks(shape, chunks, axes_order):
+def field_chunks(field, shape, chunks, axes_order):
+    if hasattr(field, "_field_chunks"):
+        return tuple(field._field_chunks)
+    
     keys, vals = zip(*shape)
     Skeys, Svals = list(keys), list(vals)
     keys, vals = zip(*chunks)
@@ -35,16 +43,21 @@ def field_chunks(shape, chunks, axes_order):
             Skeys.pop(idx)
             Svals.pop(idx)
 
+    field._field_chunks = chunks
     return tuple(chunks)
 
 
 @computable
-def num_workers(shape, chunks):
+def num_workers(field, shape, chunks):
+    if hasattr(field, "_num_workers"):
+        return field._num_workers
+    
     from math import ceil
     num_workers = 1
     for num, den in zip(shape, chunks):
         num_workers *= ceil(num/den)
-        
+
+    field._num_workers = num_workers
     return num_workers
 
 @computable

@@ -239,6 +239,16 @@ class Field(Tunable, FieldMethods):
     
     
     @property
+    def indeces(self):
+        """
+        Returns the list of indeces. The order is not significant.
+        Indeces are like axes, where though each axis has a unique name,
+        distinguishing the repetition with _0, _1 etc.
+        """
+        return list(self.__dict__.get("_indeces", []))
+    
+    
+    @property
     def shape(self):
         """
         Returns the list of dimensions with size. The order is not significant.
@@ -283,6 +293,18 @@ class Field(Tunable, FieldMethods):
 
         self._axes = self._expand(value)
         self._field_type = value
+
+        from collections import Counter
+        counts = Counter(self.axes)
+        indeces = {axis:0 for axis in counts}
+        self._indeces = []
+        for axis in self.axes:
+            if counts[axis] > 1:
+                self._indeces.append(axis+"_"+str(indeces[axis]))
+                indeces[axis]+=1
+            else:
+                self._indeces.append(axis)
+        assert len(set(self.indeces)) == len(self.indeces)
 
 
     @property
@@ -427,7 +449,7 @@ class Field(Tunable, FieldMethods):
         if not self.axes:
             return ()
         from .field_computables import field_shape
-        return field_shape(self.shape, self.axes_order)
+        return field_shape(self, self.shape, self.axes_order)
 
 
     @property
@@ -435,13 +457,13 @@ class Field(Tunable, FieldMethods):
         if not self.axes:
             return ()
         from .field_computables import field_chunks
-        return field_chunks(self.shape, self.chunks, self.axes_order)
+        return field_chunks(self, self.shape, self.chunks, self.axes_order)
 
 
     @property
     def num_workers(self):
         from .field_computables import num_workers
-        return num_workers(self.field_shape, self.field_chunks)
+        return num_workers(self, self.field_shape, self.field_chunks)
 
 
     @property
