@@ -83,6 +83,30 @@ def indeces_order(field, axes_order, **axis_orders):
 
 
 @computable
+def extract_axes_order(axes, indeces):
+    axes_order = []
+    for index in indeces:
+        if index in axes:
+            axes_order.append(index)
+        else:
+            key = "_".join(index.split("_")[:-1])
+            assert key in axes, "Trivial assertion"
+            axes_order.append(key)
+    return axes_order
+
+
+@computable
+def extract_axis_order(key, indeces):
+    axis_order = []
+    for index in indeces:
+        if index.startswith(key+"_"):
+            assert "_".join(index.split("_")[:-1]) == key, "Trivial assertion"
+            idx = int(index.split("_")[-1])
+            axis_order.append(idx)
+    return axis_order
+
+
+@computable
 def getitem(field, axes, axes_order, **coords):
     mask = [slice(None) for i in axes]
     for key,val in coords.items():

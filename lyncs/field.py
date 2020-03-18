@@ -473,30 +473,11 @@ class Field(Tunable, FieldMethods):
             assert list(self._indeces_order) == list(indeces), "Cannot change the indeces order if fixed"
             return
 
-        assert len(indeces) == len(self.indeces) and set(indeces) == set(self.indeces), """
-        List of indeces not compatible:
-        field indeces = %s
-        given indeces = %s
-        """ % (indeces, self.indeces)
-
-        axes_order = []
-        axis_orders = {}
-        for index in indeces:
-            if index in self.axes:
-                axes_order.append(index)
-            else:
-                key = "_".join(index.split("_")[:-1])
-                idx = int(index.split("_")[-1])
-                assert key in self.axes, "Trivial assertion"
-                axes_order.append(key)
-                if key not in axis_orders:
-                    axis_orders[key] = [idx]
-                else:
-                    axis_orders[key].append(idx)
-                    
-        self.axes_order = axes_order
-        for key,val in axis_orders.items():
-            setattr(self, key+"_order", val)
+        from .field_computables import extract_axes_order, extract_axis_order
+        self.axes_order = extract_axes_order(self.axes, indeces)
+        for key,count in self.axes_counts.items():
+            if count > 1:
+                setattr(self, key+"_order", extract_axis_order(key, indeces))
 
                 
     @property
