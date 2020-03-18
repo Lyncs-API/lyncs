@@ -445,23 +445,78 @@ class Field(Tunable, FieldMethods):
 
                 
     @property
+    def indeces_order(self):
+        """
+        Returns the list of indeces with the fixed order.
+        """
+        if hasattr(self, "_indeces_order"):
+            return self._indeces_order
+
+        axis_orders = {}
+        from collections import Counter
+        for key,count in Counter(self.axes).items():
+            if count > 1:
+                axis_orders[key] = getattr(self, key+"_order")
+        
+        from .field_computables import indeces_order
+        return indeces_order(self, self.axes_order, **axis_orders)
+
+                
+    @indeces_order.setter
+    def indeces_order(self, indeces):
+        if hasattr(self, "_indeces_order"):
+            assert list(self._indeces_order) == list(indeces), "Cannot change the indeces order if fixed"
+            return
+
+        assert len(indeces) == len(self.indeces) and set(indeces) == set(self.indeces), """
+        List of indeces not compatible:
+        field indeces = %s
+        given indeces = %s
+        """ % (indeces, self.indeces)
+
+        axes_order = []
+        axis_orders = {}
+        for index in indeces:
+            if index in self.axes:
+                axes_order.append(index)
+            else:
+                key = "_".join(index.split("_")[:-1])
+                idx = int(index.split("_")[-1])
+                assert key in self.axes, "Trivial assertion"
+                axes_order.append(key)
+                if key not in axis_orders:
+                    axis_orders[key] = [idx]
+                else:
+                    axis_orders[key].append(idx)
+                    
+        self.axes_order = axes_order
+        for key,val in axis_orders.items():
+            setattr(self, key+"_order", val)
+
+                
+    @property
     def field_shape(self):
-        if not self.axes:
-            return ()
+        if hasattr(self, "_field_shape"):
+            return self._field_shape
+        
         from .field_computables import field_shape
         return field_shape(self, self.shape, self.axes_order)
 
 
     @property
     def field_chunks(self):
-        if not self.axes:
-            return ()
+        if hasattr(self, "_field_chunks"):
+            return self._field_chunks
+        
         from .field_computables import field_chunks
         return field_chunks(self, self.shape, self.chunks, self.axes_order)
 
 
     @property
     def num_workers(self):
+        if hasattr(field, "_num_workers"):
+            return field._num_workers
+        
         from .field_computables import num_workers
         return num_workers(self, self.field_shape, self.field_chunks)
 

@@ -3,48 +3,54 @@ from .tunable import computable
 @computable
 def field_shape(field, shape, axes_order):
     if hasattr(field, "_field_shape"):
-        return tuple(field._field_shape)
-    
-    keys, vals = zip(*shape)
-    keys, vals = list(keys), list(vals)
-    shape = []
-    for key in axes_order:
-        idx = keys.index(key)
-        shape.append(vals[idx])
-        keys.pop(idx)
-        vals.pop(idx)
+        return field._field_shape
+
+    if not shape:
+        shape = ()
+    else:
+        keys, vals = zip(*shape)
+        keys, vals = list(keys), list(vals)
+        shape = []
+        for key in axes_order:
+            idx = keys.index(key)
+            shape.append(vals[idx])
+            keys.pop(idx)
+            vals.pop(idx)
         
-    field._field_shape = shape
-    return tuple(shape)
+    field._field_shape = tuple(shape)
+    return field._field_shape
 
 
 @computable
 def field_chunks(field, shape, chunks, axes_order):
     if hasattr(field, "_field_chunks"):
-        return tuple(field._field_chunks)
-    
-    keys, vals = zip(*shape)
-    Skeys, Svals = list(keys), list(vals)
-    keys, vals = zip(*chunks)
-    Ckeys, Cvals = list(keys), list(vals)
-    chunks = []
-    for key in axes_order:
-        if key in Ckeys:
-            idx = Ckeys.index(key)
-            chunks.append(Cvals[idx])
-            Ckeys.pop(idx)
-            Cvals.pop(idx)
-            idx = Skeys.index(key)
-            Skeys.pop(idx)
-            Svals.pop(idx)
-        else:
-            idx = Skeys.index(key)
-            chunks.append(Svals[idx])
-            Skeys.pop(idx)
-            Svals.pop(idx)
+        return field._field_chunks
 
-    field._field_chunks = chunks
-    return tuple(chunks)
+    if not shape:
+        chunks = ()
+    else:
+        keys, vals = zip(*shape)
+        Skeys, Svals = list(keys), list(vals)
+        keys, vals = zip(*chunks)
+        Ckeys, Cvals = list(keys), list(vals)
+        chunks = []
+        for key in axes_order:
+            if key in Ckeys:
+                idx = Ckeys.index(key)
+                chunks.append(Cvals[idx])
+                Ckeys.pop(idx)
+                Cvals.pop(idx)
+                idx = Skeys.index(key)
+                Skeys.pop(idx)
+                Svals.pop(idx)
+            else:
+                idx = Skeys.index(key)
+                chunks.append(Svals[idx])
+                Skeys.pop(idx)
+                Svals.pop(idx)
+
+    field._field_chunks = tuple(chunks)
+    return field._field_chunks
 
 
 @computable
@@ -59,6 +65,22 @@ def num_workers(field, shape, chunks):
 
     field._num_workers = num_workers
     return num_workers
+
+
+@computable
+def indeces_order(field, axes_order, **axis_orders):
+    if hasattr(field, "_indeces_order"):
+        return field._indeces_order
+
+    axes_order = list(axes_order)
+    for key, vals in axis_orders.items():
+        for val in vals:
+            idx = axes_order.index(key)
+            axes_order[idx] = key + "_" + str(val)
+
+    field._indeces_order = tuple(axes_order)
+    return field._indeces_order
+
 
 @computable
 def getitem(field, axes, axes_order, **coords):
