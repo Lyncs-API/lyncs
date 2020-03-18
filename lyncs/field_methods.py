@@ -56,7 +56,6 @@ def dot(*fields, axes=None, close_indeces=None, open_indeces=None):
     """
     from builtins import all
     from .field import Field
-    from collections import Counter
     assert not (axes is not None and close_indeces is not None), """
     Only one between axes or close_indeces can be used. They are the same parameter."""
     assert all((isinstance(field, Field) for field in fields)), "All fields must be of type field."
@@ -103,7 +102,7 @@ def dot(*fields, axes=None, close_indeces=None, open_indeces=None):
     new_field_indeces = {}
     for field in fields:
         field_indeces.append({})
-        for key, count in Counter(field.axes).items():
+        for key, count in field.axes_counts.items():
             
             if key in same_indeces:
                 if key not in new_field_indeces:
@@ -172,7 +171,6 @@ def einsum(*fields, indeces=None):
     from .tunable import computable
     from builtins import all
     from dask.array import einsum
-    from collections import Counter
 
     fields = tuple(fields)
     
@@ -221,7 +219,7 @@ def einsum(*fields, indeces=None):
     
     field_indeces = []
     for field, idxs in zip(fields+(out,), indeces):
-        kwargs = {key+"_order": getattr(field, key+"_order") for key,val in Counter(field.axes).items() if val>1}
+        kwargs = {key+"_order": getattr(field, key+"_order") for key,val in field.axes_counts.items() if val>1}
         field_indeces.append(get_indeces(idxs, field.axes_order, **kwargs))
 
     @computable
@@ -466,34 +464,24 @@ class FieldMethods:
             new_axes = self.axes
             new_axes.remove(axis)
             new_axes.remove(axis)
+            count = self.axes.count(axis)
 
             @computable
-            def axes_order(axes_order, axis_order):
-                axis_indeces = []
-                last_index = -1
-                count = axes_order.count(axis)
-                for i in range(count):
-                    axis_indeces.append(axes_order.index(axis, last_index+1))
-                    last_index = axis_indeces[-1]
-                to_remove = axis_indeces[axis_order.index(0)], axis_indeces[axis_order.index(count-1)]
-                return [i for j, i in enumerate(axes_order) if j not in to_remove]
+            def indeces_order(indeces_order):
+                indeces_order = list(indeces_order)
+                indeces_order.remove(axis+"_0")
+                indeces_order.remove(axis+"_%d" % (count-1))
+                return indeces_order
 
-            axes_order = axes_order(self.axes_order, getattr(self, axis+"_order"))
-            raw_fields, out = prepare(self, elemwise=False, field_type=new_axes, axes_order=axes_order)
-            
-            @computable
-            def trace(field, axes_order, axis_order):
-                axis_indeces = []
-                last_index = -1
-                count = axes_order.count(axis)
-                for i in range(count):
-                    axis_indeces.append(axes_order.index(axis, last_index+1))
-                    last_index = axis_indeces[-1]
-                axis1 = axis_indeces[axis_order.index(0)]
-                axis2 = axis_indeces[axis_order.index(count-1)]
-                return field.trace(axis1=axis1, axis2=axis2)
-            
-            out.field = trace(raw_fields[0], self.axes_order, getattr(self, axis+"_order"))
+            indeces_order = indeces_order(self.indeces_order)
+            raw_fields, out = prepare(self, elemwise=False, field_type=new_axes,
+                                      indeces_order=indeces_order)
+
+            axis1 = self.indeces_order.index(axis+"_0")
+            axis2 = self.indeces_order.index(axis+"_%d" % (count-1))
+
+            from dask.array import trace
+            out.field = computable(trace)(raw_fields[0], axis1=axis1, axis2=axis2)
             
             return out
         

@@ -89,13 +89,12 @@ class Field(Tunable, FieldMethods):
         self.coords = coords
 
         from .tunable import Permutation, ChunksOf
-        from collections import Counter
 
         self.add_option("axes_order", Permutation(self.axes), transformer=self._reorder)
         if len(set(self.axes))==1:
             self.axes_order = self.axes
 
-        for key,count in Counter(self.axes).items():
+        for key,count in self.axes_counts.items():
             if count > 1:
                 self.add_option(key+"_order", Permutation(list(range(count))), transformer=self._transpose)
 
@@ -134,7 +133,7 @@ class Field(Tunable, FieldMethods):
             fixed_options["axes_order"] = self._expand(fixed_options["axes_order"])
             
         for key, val in fixed_options.items():
-            assert key in self.options, "Unknown options %s" % key
+            assert hasattr(self, key), "Unknown options %s" % key
             setattr(self, key, val)
             
         if zeros_init or field is None:
@@ -237,6 +236,16 @@ class Field(Tunable, FieldMethods):
         """
         return list(self.__dict__.get("_axes", []))
     
+
+    @property
+    def axes_counts(self):
+        if hasattr(self, "_axes_counts"):
+            return dict(self._axes_counts)
+
+        from collections import Counter
+        self._axes_counts = Counter(self.axes)
+        return self.axes_counts
+
     
     @property
     def indeces(self):
@@ -294,12 +303,10 @@ class Field(Tunable, FieldMethods):
         self._axes = self._expand(value)
         self._field_type = value
 
-        from collections import Counter
-        counts = Counter(self.axes)
-        indeces = {axis:0 for axis in counts}
+        indeces = {axis:0 for axis in self.axes_counts}
         self._indeces = []
         for axis in self.axes:
-            if counts[axis] > 1:
+            if self.axes_counts[axis] > 1:
                 self._indeces.append(axis+"_"+str(indeces[axis]))
                 indeces[axis]+=1
             else:
@@ -370,8 +377,7 @@ class Field(Tunable, FieldMethods):
             if self.coords != value.coords:
                 field = self._getitem(field, self.coords, value.coords, value.axes_order)
 
-            from collections import Counter
-            if Counter(self.axes) != Counter(value.axes):
+            if self.axes_counts != value.axes_counts:
                 field = self._squeeze(field, self.axes, value.axes_order, value.field_shape)
 
             if self.dtype != value.dtype:
@@ -453,8 +459,7 @@ class Field(Tunable, FieldMethods):
             return self._indeces_order
 
         axis_orders = {}
-        from collections import Counter
-        for key,count in Counter(self.axes).items():
+        for key,count in self.axes_counts.items():
             if count > 1:
                 axis_orders[key] = getattr(self, key+"_order")
         
