@@ -30,7 +30,6 @@ class Lattice:
             self,
             dims = 4,
             dofs = "QCD",
-            dtype = "complex128",
             properties = {},
     ):
         """
@@ -58,13 +57,14 @@ class Lattice:
 
         global _last_lattice
         _last_lattice = self
+        
+    @property
+    def frozen(self):
+        return self.__dict__.get("_frozen", False)
 
     @property
     def dims(self):
-        if "_dims" in self.__dict__:
-            return self._dims.copy()
-        else:
-            return {}
+        return self.__dict__.get("_dims", {}).copy()
     
     @property
     def n_dims(self):
@@ -105,10 +105,7 @@ class Lattice:
 
     @property
     def dofs(self):
-        if "_dofs" in self.__dict__:
-            return self._dofs.copy()
-        else:
-            return {}
+        return self.__dict__.get("_dofs", {}).copy()
     
     @property
     def n_dofs(self):
@@ -145,10 +142,7 @@ class Lattice:
 
     @property
     def properties(self):
-        if "_properties" in self.__dict__:
-            return self._properties.copy()
-        else:
-            return {}
+        return self.__dict__.get("_properties", {}).copy()
 
     @properties.setter
     def properties(self, value):
@@ -194,6 +188,7 @@ class Lattice:
     __getattr__ = __getitem__
 
     def __setitem__(self, key, value):
+        assert not self.frozen, "Cannot change a lattice in use by a field. Do a copy first."
         try:
             getattr(type(self), key).__set__(self,value)
         except AttributeError:
@@ -228,3 +223,8 @@ class Lattice:
             (type(self), self.dims, self.dofs, self.properties)
         )
 
+    def copy(self):
+        return self.__copy__()
+
+    def __copy__(self):
+        return Lattice(dims=self.dims, dofs=self.dofs, properties=self.properties)
