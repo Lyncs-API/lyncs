@@ -169,7 +169,18 @@ class TunableOption:
             value._length = self._length
             return value
         elif isinstance(self._value, Delayed):
-            self._value = self._value.compute_locally(tune=False)
+            options={}
+            for key,val in self._value.tunable_options.items():
+                key=key.split('-')[0]
+                options[key] = val.value
+                
+            if options:
+                value = delayed(self)(**options)
+                value._length = self._length
+                return value
+            else:
+                self._value = self._value.compute_locally(tune=False)
+                
         return copy(self._value)
     
         
@@ -179,11 +190,14 @@ class TunableOption:
 
     def set(self, value, force=False):
         if not force:
-            assert not hasattr(self,"_value") or self._value == format(value), """
+            assert not hasattr(self,"_value") or self._value == self.format(value), """
             The value of a fixed option cannot be changed.
-            """
+            Fixed value: %s
+            Given value: %s
+            """ % (self._value, format(value))
         if type(value) == type(self) and self.source == value.source:
             self._value = value.value
+            if hasattr(value, "_unique_id"): self._unique_id = value._unique_id
             
         else:
             if isinstance(value, TunableOption):
@@ -192,7 +206,7 @@ class TunableOption:
             self._value = computable(self.format)(value)
 
 
-    def __call__(self, value=None):
+    def __call__(self, value=None, **tunable_options):
         if value is None:
             return self.value
         else:
