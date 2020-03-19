@@ -60,3 +60,32 @@ def to_list(*args):
         
     return lst
     
+
+def compute_property(key):
+    """
+    Computes a property once and then store it in self.*key*
+    """
+    from functools import wraps
+    from .tunable import Delayed
+    from copy import copy
+    
+    def decorator(fnc):
+    
+        @property
+        @wraps(fnc)
+        def wrapped_property(self, *args, **kwargs):
+            try:
+                value = getattr(self, key)
+           
+            except AttributeError:
+                value = fnc(self, *args, **kwargs)
+                
+                if isinstance(value, Delayed):
+                    return value
+                setattr(self, key, value)
+                
+            return copy(value)
+            
+        return wrapped_property
+    
+    return decorator
