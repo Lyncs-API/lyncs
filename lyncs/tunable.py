@@ -275,7 +275,7 @@ class Permutation(TunableOption):
     "A permutation of iterable"
     def __init__(self, source):
         assert hasattr(source, "__iter__"), "A permutation must be iterable"
-        source = list(source)
+        source = tuple(source)
         super().__init__(source, length = len(source))
 
         
@@ -295,7 +295,7 @@ class Permutation(TunableOption):
             if v in source:
                 source.remove(v)
                 ret.append(v)
-        return ret
+        return tuple(ret)
     
         
     def __iter__(self):

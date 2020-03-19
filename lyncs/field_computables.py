@@ -1,10 +1,7 @@
 from .tunable import computable
 
 @computable
-def field_shape(field, shape, axes_order):
-    if hasattr(field, "_field_shape"):
-        return field._field_shape
-
+def field_shape(shape, axes_order):
     if not shape:
         shape = ()
     else:
@@ -17,15 +14,11 @@ def field_shape(field, shape, axes_order):
             keys.pop(idx)
             vals.pop(idx)
         
-    field._field_shape = tuple(shape)
-    return field._field_shape
+    return tuple(shape)
 
 
 @computable
-def field_chunks(field, shape, chunks, axes_order):
-    if hasattr(field, "_field_chunks"):
-        return field._field_chunks
-
+def field_chunks(shape, chunks, axes_order):
     if not shape:
         chunks = ()
     else:
@@ -48,38 +41,29 @@ def field_chunks(field, shape, chunks, axes_order):
                 chunks.append(Svals[idx])
                 Skeys.pop(idx)
                 Svals.pop(idx)
-
-    field._field_chunks = tuple(chunks)
-    return field._field_chunks
+                
+    return tuple(chunks)
 
 
 @computable
-def num_workers(field, shape, chunks):
-    if hasattr(field, "_num_workers"):
-        return field._num_workers
-    
+def num_workers(shape, chunks):
     from math import ceil
     num_workers = 1
     for num, den in zip(shape, chunks):
         num_workers *= ceil(num/den)
 
-    field._num_workers = num_workers
     return num_workers
 
 
 @computable
-def indeces_order(field, axes_order, **axis_orders):
-    if hasattr(field, "_indeces_order"):
-        return field._indeces_order
-
+def indeces_order(axes_order, **axis_orders):
     axes_order = list(axes_order)
     for key, vals in axis_orders.items():
         for val in vals:
             idx = axes_order.index(key)
             axes_order[idx] = key + "_" + str(val)
-
-    field._indeces_order = tuple(axes_order)
-    return field._indeces_order
+            
+    return tuple(axes_order)
 
 
 @computable
@@ -128,6 +112,7 @@ def setitem(field, setitem, axes, axes_order, **coords):
 @computable
 def squeeze(field, new_axes, old_axes_order, old_field_shape):
     from collections import Counter
+    old_axes_order=list(old_axes_order)
     axes = []
     for i, (axis, size) in enumerate(zip(list(old_axes_order), old_field_shape)):
         if axis in new_axes and size>1:

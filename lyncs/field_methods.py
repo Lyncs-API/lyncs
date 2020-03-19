@@ -192,7 +192,7 @@ def einsum(*fields, indeces=None):
             if isinstance(val, int):
                 idxs[key] = (val,)
             idxs[key] = tuple(val)
-            assert len(idxs[key])==field.axes.count(key), "Indeces must be given for all the repetion of the axis"
+            assert len(idxs[key])==field.axes_counts[key], "Indeces must be given for all the repetion of the axis"
 
     for key,val in indeces[-1].items():
         if isinstance(val, int):
@@ -400,7 +400,7 @@ class FieldMethods:
                 keys = [key]
 
             for key2 in keys:
-                count = self.axes.count(key2)
+                count = self.axes_counts[key2]
                 if key+"_order" in axes_order:
                     from .tunable import Permutation
                     assert Permutation(list(range(count))).compatible(axes_order[key+"_order"]), """
@@ -456,15 +456,15 @@ class FieldMethods:
         if not axes:
             axes = "all"
             
-        axes = [axis for axis in set(self._expand(axes)) if self.axes.count(axis) > 1]
+        axes = [axis for axis in set(self._expand(axes)) if self.axes_counts[axis] > 1]
             
         if len(axes) == 1:
 
             axis = axes[0]
-            new_axes = self.axes
+            new_axes = list(self.axes)
             new_axes.remove(axis)
             new_axes.remove(axis)
-            count = self.axes.count(axis)
+            count = self.axes_counts[axis]
 
             @computable
             def indeces_order(indeces_order):
@@ -489,7 +489,7 @@ class FieldMethods:
             _i=0
             indeces = [{}, {}]
             for axis in set(self.axes):
-                count = self.axes.count(axis) 
+                count = self.axes_count[axis]
                 if axis in axes:
                     indeces[0][axis] = tuple(_i+i for i in range(count-1)) + (_i,)
                     _i+=count-1
@@ -548,7 +548,7 @@ class FieldMethods:
 
         kwargs = {}
         for axis, shift in to_roll.items():
-            count = self.axes.count(axis)
+            count = self.axes_counts[axis]
             assert len(shift)==1 or len(shift)==count, """
             If an axis is repeated then a shift must be given for all the repetitions.
             """

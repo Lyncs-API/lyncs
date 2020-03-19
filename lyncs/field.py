@@ -6,6 +6,7 @@ from .tunable import Tunable, computable
 from .field_methods import FieldMethods
 from functools import wraps
 from .tunable import visualize, compute, persist
+from .utils import compute_property
 
 class Field(Tunable, FieldMethods):
     _field_types = {
@@ -75,6 +76,7 @@ class Field(Tunable, FieldMethods):
                      field.dtype if hasattr(field, "dtype") else \
                      Field._default_dtype
 
+        # Copying labels
         if isinstance(field, Field):
             for key,val in field.labels.items():
                 try: self.label(key, **val)
@@ -99,7 +101,7 @@ class Field(Tunable, FieldMethods):
                 self.add_option(key+"_order", Permutation(list(range(count))), transformer=self._transpose)
 
         from numpy import prod
-        chunks = [(key,val) for key, val in self.shape if val>1 and key in self.dims]
+        chunks = tuple((key,val) for key, val in self.shape if val>1 and key in self.dims)
         self.add_option("chunks", ChunksOf(chunks), transformer=self._rechunk)
         
         if prod([val for key,val in chunks])==1:
@@ -144,22 +146,20 @@ class Field(Tunable, FieldMethods):
 
     @property
     def lattice(self):
-        from copy import copy
-        return copy(self.__dict__.get("_lattice", None))
+        return self.__dict__.get("_lattice", None)
         
     @lattice.setter
     def	lattice(self, value):
         assert self.lattice is None, "Not allowed to change lattice, if needed ask to implement it"
         from .lattice import Lattice
-        assert isinstance(value, Lattice)
-        
+        assert isinstance(value, Lattice), "Lattice must be of Lattice type"
+        if not value.frozen: value._frozen = True
         self._lattice = value
 
 
     @property
     def dtype(self):
-        from copy import copy
-        return copy(self.__dict__.get("_dtype", None))
+        return self.__dict__.get("_dtype", None)
     
     @dtype.setter
     def dtype(self, value):
@@ -169,14 +169,14 @@ class Field(Tunable, FieldMethods):
         self._dtype = value
 
 
-    @property
+    @compute_property("_dims")
     def dims(self):
-        return [key for key in self.axes if key in self.lattice.dims]
+        return tuple(key for key in self.axes if key in self.lattice.dims)
 
     
-    @property
+    @compute_property("_dofs")
     def dofs(self):
-        return [key for key in self.axes if key not in self.lattice.dims]
+        return tuple(key for key in self.axes if key not in self.lattice.dims)
 
 
     def _expand(self, prop):
@@ -203,7 +203,7 @@ class Field(Tunable, FieldMethods):
         return __expand(prop).split()
     
     
-    @property
+    @compute_property("_dimensions")
     def dimensions(self):
         """
         Returns all the possible dimensions valid for the field.
@@ -234,30 +234,37 @@ class Field(Tunable, FieldMethods):
         """
         Returns the list of fundamental dimensions. The order is not significant.
         """
-        return list(self.__dict__.get("_axes", []))
+        return self.__dict__.get("_axes", ())
     
 
-    @property
+    @compute_property("_axes_counts")
     def axes_counts(self):
-        if hasattr(self, "_axes_counts"):
-            return dict(self._axes_counts)
-
         from collections import Counter
-        self._axes_counts = Counter(self.axes)
-        return self.axes_counts
+        return Counter(self.axes)
 
     
-    @property
+    @compute_property("_indeces")
     def indeces(self):
         """
         Returns the list of indeces. The order is not significant.
         Indeces are like axes, where though each axis has a unique name,
         distinguishing the repetition with _0, _1 etc.
         """
-        return list(self.__dict__.get("_indeces", []))
+        counts = self.axes_counts
+        idxs = {axis:0 for axis in counts}
+        indeces = []
+        for axis in self.axes:
+            if counts[axis] > 1:
+                indeces.append(axis+"_"+str(idxs[axis]))
+                idxs[axis]+=1
+            else:
+                indeces.append(axis)
+        assert len(set(self.indeces)) == len(self.indeces), "Trivial assertion"
+        
+        return tuple(indeces)
     
     
-    @property
+    @compute_property("_shape")
     def shape(self):
         """
         Returns the list of dimensions with size. The order is not significant.
@@ -268,13 +275,12 @@ class Field(Tunable, FieldMethods):
             else:
                 return self.lattice[key]
                 
-        return [(key, get_size(key)) for key in self.axes]
+        return tuple((key, get_size(key)) for key in self.axes)
     
     
     @property
     def field_type(self):
-        from copy import copy
-        return copy(self.__dict__.get("_field_type", None))
+        return self.__dict__.get("_field_type", None)
     
 
     @field_type.setter
@@ -291,6 +297,8 @@ class Field(Tunable, FieldMethods):
         assert is_known(self, value), "Got unknown field type"
 
         if not isinstance(value, str) or value not in self._field_types:
+            if isinstance(value, str): value = (value,)
+            else: value = tuple(value)
             target = sorted(self._expand(value))
             for field_type in self._field_types:
                 try:
@@ -299,24 +307,14 @@ class Field(Tunable, FieldMethods):
                         break
                 except:
                     pass
-
-        self._axes = self._expand(value)
+                
+        self._axes = tuple(self._expand(value))
         self._field_type = value
-
-        indeces = {axis:0 for axis in self.axes_counts}
-        self._indeces = []
-        for axis in self.axes:
-            if self.axes_counts[axis] > 1:
-                self._indeces.append(axis+"_"+str(indeces[axis]))
-                indeces[axis]+=1
-            else:
-                self._indeces.append(axis)
-        assert len(set(self.indeces)) == len(self.indeces)
-
+        
 
     @property
     def coords(self):
-        return dict(self.__dict__.get("_coords", {}))
+        return self.__dict__.get("_coords", {}).copy()
 
     
     @coords.setter
@@ -450,21 +448,18 @@ class Field(Tunable, FieldMethods):
                 warnings.warn("Mistmatch between computed %s and real field %s" % (self.dtype, self._field.dtype))
 
                 
-    @property
+    @compute_property("_indeces_order")
     def indeces_order(self):
         """
         Returns the list of indeces with the fixed order.
         """
-        if hasattr(self, "_indeces_order"):
-            return self._indeces_order
-
         axis_orders = {}
         for key,count in self.axes_counts.items():
             if count > 1:
                 axis_orders[key] = getattr(self, key+"_order")
         
         from .field_computables import indeces_order
-        return indeces_order(self, self.axes_order, **axis_orders)
+        return indeces_order(self.axes_order, **axis_orders)
 
                 
     @indeces_order.setter
@@ -480,31 +475,22 @@ class Field(Tunable, FieldMethods):
                 setattr(self, key+"_order", extract_axis_order(key, indeces))
 
                 
-    @property
+    @compute_property("_field_shape")
     def field_shape(self):
-        if hasattr(self, "_field_shape"):
-            return self._field_shape
-        
         from .field_computables import field_shape
-        return field_shape(self, self.shape, self.axes_order)
+        return field_shape(self.shape, self.axes_order)
 
 
-    @property
+    @compute_property("_field_chunks") 
     def field_chunks(self):
-        if hasattr(self, "_field_chunks"):
-            return self._field_chunks
-        
         from .field_computables import field_chunks
-        return field_chunks(self, self.shape, self.chunks, self.axes_order)
+        return field_chunks(self.shape, self.chunks, self.axes_order)
 
 
-    @property
+    @compute_property("_num_workers") 
     def num_workers(self):
-        if hasattr(field, "_num_workers"):
-            return field._num_workers
-        
         from .field_computables import num_workers
-        return num_workers(self, self.field_shape, self.field_chunks)
+        return num_workers(self.field_shape, self.field_chunks)
 
 
     @property
