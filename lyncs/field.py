@@ -6,7 +6,8 @@ from .tunable import Tunable, computable
 from .field_methods import FieldMethods
 from functools import wraps
 from .tunable import visualize, compute, persist
-from .utils import compute_property
+from .utils import compute_property, simple_property
+from . import fields
 
 class Field(Tunable, FieldMethods):
     _field_types = {
@@ -108,11 +109,10 @@ class Field(Tunable, FieldMethods):
             self.chunks = chunks
 
         # Loading dynamically methods and attributed from the field types in fields
-        from importlib import import_module
         from types import MethodType
         for name in self.dimensions:
-            try:
-                module = import_module(".fields.%s"%name, package="lyncs")
+            if name in fields.__all__:
+                module = getattr(fields, name)
                 for attr in module.__all__:
                     val = getattr(module, attr)
                     if attr == "__init__":
@@ -121,8 +121,6 @@ class Field(Tunable, FieldMethods):
                         setattr(self, attr, MethodType(val,self))
                     else:
                         setattr(self, attr, val)
-            except ModuleNotFoundError:
-                pass
 
         fixed_options = fixed_options.copy()
         
@@ -144,9 +142,9 @@ class Field(Tunable, FieldMethods):
             self.field = field
         
 
-    @property
+    @simple_property("_lattice", None, False)
     def lattice(self):
-        return self.__dict__.get("_lattice", None)
+        pass
         
     @lattice.setter
     def	lattice(self, value):
@@ -157,9 +155,9 @@ class Field(Tunable, FieldMethods):
         self._lattice = value
 
 
-    @property
+    @simple_property("_dtype", None, False)
     def dtype(self):
-        return self.__dict__.get("_dtype", None)
+        pass
     
     @dtype.setter
     def dtype(self, value):
@@ -229,12 +227,12 @@ class Field(Tunable, FieldMethods):
         return dims
 
 
-    @property
+    @simple_property("_axes", ())
     def axes(self):
         """
         Returns the list of fundamental dimensions. The order is not significant.
         """
-        return self.__dict__.get("_axes", ())
+        pass
     
 
     @compute_property("_axes_counts")
@@ -278,9 +276,9 @@ class Field(Tunable, FieldMethods):
         return tuple((key, get_size(key)) for key in self.axes)
     
     
-    @property
+    @simple_property("_field_type", None)
     def field_type(self):
-        return self.__dict__.get("_field_type", None)
+        pass
     
 
     @field_type.setter
@@ -312,9 +310,9 @@ class Field(Tunable, FieldMethods):
         self._field_type = value
         
 
-    @property
+    @simple_property("_coords", {})
     def coords(self):
-        return self.__dict__.get("_coords", {}).copy()
+        pass
 
     
     @coords.setter
@@ -493,7 +491,7 @@ class Field(Tunable, FieldMethods):
         return num_workers(self.field_shape, self.field_chunks)
 
 
-    @property
+    @compute_property("_size")
     def size(self):
         """
         Returns the number of elements in the field.
@@ -503,7 +501,7 @@ class Field(Tunable, FieldMethods):
         return prod
 
 
-    @property
+    @compute_property("_byte_size")
     def byte_size(self):
         """
         Returns the size of the field in bytes
@@ -511,9 +509,9 @@ class Field(Tunable, FieldMethods):
         return self.size*self.dtype.itemsize
 
 
-    @property
+    @simple_property("_labels",{})
     def labels(self):
-        return dict(self.__dict__.get("_labels",{}))
+        pass
 
     
     def label(self, name, **coords):
@@ -582,28 +580,8 @@ class Field(Tunable, FieldMethods):
         from .tunable import computable, delayed
         from dask.array import from_delayed
         
-        io = file_manager(filename, format=format, field=self, **info)
-
-        @computable
-        def read_field(shape, chunks, reader):
-            from dask.highlevelgraph import HighLevelGraph
-            from dask.array.core import normalize_chunks, Array
-            from itertools import product
-            
-            chunks = normalize_chunks(chunks, shape=shape)
-            chunks_id = list(product(*[range(len(bd)) for bd in chunks]))
-
-            reads = [delayed(reader)(chunk_id) for chunk_id in chunks_id]
-            
-            keys = [(filename, *chunk_id) for chunk_id in chunks_id]
-            vals = [read.key for read in reads]
-            dsk = dict(zip(keys, vals))
-
-            graph = HighLevelGraph.from_collections(filename, dsk, dependencies=reads)
-
-            return Array(graph, filename, chunks, dtype=self.dtype)
-        
-        self.field = read_field(self.field_shape, self.field_chunks, io.get_reader)
+        io = file_manager(self, format=format, filename=filename, **info)
+        self.field = io.read()
         
 
     def save(
