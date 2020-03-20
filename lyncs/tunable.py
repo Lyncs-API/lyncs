@@ -196,8 +196,11 @@ class TunableOption:
             Given value: %s
             """ % (self._value, format(value))
         if type(value) == type(self) and self.source == value.source:
+            if hasattr(value, "_unique_id"):
+                if hasattr(self, "_unique_id") and self._unique_id == value._unique_id:
+                    return
+                self._unique_id = value._unique_id
             self._value = value.value
-            if hasattr(value, "_unique_id"): self._unique_id = value._unique_id
             
         else:
             if isinstance(value, TunableOption):
