@@ -73,12 +73,12 @@ def compute_property(key):
     
         @property
         @wraps(fnc)
-        def wrapped_property(self, *args, **kwargs):
+        def wrapped_property(self):
             try:
                 value = getattr(self, key)
            
             except AttributeError:
-                value = fnc(self, *args, **kwargs)
+                value = fnc(self)
                 
                 if isinstance(value, Delayed):
                     return value
@@ -86,6 +86,30 @@ def compute_property(key):
                 
             return copy(value)
             
+        return wrapped_property
+    
+    return decorator
+
+
+def simple_property(key, value, copy=True):
+    """
+    Creates a simple property, i.e. returns self.key if exists of the given value.
+    """
+
+    from functools import wraps
+    if copy:
+        from copy import copy
+    else:
+        copy = lambda value: value
+    
+    def decorator(fnc):
+    
+        @property
+        @wraps(fnc)
+        def wrapped_property(self):
+            assert fnc(self) is None, "A default property should return None"
+            return copy(self.__dict__.get(key, value))
+        
         return wrapped_property
     
     return decorator

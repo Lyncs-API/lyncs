@@ -3,6 +3,8 @@ __all__ = [
     'Lattice',
 ]
 
+from .utils import simple_property
+
 _last_lattice = None
 def default_lattice():
     assert _last_lattice is not None, "Any lattice has been defined yet."
@@ -58,13 +60,13 @@ class Lattice:
         global _last_lattice
         _last_lattice = self
         
-    @property
+    @simple_property("_frozen", False)
     def frozen(self):
-        return self.__dict__.get("_frozen", False)
+        pass
 
-    @property
+    @simple_property("_dims", {})
     def dims(self):
-        return self.__dict__.get("_dims", {}).copy()
+        pass
     
     @property
     def n_dims(self):
@@ -103,9 +105,9 @@ class Lattice:
         dirs = list(self.dims.keys())
         if len(dirs)>1: self.properties = { "time": [dirs[0]], "space": dirs[1:] }
 
-    @property
+    @simple_property("_dofs", {})
     def dofs(self):
-        return self.__dict__.get("_dofs", {}).copy()
+        pass
     
     @property
     def n_dofs(self):
@@ -140,9 +142,9 @@ class Lattice:
         else:
             assert False, "Not allowed type %s"%type(value)
 
-    @property
+    @simple_property("_properties", {})
     def properties(self):
-        return self.__dict__.get("_properties", {}).copy()
+        pass
 
     @properties.setter
     def properties(self, value):
