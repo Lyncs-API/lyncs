@@ -1,4 +1,7 @@
 
+from ...tunable import Tunable, computable, delayed
+from ...utils import simple_property
+
 # List of available implementations
 engines = [
     "pylime",
@@ -7,6 +10,11 @@ engines = [
 from . import lime as pylime
 default_engine = "pylime"
 
+try:
+    from . import DDalphaAMG
+    engines.append("DDalphaAMG")
+except:
+    pass
 # from lyncs import config
 # if config.clime_enabled:
 #     import .clime
@@ -14,7 +22,8 @@ default_engine = "pylime"
 
 # TODO: add more, e.g. lemon
 
-def get_engine(engine=None):
+@computable
+def engine(engine=None):
     import sys
     engine = engine or default_engine
     self = sys.modules[__name__]
@@ -55,21 +64,6 @@ def get_field_type(records):
         assert False, "To be implemented"
     
 
-def get_fixed_options(field_type):
-    opts = {}
-    dims_order = ['t', 'z', 'y', 'x']
-    
-    if field_type == "gauge_links":
-        opts["dirs_order"] = dims_order
-        opts["axes_order"] = dims_order + ['n_dims', 'color', 'color']
-        opts["color_order"] = (0,1)
-    else:
-        # TODO
-        assert False, "To be implemented"
-        
-    return opts
-    
-
 def get_type(filename, lattice=None, field_type=None, **kwargs):
     records = pylime.scan_file(filename)
     records = {r["lime_type"]: (r["data"] if "data" in r else r["data_length"]) for r in records}
@@ -107,7 +101,6 @@ def get_type(filename, lattice=None, field_type=None, **kwargs):
         lattice=lattice,
         field_type=field_type,
         dtype = "complex%d"%(int(info["precision"])*2),
-        fixed_options = get_fixed_options(field_type),
     )
     
     assert field.byte_size == records["ildg-binary-data"], """
@@ -117,36 +110,75 @@ def get_type(filename, lattice=None, field_type=None, **kwargs):
     return field
 
 
-from ...tunable import Tunable, computable, delayed
+def fixed_options(field, key):
+    dims_order = ['t', 'z', 'y', 'x']
+
+    if key == "axes_order":
+        if field.field_type == "gauge_links":
+            return dims_order + ['n_dims', 'color', 'color']
+    elif key == "color_order":
+        return [0,1]
+    elif key == "dirs_order":
+        return dims_order
+    else:
+        # TODO
+        assert False, "To be implemented"
+
 
 class file_manager(Tunable):
     
-    def __init__(self, filename, field=None, **kwargs):
-        from ...tunable import Choice
-        from os.path import abspath
-        self.filename = abspath(filename)
+    def __init__(self, field, **kwargs):
         self.field = field
+        from ...tunable import Choice
         self.add_option("lime_engine",Choice(engines))
 
+        for key, val in kwargs.items():
+            assert hasattr(self,key), "Attribute %s not found" % key
+            setattr(self, key, val)
+
+    @simple_property("_filename", None)
+    def filename(self):
+        pass
+
+    @filename.setter
+    def filename(self, value):
+        assert isinstance(value, str), "Filename must be a string"
+        from os.path import abspath
+        self._filename = abspath(value)
+    
     @property
     def engine(self):
-        @computable
-        def engine(lime_engine):
-            return get_engine(lime_engine)
         return engine(self.lime_engine)
 
-    @property
-    def get_reader(self):
-        @computable
-        def reader(engine, shape, chunks):
-            return lambda chunk_id: engine.read(self.filename,
-                                                shape=shape,
-                                                dtype=self.field.dtype,
-                                                chunks=chunks,
-                                                chunk_id=chunk_id)
-        return reader(self.engine, self.field.field_shape, self.field.field_chunks)
+
+    def read(self, **kwargs):
+        from ...field import Field
+        filename = kwargs.get("filename", self.filename)
+        field = Field(self.field, zeros_init=True, **self.fixed_options)
+        
+        field.field = self.engine.read(
+            filename,
+            shape = field.field_shape,
+            chunks = field.field_chunks,
+        )
+        return field
 
     
+    @property
+    def fixed_options(self):
+        opts = {}
+        opts["axes_order"] = fixed_options(self.field, "axes_order")
+
+        if self.field.field_type == "gauge_links":
+            opts["color_order"] = fixed_options(self.field, "color_order")
+            opts["dirs_order"] = fixed_options(self.field, "dirs_order")
+        else:
+            # TODO
+            assert False, "To be implemented"
+            
+        return opts
+    
+
     def __dask_tokenize__(self):
         from dask.base import normalize_token
             

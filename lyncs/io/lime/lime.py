@@ -1,3 +1,4 @@
+from ...tunable import computable
 
 # Constants
 lime_header_size = 144
@@ -55,19 +56,13 @@ def scan_file(filename):
     return records
 
 
-def read(filename, shape, dtype, chunks=None, chunk_id=None):
+def read_chunk(filename, shape, dtype, data_offset, chunks=None, chunk_id=None):
     import numpy as np
     from itertools import product
     
     shape = np.array(shape)
     chunks = np.array(chunks or shape)
     chunk_id = np.array(chunk_id or np.zeros_like(shape))
-    records = scan_file(filename)
-    records = {r["lime_type"]: r for r in records}
-
-    data_record = records["ildg-binary-data"]
-    
-    assert data_record["data_length"] == np.prod(shape)*dtype.itemsize
 
     n_chunks = shape//chunks
 
@@ -80,7 +75,7 @@ def read(filename, shape, dtype, chunks=None, chunk_id=None):
         for i,l,L in zip(chunk_id,chunks,shape):
             offset = offset*L+i*l
         offset *= dtype.itemsize
-        offset += data_record["pos"]
+        offset += data_offset
         return np.fromfile(filename, dtype=dtype, count=consecutive, offset=offset).reshape(chunks)
 
     arr = np.ndarray(tuple(chunks[:start])+(consecutive,), dtype=dtype)
@@ -92,8 +87,44 @@ def read(filename, shape, dtype, chunks=None, chunk_id=None):
         for i,j,l,L in zip(chunk_id,read_id+tuple(0 for i in range(len(shape)-start)),chunks,shape):
             offset = offset*L+i*l+j
         offset *= dtype.itemsize
-        offset += data_record["pos"]
+        offset += data_offset
 
         arr[read_id] = np.fromfile(filename, dtype=dtype, count=consecutive, offset=offset)
 
     return arr.reshape(chunks)
+
+
+@computable
+def read(filename, shape, chunks):
+    from dask.highlevelgraph import HighLevelGraph
+    from dask.array.core import normalize_chunks, Array
+    from itertools import product
+    from ...tunable import delayed
+    from numpy import prod, dtype
+    import xmltodict
+
+    records = scan_file(filename)
+    records = {r["lime_type"]: r for r in records}
+
+    data_record = records["ildg-binary-data"]
+    data_offset = data_record["pos"]
+    
+    info = xmltodict.parse(records["ildg-format"]["data"])["ildgFormat"]
+    dtype = dtype("complex%d"%(int(info["precision"])*2))
+
+    assert data_record["data_length"] == prod(shape)*dtype.itemsize
+
+    normal_chunks = normalize_chunks(chunks, shape=shape)
+    chunks_id = list(product(*[range(len(bd)) for bd in normal_chunks]))
+
+    reads = [delayed(read_chunk)(filename, shape, dtype, data_offset,
+                                 chunks, chunk_id) for chunk_id in chunks_id]
+    
+    keys = [(filename, *chunk_id) for chunk_id in chunks_id]
+    vals = [read.key for read in reads]
+    dsk = dict(zip(keys, vals))
+    
+    graph = HighLevelGraph.from_collections(filename, dsk, dependencies=reads)
+    
+    return Array(graph, filename, normal_chunks, dtype=dtype)
+        
