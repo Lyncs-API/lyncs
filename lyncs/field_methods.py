@@ -835,7 +835,7 @@ def wrap_reduction(reduction):
         if axes:
             assert set(axes).issubset(field.dimensions)
             axes = field._expand(axes)
-            new_axes = field.axes
+            new_axes = list(field.axes)
             for axis in set(axes):
                 while axis in new_axes:
                     new_axes.remove(axis)
@@ -843,6 +843,7 @@ def wrap_reduction(reduction):
             @computable
             def get_axes(old_axes):
                 axes = list(range(len(old_axes)))
+                old_axes = list(old_axes)
                 for axis in new_axes:
                     axes.pop(old_axes.index(axis))
                     old_axes.remove(axis)
