@@ -1,0 +1,11 @@
+@import url("default.css");
+div.sphinxsidebar span.caption-text {
+    font-family: Georgia, serif;
+    color: #444;
+    font-size: 24px;
+    font-weight: normal;
+}
+
+div.body p.caption {
+    text-align: justify;
+}

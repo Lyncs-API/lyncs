@@ -59,6 +59,7 @@ html_favicon = '_static/icon.png'
 
 html_theme_options = {
     'logo': 'logo.png',
+    'body_text_align': 'justify',
     'github_user': 'sbacchio',
     'github_repo': 'lyncs',
     'touch_icon': 'icon.png',
