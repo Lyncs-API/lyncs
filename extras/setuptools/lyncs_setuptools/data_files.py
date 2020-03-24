@@ -36,6 +36,5 @@ def add_to_data_files(*files, directory=None):
 
 
 def get_data_files():
-    print(_data_files)
     return list(_data_files.items())
  
