@@ -9,7 +9,7 @@ def find_version(filename=None):
         assert os.path.isfile(filename), "Given version does not exist"
         with codecs.open(filename, 'r') as fp:
             if filename.endswith(".py"):
-                version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]", fp.read(), re.M)
+                version_match = re.search(r"^__version__\s?=\s?['\"]([^'\"]*)['\"]", fp.read(), re.M)
                 assert version_match, "__version__ = not found in file"
                 return version_match.group(1)
             else:
