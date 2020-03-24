@@ -54,7 +54,7 @@ endif()
 include(${CMAKE_SOURCE_DIR}/CMakeExt/MessageColor.cmake)
 include(${CMAKE_SOURCE_DIR}/CMakeExt/pytest.cmake)
 
-set(_EXT_LIBS QUDA TMLQCD LIME DDALPHAAMG)
+set(_EXT_LIBS QUDA TMLQCD DDALPHAAMG)
 foreach(lib ${_EXT_LIBS})
   option(ENABLE_${lib}
          "Specify whether to enable ${LIB} library" off)

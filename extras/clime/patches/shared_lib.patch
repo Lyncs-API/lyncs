@@ -1,0 +1,36 @@
+diff --git a/autogen.sh b/autogen.sh
+index b01fdc4..905970e 100755
+--- a/autogen.sh
++++ b/autogen.sh
+@@ -1,3 +1,3 @@
+ #!/bin/sh
+ 
+-autoreconf -f
++autoreconf -if
+diff --git a/configure.ac b/configure.ac
+index bdf6b91..5e6415a 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -74,6 +74,8 @@ AC_FUNC_FSEEKO
+ # Checks for library functions.
+ ## AC_FUNC_MALLOC
+ 
++LT_INIT
++
+ AC_CONFIG_FILES(Makefile)
+ AC_CONFIG_FILES(include/Makefile)
+ AC_CONFIG_FILES(lib/Makefile)
+diff --git a/lib/Makefile.am b/lib/Makefile.am
+index 1d116c7..b992867 100644
+--- a/lib/Makefile.am
++++ b/lib/Makefile.am
+@@ -1,7 +1,7 @@
+ 
+ AM_CFLAGS = -I@top_srcdir@/include -I@top_builddir@/include
+ 
+-lib_LIBRARIES = liblime.a
++lib_LTLIBRARIES = liblime.la
+ 
+-liblime_a_SOURCES = lime_writer.c  lime_header.c  lime_utils.c \
++liblime_la_SOURCES = lime_writer.c  lime_header.c  lime_utils.c \
+ 	lime_reader.c lime_fseeko.c
