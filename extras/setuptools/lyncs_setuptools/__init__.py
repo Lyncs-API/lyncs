@@ -9,7 +9,7 @@ def setup(name, **kwargs):
 
     kwargs.setdefault('author', 'Simone Bacchio')
     kwargs.setdefault('author_email', 's.bacchio@gmail.com')
-    kwargs.setdefault('url', 'lyncs.readthedocs.io')
+    kwargs.setdefault('url', 'https://github.com/sbacchio')
     kwargs.setdefault('version', find_version())
     kwargs.setdefault('packages', find_packages())
     kwargs.setdefault('classifiers', classifiers)
