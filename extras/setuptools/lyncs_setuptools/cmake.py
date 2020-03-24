@@ -25,20 +25,21 @@ class CMakeExtension(Extension):
 
 class CMakeBuild(build_ext):
     def run(self):
-        import subprocess
-        
+        for ext in self.extensions:
+            if isinstance(ext, CMakeExtension):
+                self.build_extension(ext)
+                self.extensions.remove(ext)
+        if self.extensions:
+            return build_ext.run(self)
+
+    def build_extension(self, ext):
+        import os, subprocess
+
         try:
             out = subprocess.check_output(['cmake', '--version'])
         except OSError:
             raise RuntimeError(
-                "CMake must be installed to build the following extensions: " +
-                ", ".join(e.name for e in self.extensions))
-
-        for ext in self.extensions:
-            self.build_extension(ext)
-
-    def build_extension(self, ext):
-        import os, subprocess
+                "CMake must be installed to build the following extensions: " + ext.name)
         
         extdir = os.path.abspath(
             os.path.dirname(self.get_ext_fullpath(ext.name)))

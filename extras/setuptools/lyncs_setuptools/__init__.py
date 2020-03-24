@@ -20,7 +20,7 @@ def setup(name, **kwargs):
         kwargs.setdefault('long_description', dlong)
         kwargs.setdefault('long_description_content_type', dtype)
     
-    if 'ext_modules' in kwargs and all((isinstance(ext, CMakeExtension) for ext in kwargs['ext_modules'])):
+    if 'ext_modules' in kwargs:
         kwargs.setdefault('cmdclass', dict())
         kwargs['cmdclass'].setdefault("build_ext", CMakeBuild)
         
