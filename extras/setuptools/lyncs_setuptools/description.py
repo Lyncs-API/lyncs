@@ -1,5 +1,5 @@
 
-def find_long_description(readme=None):
+def find_description(readme=None):
     import codecs, os
     from itertools import product
     from .data_files import add_to_data_files
@@ -20,8 +20,30 @@ def find_long_description(readme=None):
     Couldn't find a compatible filename. 
     Options are %s""" % ", ".join(options)
     
+    if readme.endswith(".md"):
+        dtype = "text/markdown"
+    elif readme.endswith(".rst"):
+        dtype = "text/x-rst"
+    else:
+        dtype = "text/plain"
+        
     with codecs.open(readme, encoding='utf-8') as f:
         add_to_data_files(readme, directory=".")
-        return f.read()
+        dlong = f.read()
+
+    dshort = ""
+    
+    for line in dlong.split("\n"):
+        if line.split():
+            dshort = line
+            break
+
+    if "markdown" in dtype:
+        while dshort.startswith("#"):
+            dshort = dshort[1:]
+
+    return dshort.strip(), dlong, dtype
+        
+        
     
     
