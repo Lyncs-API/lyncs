@@ -1,0 +1,21 @@
+# This workflow updates the lyncs-setuptools package on PyPI test if version is changed
+
+name: lyncs-setuptools upload test
+
+on:
+  push:
+    paths: 
+      - 'extras/setuptools/lyncs_setuptools/version.py'
+
+jobs:
+  build-n-publish:  
+    runs-on: ubuntu-latest
+    steps:
+    - name: Change directory
+      run: cd extras/setuptools/
+    - name: Publish package to TestPyPI
+      uses: pypa/gh-action-pypi-publish@master
+      with:
+        user: __token__
+        password: ${{ secrets.test_pypi_password }}
+        repository_url: https://test.pypi.org/legacy/
