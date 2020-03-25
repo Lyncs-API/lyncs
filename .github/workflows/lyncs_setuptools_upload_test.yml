@@ -11,11 +11,10 @@ jobs:
   build-n-publish:  
     runs-on: ubuntu-latest
     steps:
-    - name: Change directory
-      run: cd extras/setuptools/
     - name: Publish package to TestPyPI
       uses: pypa/gh-action-pypi-publish@master
       with:
         user: __token__
         password: ${{ secrets.test_pypi_password }}
         repository_url: https://test.pypi.org/legacy/
+        packages_dir: extras/setuptools/
