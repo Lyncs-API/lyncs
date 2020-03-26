@@ -11,15 +11,15 @@ class CMakeExtension(Extension):
     def __init__(self, name, source_dir='.', cmake_args=[]):
         import os
         
-        sourcedir = sourcedir or '.'
+        source_dir = source_dir or '.'
         
-        sources = [sourcedir+"/CMakeLists.txt"]
-        if os.path.exists(sourcedir+"/patches"):
-            for filename in os.listdir(sourcedir+"/patches"):
-                sources += [sourcedir+"/patches/"+filename]
+        sources = [source_dir+"/CMakeLists.txt"]
+        if os.path.exists(source_dir+"/patches"):
+            for filename in os.listdir(source_dir+"/patches"):
+                sources += [source_dir+"/patches/"+filename]
                 
         Extension.__init__(self, name, sources=sources)
-        self.sourcedir = os.path.abspath(sourcedir)
+        self.source_dir = os.path.abspath(source_dir)
         self.cmake_args = cmake_args
 
 
@@ -59,7 +59,7 @@ class CMakeBuild(build_ext):
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
             
-        subprocess.check_call(['cmake', ext.sourcedir] + cmake_args,
+        subprocess.check_call(['cmake', ext.source_dir] + cmake_args,
                               cwd=self.build_temp, env=env)
         subprocess.check_call(['cmake', '--build', '.'] + build_args,
                               cwd=self.build_temp)
