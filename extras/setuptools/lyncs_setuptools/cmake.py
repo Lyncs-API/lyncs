@@ -8,7 +8,7 @@ from setuptools import Extension
 from setuptools.command.build_ext import build_ext
 
 class CMakeExtension(Extension):
-    def __init__(self, name, sourcedir='.', cmake_args=[]):
+    def __init__(self, name, source_dir='.', cmake_args=[]):
         import os
         
         sourcedir = sourcedir or '.'
