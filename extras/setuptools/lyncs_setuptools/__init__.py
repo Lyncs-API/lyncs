@@ -49,11 +49,7 @@ switcher = {
 }
 
 
-def main():
-    import sys
-    assert len(sys.argv)==1 or (len(sys.argv)==2 and sys.argv[1] in switcher.keys()), """
-    Only one argument is allowed and options are '%s'.
-    """ % ("', '".join(switcher.keys()))
+def main(arg="all"):
 
     def run(arg):
         if callable(arg):
@@ -61,9 +57,10 @@ def main():
         else:
             return arg
 
-    if len(sys.argv)==2:
+    if arg in switcher:
         return run(switcher[sys.argv[1]])
     else:
+        assert arg=="all", "Allowed options are 'all', '%s'" % ("', '".join(switcher.keys()))
         accum = ""
         for key, fnc in switcher.items():
             res = run(fnc)
