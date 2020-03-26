@@ -1,6 +1,3 @@
-__version__ = "0.0.3"
-
-
 def find_version(filename=None):
     import codecs, os, re
     from .data_files import add_to_data_files

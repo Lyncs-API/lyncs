@@ -4,6 +4,9 @@ from .description import *
 from .classifiers import *
 from .cmake import *
 
+__version__ = "0.0.4"
+
+
 # TODO: authomatize the following
 AUTHOR='Simone Bacchio'
 AUTHOR_EMAIL='s.bacchio@gmail.com'
@@ -29,6 +32,16 @@ def setup(name, **kwargs):
     if 'ext_modules' in kwargs:
         kwargs.setdefault('cmdclass', dict())
         kwargs['cmdclass'].setdefault("build_ext", CMakeBuild)
+
+    kwargs.setdefault('install_require', [])
+    kwargs['install_require'].append("lyncs_setuptools")
+
+    kwargs.setdefault('extras_require', {})
+    if kwargs['extras_require'] and "all" not in kwargs['extras_require']:
+        _all = set()
+        for val in kwargs['extras_require'].values():
+            _all = _all.join(val)
+        kwargs['extras_require']['all'] = list(_all)
         
     kwargs.setdefault('data_files', [])
     kwargs['data_files'] += get_data_files()
