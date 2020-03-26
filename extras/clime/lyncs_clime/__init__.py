@@ -2,7 +2,6 @@
 A Python interface to clime
 """
 
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 
-from .version import *
 from .lib import *
