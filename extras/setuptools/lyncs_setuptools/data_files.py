@@ -16,7 +16,8 @@ def is_subdir(path):
 def _add_to_data_files(directory, filename):
     assert is_subdir(directory), "Given directory is not a subdir %s" % directory
     if directory in _data_files:
-        _data_files[directory].append(filename)
+        if filename not in _data_files[directory]:
+            _data_files[directory].append(filename)
     else:
         _data_files[directory] = [filename]
     
