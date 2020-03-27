@@ -61,6 +61,9 @@ class Lib:
     
     @property
     def lib(self):
+        """
+        It checks if the library is already loaded, or it loads it.
+        """
         import cppyy
         if all((hasattr(cppyy.gbl, check) for check in self.check)):
             return cppyy.gbl
@@ -97,4 +100,42 @@ class Lib:
     
             
     def __getattr__(self, key):
-        return getattr(self.lib, key)
+        try:
+            return getattr(self.lib, key)
+        except AttributeError:
+            try:
+                return self.get_macro(key)
+            except:
+                pass
+            raise
+
+    @property
+    def fopen(self):
+        """
+        This fixes the cppyy's issue due to the use of __restrict__ in fopen.
+        ```
+        NotImplementedError: _IO_FILE* ::fopen(const char*__restrict __filename, const char*__restrict __modes) =>
+        NotImplementedError: could not convert argument 1 (this method cannot (yet) be called)
+        ```
+        """
+        try:
+            return self.lib.fopen_without_restrict
+        except AttributeError:
+            from cppyy import cppdef
+            assert cppdef("""
+            FILE* fopen_without_restrict( const char * filename, const char * mode ) {
+                return fopen(filename, mode);
+            }
+            """), "Couldn't define fopen_without_restrict"
+            return self.fopen_without_restrict
+
+
+    def get_macro(self, key):
+        try:
+            return getattr(self.lib, "_"+key)
+        except AttributeError:
+            from cppyy import cppdef
+            assert cppdef("""
+            auto _%s = %s;
+            """ % (key,key)), "%s is not a defined macro" % key
+            self.get_macro(key)
