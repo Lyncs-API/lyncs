@@ -4,7 +4,7 @@ from .description import *
 from .classifiers import *
 from .cmake import *
 
-__version__ = "0.0.5"
+__version__ = "0.0.6"
 
 
 def setup(*args, **kwargs):
@@ -32,8 +32,9 @@ def setup(*args, **kwargs):
         kwargs.setdefault('cmdclass', dict())
         kwargs['cmdclass'].setdefault("build_ext", CMakeBuild)
 
-    kwargs.setdefault('install_require', [])
-    kwargs['install_require'].append("lyncs_setuptools")
+    kwargs.setdefault('install_requires', [])
+    if "name" in kwargs and kwargs["name"] != "lyncs_setuptools":
+        kwargs['install_requires'].append("lyncs-setuptools")
 
     kwargs.setdefault('extras_require', {})
     if kwargs['extras_require'] and "all" not in kwargs['extras_require']:
