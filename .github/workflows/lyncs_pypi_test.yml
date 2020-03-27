@@ -43,8 +43,8 @@ jobs:
         TWINE_PASSWORD: ${{ secrets.test_pypi_password }}
       run: |
         cd ${{ matrix.package }}
-        pip install -i https://test.pypi.org/simple/ $(lyncs_setuptools name)==$(lyncs_setuptools version)
-        if [ $? -ne 0 ]; then
+        pip install -i https://test.pypi.org/simple/ $(lyncs_setuptools name)==$(lyncs_setuptools version) || (
           python setup.py sdist bdist_wheel
           twine upload --repository-url https://test.pypi.org/legacy/ dist/*
-        fi
+        )
+        
