@@ -23,7 +23,7 @@ author = 'Simone Bacchio'
 
 # The full version, including alpha/beta/rc tags
 release = '0.0.0'
-
+master_doc = 'index'
 
 # -- General configuration ---------------------------------------------------
 
