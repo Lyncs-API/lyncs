@@ -27,6 +27,16 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - name: Changed Files Exporter
+      uses: futuratrepadeira/changed-files@v3.0.0
+      with:
+        repo-token: ${{ github.token }}
+        pattern: ${{ matrix.package }}/*
+    - name: Print changed filed
+      run: |
+        echo ${{ files_created }}
+        echo ${{ files_updated }}
+        echo ${{ files_deleted }}
     - name: Set up Python
       uses: actions/setup-python@v1
       with:
@@ -47,4 +57,4 @@ jobs:
           python setup.py sdist bdist_wheel
           twine upload --repository-url https://test.pypi.org/legacy/ dist/*+(.tar.gz|any.whl)
         )
-        
+
