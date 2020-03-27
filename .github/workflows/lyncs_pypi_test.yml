@@ -31,7 +31,7 @@ jobs:
       uses: futuratrepadeira/changed-files@v3.0.0
       with:
         repo-token: ${{ github.token }}
-        pattern: ${{ matrix.package }}/*
+        pattern: ${{ matrix.package }}/lyncs*.py
     - name: Print changed filed
       run: |
         echo ${{ files_created }}
