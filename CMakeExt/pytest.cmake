@@ -1,5 +1,0 @@
-enable_testing()
-find_program ( PYTEST pytest )
-if(PYTEST)
-  add_test(NAME Running_pytest COMMAND /bin/sh -c "if ${PYTEST} --help | grep '\\-\\-cov'; then PYTEST_COV=\"--cov=lyncs --cov-report html:htmlcov\"; fi; ${PYTEST} -v \${PYTEST_COV} ${CMAKE_SOURCE_DIR}/tests/")
-endif()
