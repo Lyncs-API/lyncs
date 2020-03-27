@@ -4,7 +4,7 @@ from .description import *
 from .classifiers import *
 from .cmake import *
 
-__version__ = "0.0.6"
+__version__ = "0.0.7"
 
 
 def setup(*args, **kwargs):
@@ -17,7 +17,8 @@ def setup(*args, **kwargs):
 
     kwargs.setdefault('author', 'Simone Bacchio')
     kwargs.setdefault('author_email', 's.bacchio@gmail.com')
-    kwargs.setdefault('url', 'https://github.com/sbacchio')
+    kwargs.setdefault('url', 'https://lyncs.readthedocs.io/en/latest')
+    kwargs.setdefault('download_url', 'https://github.com/sbacchio/lyncs')
     kwargs.setdefault('version', find_version())
     kwargs.setdefault('packages', find_packages())
     kwargs.setdefault('classifiers', classifiers)
