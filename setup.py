@@ -1,39 +1,37 @@
-from setuptools import find_packages, setup
+from lyncs_setuptools import setup
 
-try:
-    import lyncs_config
-except ModuleNotFoundError:
-    # TODO: run cmake with default options and then import lyncs_config
-    raise
-
-requirements = [
-    "cppyy>=1.6.2",
+install_requires = [
     "dask",
     "numpy",
     "xmltodict",
     ]
 
-if lyncs_config.mpi_enabled:
-    requirements.append("mpi4py")
-    requirements.append("dask_mpi")
+extras_require = {
+    # lyncs/extras
+    "clime": ["lyncs-clime"],
+    "DDalphaAMG": ["lyncs-DDalphaAMG"],
+    
+    # Groups
+    "cpu": [
+        "lyncs[DDalphaAMG]",
+    ],
+    
+    "gpu": [
+    ],
+    
+    "io": [
+        "lyncs[clime]",
+    ],
+}
 
-
-setup(name='lyncs',
-      version=lyncs_config.version,
-      packages=find_packages(),
-      description='A python API for LQCD applications',
-      long_description=open("./README.md", 'r').read(),
-      long_description_content_type="text/markdown",
-      keywords="LQCD, API, ...",
-      classifiers=["Intended Audience :: Students",
-                   "Intended Audience :: Researchers",
-                   "License :: OSI Approved :: "
-                   "The 3-Clause BSD License (BSD-3-Clause)",
-                   "Natural Language :: English",
-                   "Programming Language :: C",
-                   "Programming Language :: C++",
-                   "Programming Language :: Python",
-                   "Programming Language :: Python :: 3.6"],
-      license='BSD-3-Clause',
-      install_requires = requirements
+setup('lyncs',
+      install_requires = install_requires,
+      extras_require = extras_require,
+      keywords= [
+          "Python",
+          "API",
+          "Lattice",
+          "Field",
+          "QCD",
+      ],
     )

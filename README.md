@@ -1,9 +1,6 @@
+# A python API for Lattice QCD applications
 
 ![alt text](https://github.com/sbacchio/lyncs/blob/master/docs/source/_static/logo.png "Lyncs")
-
-# Lyncs
-
-## A python API for Lattice QCD applications
 
 Lyncs is a Python API for Lattice QCD applications currently under development with a first
 released version expected by the end of Q2 of 2020. Lyncs aims to bring several popular
