@@ -1,0 +1,51 @@
+# This workflow updates the lyncs packages on PyPI test if version is changed
+
+name: Lyncs upload to PyPI test
+
+on:
+  pull_request:
+    branches:
+      - 'master'
+    paths-ignore:
+      - 'docs/**'
+  push:
+    branches:
+      - 'master'
+    paths-ignore:
+      - 'docs/**'
+
+jobs:
+  build-n-publish:  
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        package:
+	  - extras/setuptools
+	  - extras/cppyy
+	  - extras/clime
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python
+      uses: actions/setup-python@v1
+      with:
+        python-version: '3.x'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install setuptools wheel twine
+	pip install -i https://test.pypi.org/legacy/ lyncs-setuptools
+	
+    - name: Install and upload if not available
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.test_pypi_password }}
+      run: |
+        cd ${{ matrix.package }}
+	pip install -i https://test.pypi.org/legacy/ $(lyncs_setuptools name)==$(lyncs_setuptools version)
+      	if [ $? -ne 0 ]; then
+	  python setup.py sdist bdist_wheel
+          twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+	fi
+	
