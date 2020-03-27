@@ -7,14 +7,13 @@ from .cmake import *
 __version__ = "0.0.4"
 
 
-# TODO: authomatize the following
-AUTHOR='Simone Bacchio'
-AUTHOR_EMAIL='s.bacchio@gmail.com'
-URL='https://github.com/sbacchio'
-
-
-def setup(name, **kwargs):
-    from setuptools import setup, find_packages
+def setup(*args, **kwargs):
+    from setuptools import find_packages
+    
+    if args:
+        assert len(args)==1, "Only one arg allowed and it will be threated as name."
+        assert "name" not in kwargs, "Repeated name parameter"
+        kwargs["name"] = args[0]
 
     kwargs.setdefault('author', 'Simone Bacchio')
     kwargs.setdefault('author_email', 's.bacchio@gmail.com')
@@ -46,48 +45,48 @@ def setup(name, **kwargs):
     kwargs.setdefault('data_files', [])
     kwargs['data_files'] += get_data_files()
 
-    setup(name=name, **kwargs)
-    
-    
-switcher = {
-    "author": AUTHOR,
-    "author_email": AUTHOR_EMAIL,
-    "url": URL,
-    "version": find_version,
-    "description": lambda: find_description()[0],
-    "long_description_content_type": lambda: find_description()[2],
-    "long_description": lambda: find_description()[1],
-    "classifiers": classifiers,
-    "data_files": get_data_files,
-}
-
-
-def main(arg="all"):
-
-    def run(arg):
-        if callable(arg):
-            return arg()
-        else:
-            return arg
-
-    if arg in switcher:
-        return run(switcher[sys.argv[1]])
+    if __name__ != "__main__":
+        from setuptools import setup, find_packages
+        setup(**kwargs)
     else:
-        assert arg=="all", "Allowed options are 'all', '%s'" % ("', '".join(switcher.keys()))
-        accum = ""
-        for key, fnc in switcher.items():
-            res = run(fnc)
-            
-            if type(res) is str and "\n" in res:
-                res = "\"\"\"\n" + res + "\n\"\"\""
-            elif type(res) is str:
-                res = "\"" + res + "\""
-            elif type(res) is list and res:
-                res = "[\n" + ",\n".join((repr(i) for i in res)) + "\n]"                
-            else:
-                res = repr(res)
-                
-            res = res.replace("\n", "\n |  ")
-            accum += "%s: %s\n\n" % (key, res)
-        return accum
+        import sys
+        global __argv__
+        
+        if len(__argv__)==1:
+            assert __argv__[0] in kwargs, "Allowed options are '%s'" % ("', '".join(kwargs))
+            print(kwargs[__argv__[0]])
+        else:
+            for key, res in kwargs.items():
+                if type(res) is str and "\n" in res:
+                    res = "\"\"\"\n" + res + "\n\"\"\""
+                elif type(res) is str:
+                    res = "\"" + res + "\""
+                elif type(res) is list and res:
+                    res = "[\n" + ",\n".join((repr(i) for i in res)) + "\n]"                
+                else:
+                    res = repr(res)
+                    
+                res = res.replace("\n", "\n |  ")
+                if not __argv__ or key in __argv__:
+                    print("%s: %s\n" % (key, res))
+
+__argv__=[]
+def main(argv=None):
+    global __name__
+    __name__ = "__main__"
+
+    import sys, os
+    sys.path.insert(0, os.getcwd())
+    
+    global __argv__
+    if argv is None:
+        __argv__ = sys.argv[1:]
+    else:
+        __argv__ = argv
+        
+    try:
+        import setup
+    except:
+        global setup
+        setup()
             

@@ -34,30 +34,10 @@ def find_description(readme=None):
         
     with codecs.open(readme, encoding='utf-8') as f:
         add_to_data_files(readme, directory=".")
-        dlong = f.read().split("\n")
-
-    for i,line in enumerate(dlong):
-        if line.startswith("[lyncs_setuptools]: "):
-            global _ALREADY_RUNNING
-
-            if not _ALREADY_RUNNING:
-                _ALREADY_RUNNING = True
-                line=": ".join(line.split(":")[1:])
-                import io
-                from contextlib import redirect_stdout
-                
-                f = io.StringIO()
-                with redirect_stdout(f):
-                    for line in line.split(";"):
-                        exec(line.strip())
-                dlong[i] = f.getvalue()#.replace("\\n", "\n")
-                
-                _ALREADY_RUNNING = False
-            else:
-                dlong[i] = ""
-                
+        dlong = f.read()
+        
     dshort = ""
-    for line in dlong:
+    for line in dlong.split("\n"):
         if line.split():
             dshort = line
             break
@@ -67,7 +47,7 @@ def find_description(readme=None):
             dshort = dshort[1:]
     
 
-    return dshort.strip(), "\n".join(dlong), dtype
+    return dshort.strip(), dlong, dtype
         
         
     
