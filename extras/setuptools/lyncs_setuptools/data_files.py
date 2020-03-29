@@ -11,7 +11,7 @@ def is_subdir(path):
     import os
     p1 = os.getcwd()
     p2 = os.path.realpath(path)
-    return p1 == p2 or p2.startswith(p1+os.sep)
+    return p1 == p2 or p2.startswith(p1 + os.sep)
 
 
 def _add_to_data_files(directory, filename):
@@ -33,7 +33,7 @@ def add_to_data_files(*files, directory=None):
             assert is_subdir(
                 filename), "If directory is not given, then the file must be in a subdir"
             filename = os.path.realpath(
-                filename)[len(os.getcwd())+1:].split(os.sep)
+                filename)[len(os.getcwd()) + 1:].split(os.sep)
             if len(filename) == 1:
                 _add_to_data_files(".", filename[0])
             else:

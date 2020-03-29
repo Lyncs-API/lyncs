@@ -51,7 +51,7 @@ def setup(*args, **kwargs):
         test_dir = kwargs.pop("test_dir", "tests/")
         files = (str(path) for path in pathlib.Path(test_dir).glob("*.py"))
         add_to_data_files(*files)
-    except:
+    except BaseException:
         raise
     kwargs['data_files'] += get_data_files()
 
@@ -68,11 +68,11 @@ def setup(*args, **kwargs):
             print(kwargs[__argv__[0]])
         else:
             for key, res in kwargs.items():
-                if type(res) is str and "\n" in res:
+                if isinstance(res, str) and "\n" in res:
                     res = "\"\"\"\n" + res + "\n\"\"\""
-                elif type(res) is str:
+                elif isinstance(res, str):
                     res = "\"" + res + "\""
-                elif type(res) is list and res:
+                elif isinstance(res, list) and res:
                     res = "[\n" + ",\n".join((repr(i) for i in res)) + "\n]"
                 else:
                     res = repr(res)
@@ -101,6 +101,6 @@ def main(argv=None):
 
     try:
         import setup
-    except:
+    except BaseException:
         global setup
         setup()

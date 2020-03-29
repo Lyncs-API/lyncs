@@ -14,10 +14,10 @@ class CMakeExtension(Extension):
 
         source_dir = source_dir or '.'
 
-        sources = [source_dir+"/CMakeLists.txt"]
-        if os.path.exists(source_dir+"/patches"):
-            for filename in os.listdir(source_dir+"/patches"):
-                sources += [source_dir+"/patches/"+filename]
+        sources = [source_dir + "/CMakeLists.txt"]
+        if os.path.exists(source_dir + "/patches"):
+            for filename in os.listdir(source_dir + "/patches"):
+                sources += [source_dir + "/patches/" + filename]
 
         Extension.__init__(self, name, sources=sources)
         self.source_dir = os.path.abspath(source_dir)

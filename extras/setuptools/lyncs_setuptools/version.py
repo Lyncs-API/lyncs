@@ -9,6 +9,7 @@ from itertools import product
 from setuptools import find_packages
 from .data_files import add_to_data_files
 
+
 def find_version(filename=None):
 
     def get_version(filename):
@@ -42,7 +43,7 @@ def find_version(filename=None):
                 pass
 
     assert version, """
-    Couldn't find a compatible filename. 
+    Couldn't find a compatible filename.
     Options are %s""" % ", ".join(options)
 
     add_to_data_files(filename)

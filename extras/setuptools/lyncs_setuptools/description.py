@@ -24,7 +24,7 @@ def find_description(readme=None):
                 break
 
     assert readme, """
-    Couldn't find a compatible filename. 
+    Couldn't find a compatible filename.
     Options are %s""" % ", ".join(options)
 
     if readme.endswith(".md"):
