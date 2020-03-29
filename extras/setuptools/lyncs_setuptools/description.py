@@ -1,16 +1,14 @@
+import codecs
+import os
+from itertools import product
+from .data_files import add_to_data_files
+
 __all__ = [
     "find_description",
 ]
 
-_ALREADY_RUNNING = False
-
 
 def find_description(readme=None):
-    import codecs
-    import os
-    from itertools import product
-    from .data_files import add_to_data_files
-
     base = ["README", "readme", "description"]
     ext = ["", ".txt", ".md", ".rst"]
     options = ["".join(parts) for parts in product(base, ext)]
@@ -25,7 +23,9 @@ def find_description(readme=None):
 
     assert readme, """
     Couldn't find a compatible filename.
-    Options are %s""" % ", ".join(options)
+    Options are %s""" % ", ".join(
+        options
+    )
 
     if readme.endswith(".md"):
         dtype = "text/markdown"
@@ -34,9 +34,9 @@ def find_description(readme=None):
     else:
         dtype = "text/plain"
 
-    with codecs.open(readme, encoding='utf-8') as f:
+    with codecs.open(readme, encoding="utf-8") as _fp:
         add_to_data_files(readme, directory=".")
-        dlong = f.read()
+        dlong = _fp.read()
 
     dshort = ""
     for line in dlong.split("\n"):

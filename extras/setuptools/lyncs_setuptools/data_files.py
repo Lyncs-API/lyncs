@@ -1,45 +1,43 @@
+import os
+
 __all__ = [
     "get_data_files",
     "add_to_data_files",
 ]
 
-_data_files = {}
+DATA_FILES = {}
 
 
 def is_subdir(path):
     """returns true if the path is a subdirectory"""
-    import os
-    p1 = os.getcwd()
-    p2 = os.path.realpath(path)
-    return p1 == p2 or p2.startswith(p1 + os.sep)
+    cwd = os.getcwd()
+    path = os.path.realpath(path)
+    return cwd == path or path.startswith(cwd + os.sep)
 
 
 def _add_to_data_files(directory, filename):
-    assert is_subdir(
-        directory), "Given directory is not a subdir %s" % directory
-    if directory in _data_files:
-        if filename not in _data_files[directory]:
-            _data_files[directory].append(filename)
+    assert is_subdir(directory), "Given directory is not a subdir %s" % directory
+    if directory in DATA_FILES:
+        if filename not in DATA_FILES[directory]:
+            DATA_FILES[directory].append(filename)
     else:
-        _data_files[directory] = [filename]
+        DATA_FILES[directory] = [filename]
 
 
 def add_to_data_files(*files, directory=None):
-    import os
     for filename in files:
         if directory:
             _add_to_data_files(directory, filename)
         else:
             assert is_subdir(
-                filename), "If directory is not given, then the file must be in a subdir"
-            filename = os.path.realpath(
-                filename)[len(os.getcwd()) + 1:].split(os.sep)
+                filename
+            ), "If directory is not given, then the file must be in a subdir"
+            filename = os.path.realpath(filename)[len(os.getcwd()) + 1 :].split(os.sep)
             if len(filename) == 1:
                 _add_to_data_files(".", filename[0])
             else:
-                _add_to_data_files(os.sep.join(
-                    filename[:-1]), os.sep.join(filename))
+                _add_to_data_files(os.sep.join(filename[:-1]), os.sep.join(filename))
 
 
 def get_data_files():
-    return list(_data_files.items())
+    return list(DATA_FILES.items())

@@ -11,13 +11,13 @@ from .data_files import add_to_data_files
 
 
 def find_version(filename=None):
-
     def get_version(filename):
         assert os.path.isfile(filename), "Given version does not exist"
-        with codecs.open(filename, 'r') as _fp:
+        with codecs.open(filename, "r") as _fp:
             if filename.endswith(".py"):
                 version_match = re.search(
-                    r"^__version__\s?=\s?['\"]([^'\"]*)['\"]", _fp.read(), re.M)
+                    r"^__version__\s?=\s?['\"]([^'\"]*)['\"]", _fp.read(), re.M
+                )
                 assert version_match, "__version__ = not found in file"
                 return version_match.group(1)
             return _fp.read()
@@ -44,7 +44,9 @@ def find_version(filename=None):
 
     assert version, """
     Couldn't find a compatible filename.
-    Options are %s""" % ", ".join(options)
+    Options are %s""" % ", ".join(
+        options
+    )
 
     add_to_data_files(filename)
     return version
