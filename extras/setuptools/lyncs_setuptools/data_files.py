@@ -5,6 +5,7 @@ __all__ = [
 
 _data_files = {}
 
+
 def is_subdir(path):
     """returns true if the path is a subdirectory"""
     import os
@@ -14,13 +15,14 @@ def is_subdir(path):
 
 
 def _add_to_data_files(directory, filename):
-    assert is_subdir(directory), "Given directory is not a subdir %s" % directory
+    assert is_subdir(
+        directory), "Given directory is not a subdir %s" % directory
     if directory in _data_files:
         if filename not in _data_files[directory]:
             _data_files[directory].append(filename)
     else:
         _data_files[directory] = [filename]
-    
+
 
 def add_to_data_files(*files, directory=None):
     import os
@@ -28,14 +30,16 @@ def add_to_data_files(*files, directory=None):
         if directory:
             _add_to_data_files(directory, filename)
         else:
-            assert is_subdir(filename), "If directory is not given, then the file must be in a subdir"
-            filename = os.path.realpath(filename)[len(os.getcwd())+1:].split(os.sep)
-            if len(filename)==1:
+            assert is_subdir(
+                filename), "If directory is not given, then the file must be in a subdir"
+            filename = os.path.realpath(
+                filename)[len(os.getcwd())+1:].split(os.sep)
+            if len(filename) == 1:
                 _add_to_data_files(".", filename[0])
             else:
-                _add_to_data_files(os.sep.join(filename[:-1]), os.sep.join(filename))
+                _add_to_data_files(os.sep.join(
+                    filename[:-1]), os.sep.join(filename))
 
 
 def get_data_files():
     return list(_data_files.items())
- 

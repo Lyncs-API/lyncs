@@ -9,9 +9,10 @@ __version__ = "0.0.7"
 
 def setup(*args, **kwargs):
     from setuptools import find_packages
-    
+
     if args:
-        assert len(args)==1, "Only one arg allowed and it will be threated as name."
+        assert len(
+            args) == 1, "Only one arg allowed and it will be threated as name."
         assert "name" not in kwargs, "Repeated name parameter"
         kwargs["name"] = args[0]
 
@@ -28,7 +29,7 @@ def setup(*args, **kwargs):
         kwargs.setdefault('description', dshort)
         kwargs.setdefault('long_description', dlong)
         kwargs.setdefault('long_description_content_type', dtype)
-    
+
     if 'ext_modules' in kwargs:
         kwargs.setdefault('cmdclass', dict())
         kwargs['cmdclass'].setdefault("build_ext", CMakeBuild)
@@ -43,7 +44,7 @@ def setup(*args, **kwargs):
         for val in kwargs['extras_require'].values():
             _all = _all.join(val)
         kwargs['extras_require']['all'] = list(_all)
-        
+
     kwargs.setdefault('data_files', [])
     try:
         import pathlib
@@ -60,9 +61,10 @@ def setup(*args, **kwargs):
     else:
         import sys
         global __argv__
-        
-        if len(__argv__)==1:
-            assert __argv__[0] in kwargs, "Allowed options are '%s'" % ("', '".join(kwargs))
+
+        if len(__argv__) == 1:
+            assert __argv__[0] in kwargs, "Allowed options are '%s'" % (
+                "', '".join(kwargs))
             print(kwargs[__argv__[0]])
         else:
             for key, res in kwargs.items():
@@ -71,31 +73,34 @@ def setup(*args, **kwargs):
                 elif type(res) is str:
                     res = "\"" + res + "\""
                 elif type(res) is list and res:
-                    res = "[\n" + ",\n".join((repr(i) for i in res)) + "\n]"                
+                    res = "[\n" + ",\n".join((repr(i) for i in res)) + "\n]"
                 else:
                     res = repr(res)
-                    
+
                 res = res.replace("\n", "\n |  ")
                 if not __argv__ or key in __argv__:
                     print("%s: %s\n" % (key, res))
 
-__argv__=[]
+
+__argv__ = []
+
+
 def main(argv=None):
     global __name__
     __name__ = "__main__"
 
-    import sys, os
+    import sys
+    import os
     sys.path.insert(0, os.getcwd())
-    
+
     global __argv__
     if argv is None:
         __argv__ = sys.argv[1:]
     else:
         __argv__ = argv
-        
+
     try:
         import setup
     except:
         global setup
         setup()
-            
