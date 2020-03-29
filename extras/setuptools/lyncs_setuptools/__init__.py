@@ -45,6 +45,13 @@ def setup(*args, **kwargs):
         kwargs['extras_require']['all'] = list(_all)
         
     kwargs.setdefault('data_files', [])
+    try:
+        import pathlib
+        test_dir = kwargs.pop("test_dir", "tests/")
+        files = (str(path) for path in pathlib.Path(test_dir).glob("*.py"))
+        add_to_data_files(*files)
+    except:
+        raise
     kwargs['data_files'] += get_data_files()
 
     if __name__ != "__main__":
