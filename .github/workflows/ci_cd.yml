@@ -63,13 +63,6 @@ jobs:
           pip install pytest
           pip install pytest-cov
           pytest --cov=./ --cov-report=xml
+          export CODECOV_TOKEN="${{ secrets.CODECOV_TOKEN }}"
+          bash <(curl -s https://codecov.io/bash) -f ./coverage.xml -n ${{ matrix.package }}
         fi
-        
-    - name: Upload coverage to Codecov  
-      uses: codecov/codecov-action@v1
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        file: ${{ matrix.package }}/coverage.xml
-        flags: unittests
-        name: ${{ matrix.package }}
-        fail_ci_if_error: true
