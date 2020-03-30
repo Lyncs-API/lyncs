@@ -10,7 +10,7 @@ from .description import *
 from .classifiers import *
 from .cmake import *
 
-__version__ = "0.0.9"
+__version__ = "0.1.0"
 
 
 def complete_kwargs(*args, **kwargs):
@@ -24,9 +24,16 @@ def complete_kwargs(*args, **kwargs):
     kwargs.setdefault("url", "https://lyncs.readthedocs.io/en/latest")
     kwargs.setdefault("download_url", "https://github.com/sbacchio/lyncs")
     kwargs.setdefault("version", find_version())
-    kwargs.setdefault("packages", find_packages())
+    
+    packages = find_packages()
+    test_dir = kwargs.pop("test_dir", "tests")
+    if test_dir in packages:
+        packages.remove(test_dir)
+    kwargs.setdefault("packages", packages)
+    kwargs.setdefault("name", packages[0])
+    
     kwargs.setdefault("classifiers", classifiers)
-
+    
     if "long_description" not in kwargs:
         dshort, dlong, dtype = find_description()
         kwargs.setdefault("description", dshort)
@@ -50,7 +57,6 @@ def complete_kwargs(*args, **kwargs):
 
     kwargs.setdefault("data_files", [])
     try:
-        test_dir = kwargs.pop("test_dir", "tests/")
         files = (str(path) for path in pathlib.Path(test_dir).glob("*.py"))
         add_to_data_files(*files)
     except BaseException:
