@@ -61,7 +61,7 @@ jobs:
         if [ ! -z "$(ls test* 2> /dev/null)" ]; then
           pip install pytest
           pip install pytest-cov
-          pytest --cov=$(lyncs_setuptools name) --cov-report=xml $(ls test*)
+          pytest -v --cov=$(lyncs_setuptools name) --cov-report=xml test*
           export CODECOV_TOKEN="${{ secrets.CODECOV_TOKEN }}"
           bash <(curl -s https://codecov.io/bash) -f ./coverage.xml -n ${{ matrix.package }}
         fi
