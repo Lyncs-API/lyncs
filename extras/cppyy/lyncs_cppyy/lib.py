@@ -3,7 +3,7 @@ __all__ = [
     ]
 
 class Lib:
-    __slots__ = ["_cwd", "_path", "_header", "_library", "_check", "_c_include"]
+    __slots__ = ["_cwd", "_path", "_include", "_header", "_library", "_check", "_c_include"]
     
     def __init__(
             self,
@@ -11,6 +11,7 @@ class Lib:
             header = [],
             library = [],
             check = [],
+            include = [],
             c_include = False,
     ):
         """
@@ -37,6 +38,7 @@ class Lib:
         self._header = [header] if isinstance(header, str) else header
         self._library = [library] if isinstance(library, str) else library
         self._check = [check] if isinstance(check, str) else check
+        self._include = [include] if isinstance(include, str) else include
         self._c_include = c_include
         
     @property
@@ -56,6 +58,10 @@ class Lib:
         return self._check
     
     @property
+    def include(self):
+        return self._include
+    
+    @property
     def c_include(self):
         return self._c_include
     
@@ -67,7 +73,10 @@ class Lib:
         import cppyy
         if all((hasattr(cppyy.gbl, check) for check in self.check)):
             return cppyy.gbl
-        
+
+        for include in self.include:
+            cppyy.add_include_path(include)
+
         import os
         for header in self.header:
             for path in self.path:
