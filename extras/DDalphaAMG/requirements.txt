@@ -1,0 +1,2 @@
+lyncs-setuptools
+lyncs-clime

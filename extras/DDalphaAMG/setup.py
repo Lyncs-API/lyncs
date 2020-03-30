@@ -1,5 +1,15 @@
-from lyncs_setuptools import setup, CMakeExtension
-from lyncs_clime import __path__ as lime_path
+try:
+    from lyncs_setuptools import setup, CMakeExtension
+    from lyncs_clime import __path__ as lime_path
+except:
+    print("""
+    
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    Install first the requirements:
+    pip install -r requirements.txt
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    
+    """)
 
 setup(
     "lyncs_DDalphaAMG",

@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
+      max-parallel: 1
       matrix:
         package:
           - extras/setuptools
@@ -46,6 +47,9 @@ jobs:
         TWINE_PASSWORD: ${{ secrets.test_pypi_password }}
       run: |
         cd ${{ matrix.package }}
+        if [ -f requirements.txt ]; then
+          pip install -i https://test.pypi.org/simple/ -r requirements.txt
+        fi
         pip install -i https://test.pypi.org/simple/ $(lyncs_setuptools name)==$(lyncs_setuptools version) || (
           python setup.py install
           python setup.py sdist bdist_wheel
