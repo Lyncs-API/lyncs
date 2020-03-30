@@ -1,13 +1,14 @@
+import os
+import io
+import subprocess
+from setuptools import Extension
+from setuptools.command.build_ext import build_ext
+
+
 __all__ = [
     "CMakeExtension",
     "CMakeBuild",
 ]
-
-
-import os
-import subprocess
-from setuptools import Extension
-from setuptools.command.build_ext import build_ext
 
 
 class CMakeExtension(Extension):
@@ -21,7 +22,9 @@ class CMakeExtension(Extension):
 
         Extension.__init__(self, name, sources=sources)
         self.source_dir = os.path.abspath(source_dir)
-        self.cmake_args = cmake_args or []
+        self.cmake_args = (
+            [cmake_args] if isinstance(cmake_args, str) else (cmake_args or [])
+        )
 
 
 class CMakeBuild(build_ext):
@@ -58,9 +61,10 @@ class CMakeBuild(build_ext):
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
 
-        subprocess.check_call(
-            ["cmake", ext.source_dir] + cmake_args, cwd=self.build_temp, env=env
+        out = subprocess.check_output(
+            ["cmake", ext.source_dir] + cmake_args, cwd=self.build_temp, env=env,
         )
-        subprocess.check_call(
-            ["cmake", "--build", "."] + build_args, cwd=self.build_temp
+        out += subprocess.check_output(
+            ["cmake", "--build", "."] + build_args, cwd=self.build_temp,
         )
+        print(out)
