@@ -37,3 +37,5 @@ ExternalProject_Add(DDalphaAMG
   BUILD_IN_SOURCE 1
   INSTALL_COMMAND ""
 )
+
+configure_file(config.py.in ${EXTERNAL_INSTALL_LOCATION}/config.py)
