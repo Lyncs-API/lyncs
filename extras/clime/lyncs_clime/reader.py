@@ -68,6 +68,17 @@ class Reader:
     def __exit__(self, typ, value, tb):
         self.close()
         
+    def __len__(self):
+        offset = lib.limeGetReaderPointer(self.reader)
+        lib.limeSetReaderPointer(self.reader, 0)
+        count = 0
+        status = lib.limeReaderNextRecord(self.reader)
+        while status != lib.LIME_EOF:
+            status = lib.limeReaderNextRecord(self.reader)
+            count += 1
+        status = lib.limeSetReaderPointer(self.reader, offset)
+        return count
+
     def __iter__(self):
         lib.limeSetReaderPointer(self.reader, 0)
         return self
