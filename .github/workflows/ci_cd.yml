@@ -25,7 +25,6 @@ jobs:
           - extras/setuptools
           - extras/cppyy
           - extras/clime
-          - extras/DDalphaAMG
 
     steps:
     - uses: actions/checkout@v2
