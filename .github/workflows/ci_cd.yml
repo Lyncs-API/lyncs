@@ -24,27 +24,48 @@ jobs:
           - extras/setuptools
           - extras/cppyy
           - extras/clime
+          - extras/DDalphaAMG
 
     steps:
     - uses: actions/checkout@v2
+
     - name: Set up Python
       uses: actions/setup-python@v1
       with:
         python-version: '3.x'
+        
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install setuptools wheel twine
         pip install -i https://test.pypi.org/simple/ lyncs-setuptools
         
-    - name: Install and upload if not available
+    - name: Install and upload if not up to date
       env:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.test_pypi_password }}
       run: |
         cd ${{ matrix.package }}
         pip install -i https://test.pypi.org/simple/ $(lyncs_setuptools name)==$(lyncs_setuptools version) || (
+          python setup.py install --upgrade
           python setup.py sdist bdist_wheel
           twine upload --repository-url https://test.pypi.org/legacy/ $(ls dist/*{.tar.gz,any.whl} 2> /dev/null)
         )
 
+    - name: Run tests if available
+      run: |
+        cd ${{ matrix.package }}
+        if [ ! -z "$(ls test* 2> /dev/null)" ]; then
+          pip install pytest
+          pip install pytest-cov
+          pytest --cov=./ --cov-report=xml
+        fi
+        
+    - name: Upload coverage to Codecov  
+      uses: codecov/codecov-action@v1
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: ${{ matrix.package }}/coverage.xml
+        flags: unittests
+        name: ${{ matrix.package }}
+        fail_ci_if_error: true
