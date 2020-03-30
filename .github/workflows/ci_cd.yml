@@ -50,9 +50,9 @@ jobs:
           pip install -i https://test.pypi.org/simple/ -r requirements.txt
         fi
         pip install -i https://test.pypi.org/simple/ $(lyncs_setuptools name)==$(lyncs_setuptools version) || (
-          python setup.py install -i https://test.pypi.org/simple/
           python setup.py sdist bdist_wheel
           twine upload --repository-url https://test.pypi.org/legacy/ $(ls dist/*{.tar.gz,any.whl} 2> /dev/null)
+          pip install -i https://test.pypi.org/simple/ $(lyncs_setuptools name)==$(lyncs_setuptools version)
         )
 
     - name: Run tests if available
