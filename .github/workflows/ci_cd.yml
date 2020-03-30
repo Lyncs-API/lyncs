@@ -58,11 +58,10 @@ jobs:
 
     - name: Run tests if available
       run: |
-        cd ${{ matrix.package }}
-        if [ ! -z "$(ls test* 2> /dev/null)" ]; then
+        if [ ! -z "$(ls ${{ matrix.package }}/test* 2> /dev/null)" ]; then
           pip install pytest
           pip install pytest-cov
-          pytest --cov=./ --cov-report=xml
+          pytest --cov=${{ matrix.package }} --cov-report=xml $(ls ${{ matrix.package }}/test*)
           export CODECOV_TOKEN="${{ secrets.CODECOV_TOKEN }}"
           bash <(curl -s https://codecov.io/bash) -f ./coverage.xml -n ${{ matrix.package }}
         fi
