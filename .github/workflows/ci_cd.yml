@@ -52,7 +52,11 @@ jobs:
         pip install -i https://test.pypi.org/simple/ $(lyncs_setuptools name)==$(lyncs_setuptools version) || (
           python setup.py sdist bdist_wheel
           twine upload --repository-url https://test.pypi.org/legacy/ $(ls dist/*{.tar.gz,any.whl} 2> /dev/null)
-          pip install -i https://test.pypi.org/simple/ $(lyncs_setuptools name)==$(lyncs_setuptools version)
+	  count=0
+	  while ! pip install -i https://test.pypi.org/simple/ $(lyncs_setuptools name)==$(lyncs_setuptools version) && [ $count -lt 20 ]; do
+	    sleep 1
+	    count=$((count+1))
+	  done
         )
 
     - name: Run tests if available
