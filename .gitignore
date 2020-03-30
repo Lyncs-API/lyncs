@@ -33,6 +33,7 @@
 
 # Default build directory
 build/
+tmp/
 
 # Edited files
 *~
