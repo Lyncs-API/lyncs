@@ -120,10 +120,10 @@ class Lib:
         except AttributeError:
             assert cppyy.cppdef(
                 """
-            FILE* fopen_without_restrict( const char * filename, const char * mode ) {
-                return fopen(filename, mode);
-            }
-            """
+                FILE* fopen_without_restrict( const char * filename, const char * mode ) {
+                  return fopen(filename, mode);
+                }
+                """
             ), "Couldn't define fopen_without_restrict"
             return self.fopen_without_restrict
 
