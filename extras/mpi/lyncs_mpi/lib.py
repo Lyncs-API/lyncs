@@ -1,5 +1,6 @@
 __all__ = [
     "lib",
+    "default_comm",
     "initialized",
     "finalized",
     "initialize",
@@ -18,6 +19,18 @@ lib = Lib(
     c_include=False,
     check="MPI_Init",
 )
+
+
+COMM = None
+
+
+def default_comm():
+    global COMM
+    # pylint: disable=import-outside-toplevel,no-name-in-module,redefined-outer-name
+    if not COMM:
+        from mpi4py.MPI import COMM_WORLD as COMM
+
+    return COMM
 
 
 def initialized():

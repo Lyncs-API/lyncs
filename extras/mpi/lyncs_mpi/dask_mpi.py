@@ -27,18 +27,6 @@ def default_client():
     return client
 
 
-COMM = None
-
-
-def default_comm():
-    global COMM
-    # pylint: disable=import-outside-toplevel,no-name-in-module,redefined-outer-name
-    if not COMM:
-        from mpi4py.MPI import COMM_WORLD as COMM
-
-    return COMM
-
-
 class Client(_Client):
     "Wrapper to dask.distributed.Client"
 
