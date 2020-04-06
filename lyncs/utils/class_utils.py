@@ -2,6 +2,13 @@
 Some recurring utils used all along the package
 """
 
+__all__ = [
+    "default_repr",
+    "add_parameters_to_doc",
+    "compute_property",
+    "simple_property",
+]
+
 def default_repr(self):
     """
     Default repr used by lyncs
@@ -48,7 +55,7 @@ def add_parameters_to_doc(doc, doc_params):
             
 
 def to_list(*args):
-    from .tunable import computable, Delayed
+    from ..tunable import computable, Delayed
     
     @computable
     def to_list(*args):
@@ -66,7 +73,7 @@ def compute_property(key):
     Computes a property once and then store it in self.*key*
     """
     from functools import wraps
-    from .tunable import Delayed
+    from ..tunable import Delayed
     from copy import copy
     
     def decorator(fnc):
