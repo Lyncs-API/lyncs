@@ -62,6 +62,10 @@ class Lib:
         for include in self.include:
             cppyy.add_include_path(include)
 
+        for library in self.library:
+            if isinstance(library, Lib):
+                library.lib
+
         for header in self.header:
             for path in self.path:
                 if not path.startswith(os.sep):
@@ -75,6 +79,7 @@ class Lib:
                 cppyy.include(header)
 
         for library in self.library:
+            if not isinstance(library, str): continue
             tmp = library
             if not tmp.startswith(os.sep):
                 tmp = self._cwd + "/" + tmp
