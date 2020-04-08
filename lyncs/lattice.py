@@ -1,14 +1,16 @@
 __all__ = [
-    'default_lattice',
-    'Lattice',
+    "default_lattice",
+    "Lattice",
 ]
 
-from .utils import simple_property
+from types import MappingProxyType
+from dask.base import normalize_token
+from .utils import default_repr
 
-_last_lattice = None
+
 def default_lattice():
-    assert _last_lattice is not None, "Any lattice has been defined yet."
-    return _last_lattice
+    assert Lattice.last_defined is not None, "Any lattice has been defined yet."
+    return Lattice.last_defined
 
 
 class Lattice:
@@ -16,187 +18,228 @@ class Lattice:
     Lattice base class.
     A container for all the information on the lattice theory.
     """
-    
+
+    last_defined = None
     default_dims_labels = ["t", "x", "y", "z"]
-    default_dofs = {
-        "QCD": {
-            "spin": 4,
-            "color": 3,
-            "properties": {
-                "gauge_dofs": ["color"],
-                },
-            },
-        }
-    
+    theories = {
+        "QCD": {"spin": 4, "color": 3, "properties": {"gauge_dofs": ["color"],},},
+    }
+    __slots__ = ["_dims", "_dofs", "_properties", "_frozen"]
+    __repr__ = default_repr
+
     def __init__(
-            self,
-            dims = 4,
-            dofs = "QCD",
-            properties = {},
+        self, dims=4, dofs="QCD", properties=None,
     ):
         """
         Lattice initializer.
-        Note: order of dimensions and degree of freedoms has any significance.
+
+        Notation
+        --------
+        Dimensions: (dims) are labelled axes of the Lattice which size is variable.
+            The volume of the lattice, i.e. number of sites, is given by the product
+            of dims. Dims are usually the axes where one can parallelize on.
+        Degrees of Freedoms: (dofs) are labelled local axes with fixed size.
+        Axes: Any of the dimensions or degree of freedoms.
 
         Parameters
         ----------
-        dims: dimensions (default naming: t,x,y,z if less than 5 or dim_0/1/2...)
-        -> int: number of dimensions (default 4)
-        -> list/tuple: size of the dimensions and len(list) = number of dimensions
-        -> dict: names of the dimensions (keys) + size (value)
-
-        dofs: specifies local degree of freedoms.
-        -> str: one of the labeled theories (QCD,...)
-        -> int: size of one-dimensional degree of freedom
-        -> list: size per dimension of the degrees of freedom (default naming: dof_0/1/2...)
-        -> dict: names of the degree of freedom (keys) + size (value)
+        dims: int, list or dict (default 4)
+            Dimensions (default labels: t,x,y,z if less than 5 or dim_0/1/2...)
+            - int: number of dimensions. The default labels will be used.
+            - list: size of the dimensions. The default labels will be used.
+            - dict: labels of the dimensions (keys) and sizes (value)
+        dofs: str, int, list, dict (default QCD)
+            Specifies local degree of freedoms. (default naming: dof_0/1/2...)
+            - str: one of the labeled theories (QCD,...). See Lattice.theories
+            - int: size of one degree of freedom
+            - list: size per dimension of the degrees of freedom
+            - dict: labels of the degree of freedom (keys) and sizes (value)
+        properties: dict
+            Re-labelling or grouping of the dimensions. Each entry of the dictionary
+            must contain a str or a list of strings which name refers to either another
+            property or one of the dimensions or degree of freedoms.
         """
-
+        self._frozen = False
+        self._dims = {}
+        self._dofs = {}
         self._properties = {}
         self.dims = dims
         self.dofs = dofs
-        self.properties = properties
+        if properties is not None:
+            self.properties = properties
 
-        global _last_lattice
-        _last_lattice = self
-        
-    @simple_property("_frozen", False)
+        Lattice.last_defined = self
+
+    @property
     def frozen(self):
-        pass
+        return getattr(self, "_frozen", False)
 
-    @simple_property("_dims", {})
+    @frozen.setter
+    def frozen(self, value):
+        if value != self.frozen:
+            assert value is True, "Frozen can be only changed to True"
+            self.freeze()
+
+    def freeze(self):
+        self._dims = MappingProxyType(self._dims)
+        self._dofs = MappingProxyType(self._dofs)
+        self._properties = MappingProxyType(self._properties)
+        self._frozen = True
+
+    @property
     def dims(self):
-        pass
-    
+        return getattr(self, "_dims", {})
+
     @property
     def n_dims(self):
-        return len(self.dims)
+        return len(self._dims)
 
     @dims.setter
     def dims(self, value):
-        
-        if isinstance(value, int):
-            assert isinstance(value,int), "Non-integer number of dimensions"
-            assert value > 0, "Non-positive number of dimensions"
-            
-            if value<=len(Lattice.default_dims_labels):
-                self._dims = { Lattice.default_dims_labels[i]:1 for i in range(value) }
-            else:
-                self._dims = { "dim_%d"%i:1 for i in range(value) }
-                    
-        elif isinstance(value, (list,tuple)):
-            assert all([isinstance(v,int) for v in value]), "Non-integer size of dimensions"
-            assert all([v>0 for v in value]), "Non-positive size of dimensions"
-            
-            if len(value)<=len(Lattice.default_dims_labels):
-                self._dims = { Lattice.default_dims_labels[i]:v for i,v in enumerate(value) }
-            else:
-                self._dims = { "dim_%d"%i:v for i,v in enumerate(value) }
 
-        elif isinstance(value, (dict)):
-            assert all([isinstance(v,int) for v in value.values()]), "Non-integer size of dimensions"
-            assert all([v>0 for v in value.values()]), "Non-positive size of dimensions"
-            
+        if not value:
+            self._dims = {}
+
+        elif isinstance(value, int):
+            assert value > 0, "Non-positive number of dimensions"
+            self.dims = [1] * value
+            return
+
+        elif isinstance(value, (list, tuple)):
+            assert all(
+                (isinstance(v, int) and v > 0 for v in value)
+            ), "All entries of the list must be positive integers"
+
+            if len(value) <= len(Lattice.default_dims_labels):
+                self._dims = {
+                    Lattice.default_dims_labels[i]: v for i, v in enumerate(value)
+                }
+            else:
+                self._dims = {"dim_%d" % i: v for i, v in enumerate(value)}
+
+        elif isinstance(value, (dict, MappingProxyType)):
+            assert all(
+                (isinstance(v, int) and v > 0 for v in value.values())
+            ), "All entries of the dictionary must be positive integers"
+
             self._dims = value.copy()
 
         else:
-            assert False, "Not allowed type %s"%type(value)
+            assert False, "Not allowed type %s" % type(value)
 
-        dirs = list(self.dims.keys())
-        if len(dirs)>1: self.properties = { "time": [dirs[0]], "space": dirs[1:] }
+        if len(self._dims) > 1:
+            dirs = list(self._dims.keys())
+            self.properties.setdefault("time", dirs[0])
+            self.properties.setdefault("space", dirs[1:])
 
-    @simple_property("_dofs", {})
+    @property
     def dofs(self):
-        pass
-    
+        return getattr(self, "_dofs", {})
+
     @property
     def n_dofs(self):
-        return len(self.dofs)
+        return len(self._dofs)
 
     @dofs.setter
     def dofs(self, value):
-        
-        if isinstance(value, str):
-            assert value in Lattice.default_dofs, "Unknown dofs name"
-            self._dofs = Lattice.default_dofs[value].copy()
-            self.properties = self._dofs.pop("properties", {})
-                    
-        elif isinstance(value, int):
-            assert isinstance(value,int), "Non-integer size for dof"
-            assert value > 0, "Non-positive size for dof"
-            
-            self._dofs = { "dof_0":value }
-                    
-        elif isinstance(value, (list,tuple)):
-            assert all([isinstance(v,int) for v in value]), "Non-integer size of dofs"
-            assert all([v>0 for v in value]), "Non-positive size of dofs"
-            
-            self._dofs = { "dof_%d"%i:v for i,v in enumerate(value) }
 
-        elif isinstance(value, (dict)):
-            assert all([isinstance(v,int) for v in value.values()]), "Non-integer size of dofs"
-            assert all([v>0 for v in value.values()]), "Non-positive size of dofs"
-            
+        if not value:
+            self._dofs = {}
+
+        elif isinstance(value, str):
+            assert value in Lattice.theories, "Unknown dofs name"
+            self._dofs = Lattice.theories[value].copy()
+            self.properties = self._dofs.pop("properties", {})
+
+        elif isinstance(value, int):
+            assert value > 0, "Non-positive size for dof"
+            self.dofs = [1] * value
+            return
+
+        elif isinstance(value, (list, tuple)):
+            assert all(
+                (isinstance(v, int) and v > 0 for v in value)
+            ), "All entries of the list must be positive integers"
+
+            self._dofs = {"dof_%d" % i: v for i, v in enumerate(value)}
+
+        elif isinstance(value, (dict, MappingProxyType)):
+            assert all(
+                (isinstance(v, int) and v > 0 for v in value.values())
+            ), "All entries of the dict must be positive integers"
+
             self._dofs = value.copy()
 
         else:
-            assert False, "Not allowed type %s"%type(value)
+            assert False, "Not allowed type %s" % type(value)
 
-    @simple_property("_properties", {})
+    @property
     def properties(self):
-        pass
+        return getattr(self, "_properties", {})
 
     @properties.setter
     def properties(self, value):
-        if isinstance(value, (dict)):
-            assert all([isinstance(v,(list,tuple)) for v in value.values()]), "Each property must be a list or a tuple"
-            assert all([hasattr(self,key) for v in value.values() for key in v]), "Each property must be a list of attributes"
-            
+        if not value:
+            self._properties = {}
+
+        elif isinstance(value, (dict)):
+            assert all(
+                (v in self for v in value.values())
+            ), """
+            Each property must be either a str, a list or a tuple
+            of attributes of the lattice object. See dir(lattice).
+            """
+
             self._properties.update(value)
 
         else:
-            assert False, "Not allowed type %s"%type(value)
+            assert False, "Not allowed type %s" % type(value)
 
-
-    def __repr__(self):
-        from .utils import default_repr
-        return default_repr(self)
+    def __eq__(self, other):
+        return self is other or (
+            isinstance(other, Lattice)
+            and self.dims == other.dims
+            and self.dofs == other.dofs
+            and self.properties == other.properties
+        )
 
     def __dir__(self):
-        o = set(dir(type(self)))
-        o.update(attr for attr in self.dims)
-        o.update(attr for attr in self.dofs)
-        o.update(attr for attr in self.properties)
-        return sorted(o)
+        keys = set(["n_dims", "dims", "n_dofs", "dofs"])
+        keys.update(attr for attr in self.dims)
+        keys.update(attr for attr in self.dofs)
+        keys.update(attr for attr in self.properties)
+        return sorted(keys)
 
     def __contains__(self, key):
-        return key in ["n_dims", "dims", "dofs"] or key in self.dims or key in self.dofs or key in self.properties
-    
+        if isinstance(key, str):
+            return key in dir(self)
+        return all((k in dir(self) for k in key))
+
     def __getitem__(self, key):
         try:
-            return self.__dict__[key]
-        except KeyError:
-            try: 
-                return getattr(type(self), key).__get__(self)
-            except AttributeError:
-                if key in self.dims:
-                    return self.dims[key]
-                elif key in self.dofs:
-                    return self.dofs[key]
-                elif key in self.properties:
-                    return self.properties[key]
-                else:
-                    raise
+            return getattr(type(self), key).__get__(self)
+        except AttributeError:
+            if key in type(self).__slots__:
+                raise
+            if key in self.dims:
+                return self.dims[key]
+            if key in self.dofs:
+                return self.dofs[key]
+            if key in self.properties:
+                return self.properties[key]
+
+            raise
+
     __getattr__ = __getitem__
 
     def __setitem__(self, key, value):
-        assert not self.frozen, "Cannot change a lattice in use by a field. Do a copy first."
+        assert not self.frozen, """
+        Cannot change a lattice in use by a field. Do a copy first.
+        """
         try:
-            getattr(type(self), key).__set__(self,value)
+            getattr(type(self), key).__set__(self, value)
         except AttributeError:
-            if key in self.__dict__:
-                self.__dict__[key] = value
-            elif key in self.dims:
+            if key in self.dims:
                 dims = self.dims
                 dims[key] = value
                 self.dims = dims
@@ -208,25 +251,47 @@ class Lattice:
                 if isinstance(value, (int)):
                     for attr in self.properties[key]:
                         self[attr] = value
+                elif isinstance(value, (list, tuple)) and all(
+                    (isinstance(v, int) for v in value)
+                ):
+                    assert len(value) == len(
+                        self.properties[key]
+                    ), """
+                    When setting a property with a list, the length must match.
+                    """
+                    for attr, val in zip(self.properties[key], value):
+                        self[attr] = val
                 else:
                     properties = self.properties
                     properties[key] = value
                     self.properties = properties
             else:
-                self.__dict__[key] = value
+                raise
 
     __setattr__ = __setitem__
 
-
     def __dask_tokenize__(self):
-        from dask.base import normalize_token
-            
-        return normalize_token(
-            (type(self), self.dims, self.dofs, self.properties)
-        )
+        return normalize_token((type(self), self.__getstate__()))
+
+    def check(self):
+        try:
+            return self == self.copy()
+        except AssertionError:
+            return False
 
     def copy(self):
         return self.__copy__()
 
     def __copy__(self):
         return Lattice(dims=self.dims, dofs=self.dofs, properties=self.properties)
+
+    def __getstate__(self):
+        return (
+            self._dims.copy(),
+            self._dofs.copy(),
+            self._properties.copy(),
+            self.frozen,
+        )
+
+    def __setstate__(self, state):
+        self._dims, self._dofs, self._properties, self.frozen = state
