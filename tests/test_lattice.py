@@ -18,4 +18,5 @@ def test_init():
     import pickle
     assert lat == pickle.loads(pickle.dumps(lat))
     
-    
+    assert all((hasattr(lat, key) for key in dir(lat)))
+    assert set(lat.dimensions).issubset(dir(lat))

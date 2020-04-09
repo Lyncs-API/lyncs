@@ -5,7 +5,7 @@ __all__ = [
 
 from types import MappingProxyType
 from dask.base import normalize_token
-from .utils import default_repr
+from .utils import default_repr, default_property
 
 
 def default_lattice():
@@ -187,7 +187,7 @@ class Lattice:
                 (v in self for v in value.values())
             ), """
             Each property must be either a str, a list or a tuple
-            of attributes of the lattice object. See dir(lattice).
+            of attributes of the lattice object. See lattice.dimensions.
             """
 
             self._properties.update(value)
@@ -203,17 +203,23 @@ class Lattice:
             and self.properties == other.properties
         )
 
-    def __dir__(self):
+    @property
+    def dimensions(self):
         keys = set(["n_dims", "dims", "n_dofs", "dofs"])
-        keys.update(attr for attr in self.dims)
-        keys.update(attr for attr in self.dofs)
-        keys.update(attr for attr in self.properties)
+        keys.update(self.dims.keys())
+        keys.update(self.dofs.keys())
+        keys.update(self.properties.keys())
+        return sorted(keys)
+    
+    def __dir__(self):
+        keys = set(dir(type(self)))
+        keys.update(self.dimensions)
         return sorted(keys)
 
     def __contains__(self, key):
         if isinstance(key, str):
-            return key in dir(self)
-        return all((k in dir(self) for k in key))
+            return key in self.dimensions
+        return all((k in self.dimensions for k in key))
 
     def __getitem__(self, key):
         try:
