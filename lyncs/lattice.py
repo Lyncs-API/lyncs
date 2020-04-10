@@ -5,7 +5,7 @@ __all__ = [
 
 from types import MappingProxyType
 from dask.base import normalize_token
-from .utils import default_repr, default_property
+from .utils import default_repr
 
 
 def default_lattice():
@@ -24,7 +24,7 @@ class Lattice:
     theories = {
         "QCD": {"spin": 4, "color": 3, "properties": {"gauge_dofs": ["color"],},},
     }
-    __slots__ = ["_dims", "_dofs", "_properties", "_frozen"]
+    __slots__ = ["_dims", "_dofs", "_properties", "_dimensions", "_frozen"]
     __repr__ = default_repr
 
     def __init__(
@@ -63,6 +63,7 @@ class Lattice:
         self._dims = {}
         self._dofs = {}
         self._properties = {}
+        self._dimensions = None
         self.dims = dims
         self.dofs = dofs
         if properties is not None:
@@ -84,6 +85,7 @@ class Lattice:
         self._dims = MappingProxyType(self._dims)
         self._dofs = MappingProxyType(self._dofs)
         self._properties = MappingProxyType(self._properties)
+        self._dimensions = self.dimensions
         self._frozen = True
 
     @property
@@ -205,12 +207,14 @@ class Lattice:
 
     @property
     def dimensions(self):
-        keys = set(["n_dims", "dims", "n_dofs", "dofs"])
-        keys.update(self.dims.keys())
-        keys.update(self.dofs.keys())
-        keys.update(self.properties.keys())
-        return sorted(keys)
-    
+        if self._dimensions is None:
+            keys = set(["n_dims", "dims", "n_dofs", "dofs"])
+            keys.update(self.dims.keys())
+            keys.update(self.dofs.keys())
+            keys.update(self.properties.keys())
+            return tuple(sorted(keys))
+        return self._dimensions
+
     def __dir__(self):
         keys = set(dir(type(self)))
         keys.update(self.dimensions)
