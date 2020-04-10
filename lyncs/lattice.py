@@ -79,15 +79,19 @@ class Lattice:
     def frozen(self, value):
         if value != self.frozen:
             assert value is True, "Frozen can be only changed to True"
-            self.freeze()
-
+            self._dims = MappingProxyType(self._dims)
+            self._dofs = MappingProxyType(self._dofs)
+            self._properties = MappingProxyType(self._properties)
+            self._dimensions = self.dimensions
+            self._frozen = True
+            
     def freeze(self):
-        self._dims = MappingProxyType(self._dims)
-        self._dofs = MappingProxyType(self._dofs)
-        self._properties = MappingProxyType(self._properties)
-        self._dimensions = self.dimensions
-        self._frozen = True
-
+        if self.frozen:
+            return self
+        copy = self.copy()
+        copy.frozen = True
+        return copy
+        
     @property
     def dims(self):
         return getattr(self, "_dims", {})
