@@ -227,6 +227,18 @@ class Lattice:
             return tuple(sorted(keys))
         return self._dimensions
 
+    def _expand(self, dims):
+        if isinstance(dims, str):
+            if isinstance(self[dims], int):
+                return dims
+            else:
+                return " ".join((self._expand(dim) for dim in self[dims]))
+        return " ".join((self._expand(dim) for dim in dims))
+
+    def expand(self, *dimensions):
+        assert dimensions in self
+        return self._expand(dimensions).split()
+
     def __dir__(self):
         keys = set(dir(type(self)))
         keys.update(self.dimensions)
@@ -235,7 +247,7 @@ class Lattice:
     def __contains__(self, key):
         if isinstance(key, str):
             return key in self.dimensions
-        return all((k in self.dimensions for k in key))
+        return all((k in self for k in key))
 
     def __getitem__(self, key):
         try:
