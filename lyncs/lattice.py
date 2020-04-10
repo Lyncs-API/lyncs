@@ -3,6 +3,7 @@ __all__ = [
     "Lattice",
 ]
 
+import re
 from types import MappingProxyType
 from dask.base import normalize_token
 from .utils import default_repr
@@ -24,8 +25,20 @@ class Lattice:
     theories = {
         "QCD": {"spin": 4, "color": 3, "properties": {"gauge_dofs": ["color"],},},
     }
+
     __slots__ = ["_dims", "_dofs", "_properties", "_dimensions", "_frozen"]
     __repr__ = default_repr
+
+    _check_key = re.compile(r"[_\-\.a-zA-Z0-9]+$")
+
+    @classmethod
+    def check_keys(cls, keys):
+        for key in keys:
+            if not cls._check_key.match(key):
+                raise KeyError(
+                    "Invalid key: %s. Keys can contain only letters, numbers or '_' '-'."
+                    % key
+                )
 
     def __init__(
         self, dims=4, dofs="QCD", properties=None,
@@ -84,14 +97,14 @@ class Lattice:
             self._properties = MappingProxyType(self._properties)
             self._dimensions = self.dimensions
             self._frozen = True
-            
+
     def freeze(self):
         if self.frozen:
             return self
         copy = self.copy()
         copy.frozen = True
         return copy
-        
+
     @property
     def dims(self):
         return getattr(self, "_dims", {})
@@ -106,37 +119,33 @@ class Lattice:
         if not value:
             self._dims = {}
 
-        elif isinstance(value, int):
-            assert value > 0, "Non-positive number of dimensions"
-            self.dims = [1] * value
-            return
-
-        elif isinstance(value, (list, tuple)):
-            assert all(
-                (isinstance(v, int) and v > 0 for v in value)
-            ), "All entries of the list must be positive integers"
-
-            if len(value) <= len(Lattice.default_dims_labels):
-                self._dims = {
-                    Lattice.default_dims_labels[i]: v for i, v in enumerate(value)
-                }
-            else:
-                self._dims = {"dim_%d" % i: v for i, v in enumerate(value)}
-
         elif isinstance(value, (dict, MappingProxyType)):
+            Lattice.check_keys(value.keys())
             assert all(
                 (isinstance(v, int) and v > 0 for v in value.values())
-            ), "All entries of the dictionary must be positive integers"
+            ), "All sizes of dims must be positive integers"
 
             self._dims = value.copy()
 
+            if self.n_dims > 1:
+                dirs = list(self.dims)
+                self.properties.setdefault("time", dirs[0])
+                self.properties.setdefault("space", dirs[1:])
+
+        elif isinstance(value, int):
+            assert value > 0, "Non-positive number of dimensions"
+            self.dims = [1] * value
+
+        elif isinstance(value, (list, tuple)):
+            if len(value) <= len(Lattice.default_dims_labels):
+                self.dims = {
+                    Lattice.default_dims_labels[i]: v for i, v in enumerate(value)
+                }
+            else:
+                self.dims = {"dim_%d" % i: v for i, v in enumerate(value)}
+
         else:
             assert False, "Not allowed type %s" % type(value)
-
-        if len(self._dims) > 1:
-            dirs = list(self._dims.keys())
-            self.properties.setdefault("time", dirs[0])
-            self.properties.setdefault("space", dirs[1:])
 
     @property
     def dofs(self):
@@ -152,29 +161,27 @@ class Lattice:
         if not value:
             self._dofs = {}
 
+        elif isinstance(value, (dict, MappingProxyType)):
+            Lattice.check_keys(value.keys())
+            assert all(
+                (isinstance(v, int) and v > 0 for v in value.values())
+            ), "All dimensions of the dofs must be positive integers"
+
+            self._dofs = value.copy()
+
         elif isinstance(value, str):
             assert value in Lattice.theories, "Unknown dofs name"
-            self._dofs = Lattice.theories[value].copy()
-            self.properties = self._dofs.pop("properties", {})
+            value = Lattice.theories[value].copy()
+            props = value.pop("properties", {})
+            self.dofs = value
+            self.properties = props
 
         elif isinstance(value, int):
             assert value > 0, "Non-positive size for dof"
             self.dofs = [1] * value
-            return
 
         elif isinstance(value, (list, tuple)):
-            assert all(
-                (isinstance(v, int) and v > 0 for v in value)
-            ), "All entries of the list must be positive integers"
-
-            self._dofs = {"dof_%d" % i: v for i, v in enumerate(value)}
-
-        elif isinstance(value, (dict, MappingProxyType)):
-            assert all(
-                (isinstance(v, int) and v > 0 for v in value.values())
-            ), "All entries of the dict must be positive integers"
-
-            self._dofs = value.copy()
+            self.dofs = {"dof_%d" % i: v for i, v in enumerate(value)}
 
         else:
             assert False, "Not allowed type %s" % type(value)
@@ -188,7 +195,8 @@ class Lattice:
         if not value:
             self._properties = {}
 
-        elif isinstance(value, (dict)):
+        elif isinstance(value, (dict, MappingProxyType)):
+            Lattice.check_keys(value.keys())
             assert all(
                 (v in self for v in value.values())
             ), """
