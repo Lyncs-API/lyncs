@@ -5,8 +5,10 @@ __all__ = [
 
 import re
 from types import MappingProxyType
+from functools import partial
 from dask.base import normalize_token
 from .utils import default_repr
+from .field.types.base import Axes, FieldType
 
 
 def default_lattice():
@@ -23,13 +25,13 @@ class Lattice:
     last_defined = None
     default_dims_labels = ["t", "x", "y", "z"]
     theories = {
-        "QCD": {"spin": 4, "color": 3, "properties": {"gauge_dofs": ["color"],},},
+        "QCD": {"spin": 4, "color": 3, "properties": {"gauge": ["color"],},},
     }
 
-    __slots__ = ["_dims", "_dofs", "_properties", "_dimensions", "_frozen"]
+    __slots__ = ["_dims", "_dofs", "_properties", "_dimensions", "_fields", "_frozen"]
     __repr__ = default_repr
 
-    _check_key = re.compile(r"[_\-\.a-zA-Z0-9]+$")
+    _check_key = re.compile(Axes._get_label.pattern + "$")
 
     @classmethod
     def check_keys(cls, keys):
@@ -77,6 +79,7 @@ class Lattice:
         self._dofs = {}
         self._properties = {}
         self._dimensions = None
+        self._fields = None
         self.dims = dims
         self.dofs = dofs
         if properties is not None:
@@ -96,6 +99,7 @@ class Lattice:
             self._dofs = MappingProxyType(self._dofs)
             self._properties = MappingProxyType(self._properties)
             self._dimensions = self.dimensions
+            self._fields = self.fields
             self._frozen = True
 
     def freeze(self):
@@ -219,29 +223,43 @@ class Lattice:
 
     @property
     def dimensions(self):
-        if self._dimensions is None:
-            keys = set(["n_dims", "dims", "n_dofs", "dofs"])
-            keys.update(self.dims.keys())
-            keys.update(self.dofs.keys())
-            keys.update(self.properties.keys())
-            return tuple(sorted(keys))
-        return self._dimensions
+        if self._dimensions is not None:
+            return self._dimensions
+        keys = set(["n_dims", "dims", "n_dofs", "dofs"])
+        keys.update(self.dims.keys())
+        keys.update(self.dofs.keys())
+        keys.update(self.properties.keys())
+        return tuple(sorted(keys))
 
     def _expand(self, dims):
         if isinstance(dims, str):
             if isinstance(self[dims], int):
                 return dims
-            else:
-                return " ".join((self._expand(dim) for dim in self[dims]))
+            return " ".join((self._expand(dim) for dim in self[dims]))
         return " ".join((self._expand(dim) for dim in dims))
 
     def expand(self, *dimensions):
         assert dimensions in self
-        return self._expand(dimensions).split()
+        return tuple(self._expand(dimensions).split())
+
+    @property
+    def fields(self):
+        if self._fields is not None:
+            return self._fields
+        fields = ["Field"]
+        for name, ftype in FieldType.s.items():
+            if ftype.axes.labels in self:
+                fields.append(name)
+        return tuple(sorted(fields))
+
+    @property
+    def Field(self):
+        return partial(FieldType.Field, lattice=self)
 
     def __dir__(self):
         keys = set(dir(type(self)))
         keys.update(self.dimensions)
+        keys.update(self.fields)
         return sorted(keys)
 
     def __contains__(self, key):
@@ -261,6 +279,8 @@ class Lattice:
                 return self.dofs[key]
             if key in self.properties:
                 return self.properties[key]
+            if key in self.fields:
+                return partial(FieldType.s[key], lattice=self)
 
             raise
 
