@@ -25,16 +25,16 @@ def default_lattice():
 class Lattice:
     """
     Lattice base class.
-    A container for all the information on the lattice theory.
+    A container for all the lattice information.
     """
 
     last_defined = None
     default_dims_labels = ["t", "x", "y", "z"]
     theories = {
-        "QCD": {"spin": 4, "color": 3, "properties": {"gauge": ["color"],},},
+        "QCD": {"spin": 4, "color": 3, "labels": {"gauge": ["color"],},},
     }
 
-    __slots__ = ["_dims", "_dofs", "_properties", "_dimensions", "_fields", "_frozen"]
+    __slots__ = ["_dims", "_dofs", "_labels", "_dimensions", "_fields", "_frozen"]
     __repr__ = default_repr
 
     _check_key = re.compile(Axes._get_label.pattern + "$")
@@ -50,7 +50,7 @@ class Lattice:
                 )
 
     def __init__(
-        self, dims=4, dofs="QCD", properties=None,
+        self, dims=4, dofs="QCD", labels=None,
     ):
         """
         Lattice initializer.
@@ -76,21 +76,21 @@ class Lattice:
             - int: size of one degree of freedom
             - list: size per dimension of the degrees of freedom
             - dict: labels of the degree of freedom (keys) and sizes (value)
-        properties: dict
+        labels: dict
             Re-labelling or grouping of the dimensions. Each entry of the dictionary
             must contain a str or a list of strings which name refers to either another
-            property or one of the dimensions or degree of freedoms.
+            label or one of the dimensions or degree of freedoms.
         """
         self._frozen = False
         self._dims = {}
         self._dofs = {}
-        self._properties = {}
+        self._labels = {}
         self._dimensions = None
         self._fields = None
         self.dims = dims
         self.dofs = dofs
-        if properties is not None:
-            self.properties = properties
+        if labels is not None:
+            self.labels = labels
 
         Lattice.last_defined = self
 
@@ -108,7 +108,7 @@ class Lattice:
             assert value is True, "Frozen can be only changed to True"
             self._dims = MappingProxyType(self._dims)
             self._dofs = MappingProxyType(self._dofs)
-            self._properties = MappingProxyType(self._properties)
+            self._labels = MappingProxyType(self._labels)
             self._dimensions = self.dimensions
             self._fields = self.fields
             self._frozen = True
@@ -147,8 +147,8 @@ class Lattice:
 
             if self.n_dims > 1:
                 dirs = list(self.dims)
-                self.properties.setdefault("time", dirs[0])
-                self.properties.setdefault("space", dirs[1:])
+                self.labels.setdefault("time", dirs[0])
+                self.labels.setdefault("space", dirs[1:])
 
         elif isinstance(value, int):
             assert value > 0, "Non-positive number of dimensions"
@@ -192,9 +192,9 @@ class Lattice:
         elif isinstance(value, str):
             assert value in Lattice.theories, "Unknown dofs name"
             value = Lattice.theories[value].copy()
-            props = value.pop("properties", {})
+            props = value.pop("labels", {})
             self.dofs = value
-            self.properties = props
+            self.labels = props
 
         elif isinstance(value, int):
             assert value > 0, "Non-positive size for dof"
@@ -207,14 +207,14 @@ class Lattice:
             assert False, "Not allowed type %s" % type(value)
 
     @property
-    def properties(self): # RENAME: aliases ?
-        "List of properties of the lattice"
-        return getattr(self, "_properties", {})
+    def labels(self):
+        "List of labels of the lattice"
+        return getattr(self, "_labels", {})
 
-    @properties.setter
-    def properties(self, value):
+    @labels.setter
+    def labels(self, value):
         if not value:
-            self._properties = {}
+            self._labels = {}
 
         elif isinstance(value, (dict, MappingProxyType)):
             Lattice.check_keys(value.keys())
@@ -225,7 +225,7 @@ class Lattice:
             of attributes of the lattice object. See lattice.dimensions.
             """
 
-            self._properties.update(value)
+            self._labels.update(value)
 
         else:
             assert False, "Not allowed type %s" % type(value)
@@ -235,18 +235,18 @@ class Lattice:
             isinstance(other, Lattice)
             and self.dims == other.dims
             and self.dofs == other.dofs
-            and self.properties == other.properties
+            and self.labels == other.labels
         )
 
     @property
-    def dimensions(self): # RENAME: labels ?
+    def dimensions(self): # RENAME ?
         "Complete list of dimensions of the lattice"
         if self._dimensions is not None:
             return self._dimensions
         keys = set(["n_dims", "dims", "n_dofs", "dofs"])
         keys.update(self.dims.keys())
         keys.update(self.dofs.keys())
-        keys.update(self.properties.keys())
+        keys.update(self.labels.keys())
         return tuple(sorted(keys))
 
     def _expand(self, dims):
@@ -298,8 +298,8 @@ class Lattice:
                 return self.dims[key]
             if key in self.dofs:
                 return self.dofs[key]
-            if key in self.properties:
-                return self.properties[key]
+            if key in self.labels:
+                return self.labels[key]
             if key in self.fields:
                 return partial(FieldType.s[key], lattice=self)
 
@@ -322,24 +322,24 @@ class Lattice:
                 dofs = self.dofs
                 dofs[key] = value
                 self.dofs = dofs
-            elif key in self.properties:
+            elif key in self.labels:
                 if isinstance(value, (int)):
-                    for attr in self.properties[key]:
+                    for attr in self.labels[key]:
                         self[attr] = value
                 elif isinstance(value, (list, tuple)) and all(
                     (isinstance(v, int) for v in value)
                 ):
                     assert len(value) == len(
-                        self.properties[key]
+                        self.labels[key]
                     ), """
                     When setting a property with a list, the length must match.
                     """
-                    for attr, val in zip(self.properties[key], value):
+                    for attr, val in zip(self.labels[key], value):
                         self[attr] = val
                 else:
-                    properties = self.properties
-                    properties[key] = value
-                    self.properties = properties
+                    labels = self.labels
+                    labels[key] = value
+                    self.labels = labels
             else:
                 raise
 
@@ -349,7 +349,7 @@ class Lattice:
         return normalize_token((type(self), self.__getstate__()))
 
     def check(self):
-        "Checks if all the properties of the lattice are valid"
+        "Checks if the lattice is valid"
         try:
             return self == self.copy()
         except AssertionError:
@@ -360,15 +360,15 @@ class Lattice:
         return self.__copy__()
 
     def __copy__(self):
-        return Lattice(dims=self.dims, dofs=self.dofs, properties=self.properties)
+        return Lattice(dims=self.dims, dofs=self.dofs, labels=self.labels)
 
     def __getstate__(self):
         return (
             self._dims.copy(),
             self._dofs.copy(),
-            self._properties.copy(),
+            self._labels.copy(),
             self.frozen,
         )
 
     def __setstate__(self, state):
-        self._dims, self._dofs, self._properties, self.frozen = state
+        self._dims, self._dofs, self._labels, self.frozen = state
