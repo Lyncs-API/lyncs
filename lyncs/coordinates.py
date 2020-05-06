@@ -49,6 +49,8 @@ class Coordinates(dict):
 
     def resolve(self, *keys, **coords):
         "Combines a set of coordinates"
+        if not keys and not coords:
+            return ()
         # TODO
         raise NotImplementedError
 

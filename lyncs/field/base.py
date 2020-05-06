@@ -3,9 +3,13 @@ Base class of the Field type that implements
 the interface to the Lattice class.
 """
 
+__all__ = [
+    "BaseField",
+]
+
 from collections import OrderedDict
 from .types.base import FieldType
-from ..utils import default_repr, FrozenDict
+from ..utils import default_repr, compute_property
 
 
 class BaseField:
@@ -19,7 +23,7 @@ class BaseField:
 
     __repr__ = default_repr
 
-    def __init__(self, field=None, axes=None, lattice=None, **kwargs):
+    def __init__(self, field=None, axes=None, lattice=None, coords=None, **kwargs):
         """
         The base field class.
         
@@ -32,7 +36,7 @@ class BaseField:
         lattice: Lattice
             The lattice on which the field is defined.
         kwargs: dict
-           Extra parameters that will be passed to the field types.
+            Extra parameters that will be passed to the field types.
         """
 
         from ..lattice import Lattice, default_lattice
@@ -41,24 +45,24 @@ class BaseField:
             lattice, Lattice
         ), "lattice must be of Lattice type"
 
+        coords = coords or ()
+
         if isinstance(field, BaseField):
-            types = field.types
             self._lattice = (lattice or field.lattice).freeze()
             self._axes = self.lattice.expand(axes or field.axes)
+            self._coords = self.lattice.coordinates.resolve(
+                *coords, **dict(field.coords)
+            )
         else:
-            types = FieldType.s
             self._lattice = (lattice or default_lattice()).freeze()
             self._axes = self.lattice.expand(axes or ())
+            self._coords = self.lattice.coordinates.resolve(*coords)
 
-        self._types = OrderedDict()
-        for name, ftype in types.items():
-            if isinstance(self, ftype):
-                self._types[name] = ftype
-                try:
-                    getattr(ftype, "__init__").__get__(self)(**kwargs)
-                except AttributeError:
-                    continue
-        self._types = FrozenDict(self._types)
+        for name, ftype in self.types:
+            try:
+                getattr(ftype, "__init__").__get__(self)(**kwargs)
+            except AttributeError:
+                continue
 
     @property
     def lattice(self):
@@ -70,10 +74,40 @@ class BaseField:
         "List of axes of the field. Order is not significant. See field.axes_order."
         return self._axes
 
-    @property
+    @compute_property
     def types(self):
-        "List of field types that the field is instance of."
-        return self._types
+        "List of field types that the field is instance of ordered per relevance"
+        types = (
+            (name, ftype)
+            for name, ftype in FieldType.s.items()
+            if isinstance(self, ftype)
+        )
+
+        return tuple(
+            (name, ftype)
+            for name, ftype in sorted(
+                types,
+                key=lambda item: len(self.lattice.expand(item[1].axes.expand)),
+                reverse=True,
+            )
+        )
+
+    @property
+    def coords(self):
+        "List of coordinates of the field."
+        return self._coords
+
+    @compute_property
+    def shape(self):
+        "Returns the list of dimensions with size. Order is not significant."
+
+        def get_size(axis):
+            if axis in self.coords:
+                return len(np.arange(self.lattice[axis])[self.coords[axis]])
+            else:
+                return self.lattice[axis]
+
+        return tuple((axis, get_size(axis)) for axis in self.axes)
 
     def __getattr__(self, key):
         "Looks up for methods in the field types"
@@ -87,15 +121,9 @@ class BaseField:
         raise AttributeError
 
     @property
-    def name(self):
+    def type(self):
         "Name of the Field. Equivalent to the most relevant field type."
-        return [
-            name
-            for name, ftype in sorted(
-                self.types.items(),
-                key=lambda item: self.lattice.expand(item[1].axes.expand),
-            )
-        ][-1]
+        return self.types[0][0]
 
 
 FieldType.Field = BaseField
