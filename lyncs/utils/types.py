@@ -1,7 +1,7 @@
 """
 Aliasing or definition of base types
 """
-#pylint: disable=C0103
+# pylint: disable=C0103
 
 __all__ = [
     "FrozenDict",
