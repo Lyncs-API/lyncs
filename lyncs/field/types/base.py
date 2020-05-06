@@ -61,6 +61,7 @@ class FieldType(type):
         Checks that the name of the class is unique and construct from
         the axes in the base classes (bases) the axes for the new class.
         """
+        assert not kwargs, "kwargs not used"
         assert name not in cls.__types__, "A FieldType named %s already exists" % name
 
         axes = Axes()
@@ -72,6 +73,8 @@ class FieldType(type):
 
     def __new__(cls, name, bases, attrs, **kwargs):
         "Checks that __axes__ is a valid Axes"
+        assert not kwargs, "kwargs not used"
+
         assert "__axes__" in attrs
         attrs["__axes__"] = Axes(attrs["__axes__"])
         return super().__new__(cls, name, bases, attrs)
@@ -81,6 +84,8 @@ class FieldType(type):
         Adds the class to the list of all FieldType and checks
         that is subclass of bases.
         """
+        assert not kwargs, "kwargs not used"
+
         for base in bases:
             assert issubclass(
                 cls, base
