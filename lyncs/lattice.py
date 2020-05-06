@@ -13,6 +13,7 @@ from types import MappingProxyType
 from functools import partial
 from dask.base import normalize_token
 from .utils import default_repr
+from .coordinates import Coordinates
 from .field.types.base import Axes, FieldType
 
 
@@ -34,7 +35,15 @@ class Lattice:
         "QCD": {"spin": 4, "color": 3, "labels": {"gauge": ["color"],},},
     }
 
-    __slots__ = ["_dims", "_dofs", "_labels", "_dimensions", "_fields", "_frozen"]
+    __slots__ = [
+        "_dims",
+        "_dofs",
+        "_labels",
+        "_dimensions",
+        "_coordinates",
+        "_fields",
+        "_frozen",
+    ]
     __repr__ = default_repr
 
     _check_key = re.compile(Axes._get_label.pattern + "$")
@@ -86,6 +95,7 @@ class Lattice:
         self._dofs = {}
         self._labels = {}
         self._dimensions = None
+        self._coordinates = Coordinates(self)
         self._fields = None
         self.dims = dims
         self.dofs = dofs
@@ -239,7 +249,7 @@ class Lattice:
         )
 
     @property
-    def dimensions(self): # RENAME ?
+    def dimensions(self):  # RENAME ?
         "Complete list of dimensions of the lattice"
         if self._dimensions is not None:
             return self._dimensions
@@ -261,6 +271,11 @@ class Lattice:
         assert dimensions in self
         return tuple(self._expand(dimensions).split())
 
+    @property
+    def coordinates(self):
+        "Coordinates on the lattice"
+        return self._coordinates
+    
     @property
     def fields(self):
         "List of available field types on the lattice"
@@ -367,8 +382,9 @@ class Lattice:
             self._dims.copy(),
             self._dofs.copy(),
             self._labels.copy(),
+            self._coordinates.copy(),
             self.frozen,
         )
 
     def __setstate__(self, state):
-        self._dims, self._dofs, self._labels, self.frozen = state
+        self._dims, self._dofs, self._labels, self._coordinates, self.frozen = state
