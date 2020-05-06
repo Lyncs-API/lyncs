@@ -93,7 +93,7 @@ class compute_property(property):
 
     def __get__(self, obj, owner):
         try:
-            return copy(getattr(self, self.key))
+            return copy(getattr(obj, self.key))
         except AttributeError:
-            setattr(self, self.key, super().__get__(obj, owner))
+            setattr(obj, self.key, super().__get__(obj, owner))
             return self.__get__(obj, owner)

@@ -12,7 +12,11 @@ class Gauge(Scalar):
     __axes__ = ["gauge"]
 
 
-class GaugeLinks(Links, Gauge):
+class GaugeMatrix(Gauge):
+    __axes__ = ["gauge!", "gauge!"]
+
+
+class GaugeLinks(Links, GaugeMatrix):
     pass
 
 

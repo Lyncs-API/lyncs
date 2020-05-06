@@ -59,11 +59,27 @@ class BaseField:
             self._axes = self.lattice.expand(axes or ())
             self._coords = self.lattice.coordinates.resolve(*coords)
 
+        self._types = tuple(
+            (name, ftype)
+            for name, ftype in FieldType.s.items()
+            if isinstance(self, ftype)
+        )
+
         for name, ftype in self.types:
             try:
-                getattr(ftype, "__init__").__get__(self)(**kwargs)
+                ftype.__init__(self, **kwargs)
             except AttributeError:
                 continue
+
+        # ordering types by relevance
+        self._types = tuple(
+            (name, ftype)
+            for name, ftype in sorted(
+                self.types,
+                key=lambda item: len(self.lattice.expand(item[1].axes.expand)),
+                reverse=True,
+            )
+        )
 
     @property
     def lattice(self):
@@ -97,20 +113,7 @@ class BaseField:
     @compute_property
     def types(self):
         "List of field types that the field is instance of ordered per relevance"
-        types = (
-            (name, ftype)
-            for name, ftype in FieldType.s.items()
-            if isinstance(self, ftype)
-        )
-
-        return tuple(
-            (name, ftype)
-            for name, ftype in sorted(
-                types,
-                key=lambda item: len(self.lattice.expand(item[1].axes.expand)),
-                reverse=True,
-            )
-        )
+        return self._types
 
     @property
     def coords(self):
