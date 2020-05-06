@@ -54,7 +54,10 @@ class Lattice:
         for key in keys:
             if not cls._check_key.match(key):
                 raise KeyError(
-                    "Invalid key: %s. Keys can contain only letters, numbers or '_' '-'."
+                    """
+                    Invalid key: %s. Keys can only contain only letters, numbers or '_'.
+                    Keys must start with a letter and cannot end with '_' followed by number.
+                    """
                     % key
                 )
 
@@ -75,12 +78,12 @@ class Lattice:
         Parameters
         ----------
         dims: int, list or dict (default 4)
-            Dimensions (default labels: t,x,y,z if less than 5 or dim_0/1/2...)
+            Dimensions (default labels: t,x,y,z if less than 5 or dim0/1/2...)
             - int: number of dimensions. The default labels will be used.
             - list: size of the dimensions. The default labels will be used.
             - dict: labels of the dimensions (keys) and sizes (value)
         dofs: str, int, list, dict (default QCD)
-            Specifies local degree of freedoms. (default naming: dof_0/1/2...)
+            Specifies local degree of freedoms. (default naming: dof0/1/2...)
             - str: one of the labeled theories (QCD,...). See Lattice.theories
             - int: size of one degree of freedom
             - list: size per dimension of the degrees of freedom
@@ -170,7 +173,7 @@ class Lattice:
                     Lattice.default_dims_labels[i]: v for i, v in enumerate(value)
                 }
             else:
-                self.dims = {"dim_%d" % i: v for i, v in enumerate(value)}
+                self.dims = {"dim%d" % i: v for i, v in enumerate(value)}
 
         else:
             assert False, "Not allowed type %s" % type(value)
@@ -211,7 +214,7 @@ class Lattice:
             self.dofs = [1] * value
 
         elif isinstance(value, (list, tuple)):
-            self.dofs = {"dof_%d" % i: v for i, v in enumerate(value)}
+            self.dofs = {"dof%d" % i: v for i, v in enumerate(value)}
 
         else:
             assert False, "Not allowed type %s" % type(value)
@@ -275,7 +278,7 @@ class Lattice:
     def coordinates(self):
         "Coordinates on the lattice"
         return self._coordinates
-    
+
     @property
     def fields(self):
         "List of available field types on the lattice"

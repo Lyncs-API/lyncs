@@ -7,6 +7,7 @@ __all__ = [
     "BaseField",
 ]
 
+import re
 from collections import Counter, OrderedDict
 from .types.base import FieldType
 from ..utils import default_repr, compute_property
@@ -85,7 +86,7 @@ class BaseField:
         indeces = []
         for axis in self.axes:
             if counts[axis] > 1:
-                indeces.append(axis + "#" + str(idxs[axis]))
+                indeces.append(axis + "_" + str(idxs[axis]))
                 idxs[axis] += 1
             else:
                 indeces.append(axis)
@@ -121,7 +122,7 @@ class BaseField:
         "Returns the list of indeces with size. Order is not significant."
 
         def get_size(key):
-            axis = key.split("#")[0]
+            axis = re.sub("_[0-9]+$", "", key)
             if key in self.coords:
                 return len(np.arange(self.lattice[axis])[self.coords[key]])
             else:

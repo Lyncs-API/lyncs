@@ -142,7 +142,7 @@ class Axes(tuple):
     Functionalities to parse the axes.
     """
 
-    _get_label = re.compile(r"[_\-\.a-zA-Z0-9]+")
+    _get_label = re.compile(r"[a-zA-Z]([a-zA-Z0-9]|_[0-9]*[a-zA-Z])*")
 
     @classmethod
     def get_label(cls, key):
