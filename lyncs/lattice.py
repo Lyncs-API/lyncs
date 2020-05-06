@@ -1,3 +1,8 @@
+"""
+Definition of the Lattice class and related routines
+"""
+# pylint: disable=C0303,C0330
+
 __all__ = [
     "default_lattice",
     "Lattice",
@@ -12,6 +17,7 @@ from .field.types.base import Axes, FieldType
 
 
 def default_lattice():
+    "Returns the last defined lattice if any"
     assert Lattice.last_defined is not None, "Any lattice has been defined yet."
     return Lattice.last_defined
 
@@ -35,6 +41,7 @@ class Lattice:
 
     @classmethod
     def check_keys(cls, keys):
+        "Checks if the given list of keys if compatible to be label of lattice axes"
         for key in keys:
             if not cls._check_key.match(key):
                 raise KeyError(
@@ -89,6 +96,10 @@ class Lattice:
 
     @property
     def frozen(self):
+        """
+        Returns if the current lattice instance is frozen, i.e. cannot be changed anymore.
+        To unfreeze it use lattice.copy.
+        """
         return getattr(self, "_frozen", False)
 
     @frozen.setter
@@ -103,6 +114,7 @@ class Lattice:
             self._frozen = True
 
     def freeze(self):
+        "Returns a frozen copy of the lattice"
         if self.frozen:
             return self
         copy = self.copy()
@@ -111,10 +123,12 @@ class Lattice:
 
     @property
     def dims(self):
+        "Map of lattice dimensions and their size"
         return getattr(self, "_dims", {})
 
     @property
     def n_dims(self):
+        "Number of dimensions"
         return len(self._dims)
 
     @dims.setter
@@ -153,10 +167,12 @@ class Lattice:
 
     @property
     def dofs(self):
+        "Map of lattice degrees of freedom and their size"
         return getattr(self, "_dofs", {})
 
     @property
     def n_dofs(self):
+        "Number of lattice degrees of freedom"
         return len(self._dofs)
 
     @dofs.setter
@@ -191,7 +207,8 @@ class Lattice:
             assert False, "Not allowed type %s" % type(value)
 
     @property
-    def properties(self):
+    def properties(self): # RENAME: aliases ?
+        "List of properties of the lattice"
         return getattr(self, "_properties", {})
 
     @properties.setter
@@ -222,7 +239,8 @@ class Lattice:
         )
 
     @property
-    def dimensions(self):
+    def dimensions(self): # RENAME: labels ?
+        "Complete list of dimensions of the lattice"
         if self._dimensions is not None:
             return self._dimensions
         keys = set(["n_dims", "dims", "n_dofs", "dofs"])
@@ -239,11 +257,13 @@ class Lattice:
         return " ".join((self._expand(dim) for dim in dims))
 
     def expand(self, *dimensions):
+        "Expand the list of dimensions into the fundamental dimensions and degrees of freedom"
         assert dimensions in self
         return tuple(self._expand(dimensions).split())
 
     @property
     def fields(self):
+        "List of available field types on the lattice"
         if self._fields is not None:
             return self._fields
         fields = ["Field"]
@@ -254,6 +274,7 @@ class Lattice:
 
     @property
     def Field(self):
+        "Returns the base Field type class initializer"
         return partial(FieldType.Field, lattice=self)
 
     def __dir__(self):
@@ -328,12 +349,14 @@ class Lattice:
         return normalize_token((type(self), self.__getstate__()))
 
     def check(self):
+        "Checks if all the properties of the lattice are valid"
         try:
             return self == self.copy()
         except AssertionError:
             return False
 
     def copy(self):
+        "Returns a copy of the lattice."
         return self.__copy__()
 
     def __copy__(self):
