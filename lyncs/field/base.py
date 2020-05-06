@@ -7,7 +7,7 @@ __all__ = [
     "BaseField",
 ]
 
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from .types.base import FieldType
 from ..utils import default_repr, compute_property
 
@@ -75,6 +75,25 @@ class BaseField:
         return self._axes
 
     @compute_property
+    def indeces(self):
+        """
+        List of indeces of the field. Similar to .axes but repeted axis are numerated.
+        Order is not significant. See field.indeces_order.
+        """
+        counts = Counter(self.axes)
+        idxs = {axis: 0 for axis in counts}
+        indeces = []
+        for axis in self.axes:
+            if counts[axis] > 1:
+                indeces.append(axis + "#" + str(idxs[axis]))
+                idxs[axis] += 1
+            else:
+                indeces.append(axis)
+        assert len(set(indeces)) == len(indeces), "Trivial assertion"
+
+        return tuple(indeces)
+
+    @compute_property
     def types(self):
         "List of field types that the field is instance of ordered per relevance"
         types = (
@@ -99,15 +118,16 @@ class BaseField:
 
     @compute_property
     def shape(self):
-        "Returns the list of dimensions with size. Order is not significant."
+        "Returns the list of indeces with size. Order is not significant."
 
-        def get_size(axis):
-            if axis in self.coords:
-                return len(np.arange(self.lattice[axis])[self.coords[axis]])
+        def get_size(key):
+            axis = key.split("#")[0]
+            if key in self.coords:
+                return len(np.arange(self.lattice[axis])[self.coords[key]])
             else:
                 return self.lattice[axis]
 
-        return tuple((axis, get_size(axis)) for axis in self.axes)
+        return tuple((key, get_size(key)) for key in self.indeces)
 
     def __getattr__(self, key):
         "Looks up for methods in the field types"
