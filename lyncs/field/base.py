@@ -26,11 +26,11 @@ class BaseField:
 
     def __init__(self, field=None, axes=None, lattice=None, coords=None, **kwargs):
         """
-        The base field class.
+        Initializes the field class.
         
         Parameters
         ----------
-        field: instance of BaseField
+        field: Field
             If given, then the missing parameters are deduced from it.
         axes: list(str)
             List of axes of the field.
@@ -90,6 +90,16 @@ class BaseField:
     def axes(self):
         "List of axes of the field. Order is not significant. See field.axes_order."
         return self._axes
+
+    @compute_property
+    def dims(self):
+        "List of dims in the field axes"
+        return tuple(key for key in self.axes if key in self.lattice.dims)
+
+    @compute_property
+    def dofs(self):
+        "List of dofs in the field axes"
+        return tuple(key for key in self.axes if key in self.lattice.dofs)
 
     @compute_property
     def indeces(self):
