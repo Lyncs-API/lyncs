@@ -2,13 +2,15 @@
 Base class of the Field type that implements
 the interface to the Lattice class.
 """
+# pylint: disable=C0303,C0330
 
 __all__ = [
     "BaseField",
 ]
 
 import re
-from collections import Counter, OrderedDict
+from collections import Counter
+from numpy import arange
 from .types.base import FieldType
 from ..utils import default_repr, compute_property
 
@@ -65,7 +67,7 @@ class BaseField:
             if isinstance(self, ftype)
         )
 
-        for name, ftype in self.types:
+        for _, ftype in self.types:
             try:
                 ftype.__init__(self, **kwargs)
             except AttributeError:
@@ -137,15 +139,20 @@ class BaseField:
         def get_size(key):
             axis = re.sub("_[0-9]+$", "", key)
             if key in self.coords:
-                return len(np.arange(self.lattice[axis])[self.coords[key]])
-            else:
-                return self.lattice[axis]
+                return len(arange(self.lattice[axis])[self.coords[key]])
+            return self.lattice[axis]
 
         return tuple((key, get_size(key)) for key in self.indeces)
 
+    def __dir__(self):
+        attrs = set(super().__dir__())
+        for _, ftype in self.types:
+            attrs.update((key for key in dir(ftype) if not key.startswith("_")))
+        return sorted(attrs)
+
     def __getattr__(self, key):
         "Looks up for methods in the field types"
-        for ftype in self.types.values():
+        for _, ftype in self.types:
             if isinstance(self, ftype):
                 try:
                     return getattr(ftype, key).__get__(self)
