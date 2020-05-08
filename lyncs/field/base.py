@@ -11,11 +11,13 @@ __all__ = [
 import re
 from collections import Counter
 from numpy import arange
+from itertools import permutations
+from tunable import TunableClass, tunable_property
 from .types.base import FieldType
 from ..utils import default_repr, compute_property
 
 
-class BaseField:
+class BaseField(TunableClass):
     """
     Base class of the Field type that implements
     the interface to the Lattice class and deduce
@@ -51,12 +53,14 @@ class BaseField:
         coords = coords or ()
 
         if isinstance(field, BaseField):
+            super().__init__(field)
             self._lattice = (lattice or field.lattice).freeze()
             self._axes = self.lattice.expand(axes or field.axes)
             self._coords = self.lattice.coordinates.resolve(
                 *coords, **dict(field.coords)
             )
         else:
+            super().__init__()
             self._lattice = (lattice or default_lattice()).freeze()
             self._axes = self.lattice.expand(axes or ())
             self._coords = self.lattice.coordinates.resolve(*coords)
@@ -90,7 +94,7 @@ class BaseField:
 
     @property
     def axes(self):
-        "List of axes of the field. Order is not significant. See field.axes_order."
+        "List of axes of the field. Order is not significant. See indeces_order."
         return self._axes
 
     @compute_property
@@ -122,9 +126,14 @@ class BaseField:
 
         return tuple(indeces)
 
-    @compute_property
+    @tunable_property
+    def indeces_order(self):
+        "Order of the field indeces"
+        return permutations(self.indeces)
+
+    @property
     def types(self):
-        "List of field types that the field is instance of ordered per relevance"
+        "List of field types that the field is instance of, ordered per relevance"
         return self._types
 
     @property
