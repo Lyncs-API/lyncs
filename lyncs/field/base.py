@@ -12,7 +12,7 @@ import re
 from collections import Counter
 from numpy import arange
 from itertools import permutations
-from tunable import TunableClass, tunable_property
+from tunable import TunableClass, tunable_property, derived_property
 from .types.base import FieldType
 from ..utils import default_repr, compute_property
 
@@ -131,16 +131,6 @@ class BaseField(TunableClass):
         "Order of the field indeces"
         return permutations(self.indeces)
 
-    @property
-    def types(self):
-        "List of field types that the field is instance of, ordered per relevance"
-        return self._types
-
-    @property
-    def coords(self):
-        "List of coordinates of the field."
-        return self._coords
-
     @compute_property
     def shape(self):
         "Returns the list of indeces with size. Order is not significant."
@@ -152,6 +142,22 @@ class BaseField(TunableClass):
             return self.lattice[axis]
 
         return tuple((key, get_size(key)) for key in self.indeces)
+
+    @derived_property(indeces_order)
+    def ordered_shape(self):
+        "Shape of the field after fixing the indeces_order"
+        shape = dict(self.shape)
+        return tuple(shape[key] for key in self.indeces_order)
+
+    @property
+    def types(self):
+        "List of field types that the field is instance of, ordered per relevance"
+        return self._types
+
+    @property
+    def coords(self):
+        "List of coordinates of the field."
+        return self._coords
 
     def __dir__(self):
         attrs = set(super().__dir__())
