@@ -10,9 +10,9 @@ __all__ = [
 
 import re
 from collections import Counter
-from numpy import arange
 from itertools import permutations
-from tunable import TunableClass, tunable_property, derived_property
+from numpy import arange
+from tunable import TunableClass, tunable_property, derived_property, Function
 from .types.base import FieldType
 from ..utils import default_repr, compute_property
 
@@ -28,7 +28,9 @@ class BaseField(TunableClass):
 
     __repr__ = default_repr
 
-    def __init__(self, field=None, axes=None, lattice=None, coords=None, **kwargs):
+    def __init__(
+        self, field=None, value=None, axes=None, lattice=None, coords=None, **kwargs
+    ):
         """
         Initializes the field class.
         
@@ -36,10 +38,14 @@ class BaseField(TunableClass):
         ----------
         field: Field
             If given, then the missing parameters are deduced from it.
+        value: Tunable
+            The underlying value of the field. Not for the faint of heart.
         axes: list(str)
             List of axes of the field.
         lattice: Lattice
             The lattice on which the field is defined.
+        coords: list/dict
+            Coordinates of the field.
         kwargs: dict
             Extra parameters that will be passed to the field types.
         """
@@ -53,16 +59,14 @@ class BaseField(TunableClass):
         coords = coords or ()
 
         if isinstance(field, BaseField):
-            super().__init__(field)
             self._lattice = (lattice or field.lattice).freeze()
             self._axes = self.lattice.expand(axes or field.axes)
             self._coords = self.lattice.coordinates.resolve(
                 *coords, **dict(field.coords)
             )
         else:
-            super().__init__()
             self._lattice = (lattice or default_lattice()).freeze()
-            self._axes = self.lattice.expand(axes or ())
+            self._axes = self.lattice.expand(axes or lattice.dims)
             self._coords = self.lattice.coordinates.resolve(*coords)
 
         self._types = tuple(
@@ -86,6 +90,25 @@ class BaseField(TunableClass):
                 reverse=True,
             )
         )
+
+        super().__init__()
+        self.value = value if value is not None else self.backend.initialize(field)
+
+        for key, val in kwargs.items():
+            try:
+                setattr(self, key, val)
+            except AttributeError:
+                continue
+
+        if isinstance(field, BaseField) and self.coords != field.coords:
+            self.value = self.backend.getitem(self.coords, field.coords)
+        elif self.coords:
+            self.value = self.backend.getitem(self.coords)
+
+    @property
+    def backend(self):
+        "The backend that implements computations. BaseField has a dummy backend."
+        return DummyBackEnd(self)
 
     @property
     def lattice(self):
@@ -152,7 +175,7 @@ class BaseField(TunableClass):
     @property
     def types(self):
         "List of field types that the field is instance of, ordered per relevance"
-        return self._types
+        return getattr(self, "_types", ())
 
     @property
     def coords(self):
@@ -167,6 +190,9 @@ class BaseField(TunableClass):
 
     def __getattr__(self, key):
         "Looks up for methods in the field types"
+        if key == "_types":
+            raise AttributeError
+
         for _, ftype in self.types:
             if isinstance(self, ftype):
                 try:
@@ -174,12 +200,103 @@ class BaseField(TunableClass):
                 except AttributeError:
                     continue
 
-        raise AttributeError
+        raise AttributeError("%s not found" % key)
+
+    def __setattr__(self, key, val):
+        "Looks up for methods in the field types"
+        for _, ftype in self.types:
+            if isinstance(self, ftype):
+                try:
+                    getattr(ftype, key).__set__(self, val)
+                except AttributeError:
+                    continue
+
+        super().__setattr__(key, val)
 
     @property
     def type(self):
         "Name of the Field. Equivalent to the most relevant field type."
         return self.types[0][0]
 
+    def copy(self, **kwargs):
+        "Creates a shallow copy of the field"
+        return type(self)(self, **kwargs)
+
+    def __getitem__(self, coords):
+        return self.copy(coords=coords)
+
+    def __setitem__(self, coords, value):
+        if not isinstance(coords, tuple):
+            coords = (coords,)
+        self.value = self.backend.setitem(
+            self.lattice.coordinates.resolve(*coords), value
+        )
+
 
 FieldType.Field = BaseField
+
+
+def default_operator(key, doc=None):
+    "Default implementation of a field operator"
+
+    def method(self, *args, **kwargs):
+        return self.copy(value=getattr(self.backend, key)(*args, **kwargs))
+
+    method.__name__ = key
+    if doc:
+        method.__doc__ = doc
+
+    return method
+
+
+OPERATORS = (
+    ("__abs__",),
+    ("__add__",),
+    ("__radd__",),
+    ("__eq__",),
+    ("__gt__",),
+    ("__ge__",),
+    ("__lt__",),
+    ("__le__",),
+    ("__mod__",),
+    ("__rmod__",),
+    ("__mul__",),
+    ("__rmul__",),
+    ("__ne__",),
+    ("__neg__",),
+    ("__pow__",),
+    ("__rpow__",),
+    ("__sub__",),
+    ("__rsub__",),
+    ("__truediv__",),
+    ("__rtruediv__",),
+    ("__floordiv__",),
+    ("__rfloordiv__",),
+    ("__divmod__",),
+    ("__rdivmod__",),
+)
+
+for (op,) in OPERATORS:
+    setattr(BaseField, op, default_operator(op))
+
+
+class DummyBackEnd:
+    "Dummy backend for the field class"
+
+    def __init__(self, field):
+        self.field = field
+
+    def initialize(self, field):
+        "Initializes the field value"
+        if isinstance(field, BaseField):
+            return field.value
+        if field is None:
+            return self.field.indeces_order
+        return self.init(self.field)
+
+    def __getattr__(self, value):
+        def attr(*args, **kwargs):
+            raise NotImplementedError("%s not implemented" % value)
+
+        attr.__name__ = value
+        return Function(attr, label=value, uid=self.field.uid, args=[self.field.value])
