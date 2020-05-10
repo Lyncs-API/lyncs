@@ -1,6 +1,7 @@
 """
 Some recurring utils used all along the package
 """
+# pylint: disable=C0303,C0330
 
 __all__ = [
     "to_list",
@@ -10,6 +11,7 @@ __all__ = [
     "compute_property",
 ]
 
+from types import MethodType
 from copy import copy
 from inspect import signature, _empty
 
@@ -35,14 +37,17 @@ def default_repr(self):
             else:
                 arg_eq = key + " = "
 
+            val = getattr(self, key)
+            if isinstance(val, MethodType):
+                continue
+            val = repr(getattr(self, key)).replace(
+                "\n", "\n" + pad + " " * (len(arg_eq))
+            )
+
             if found_first:
                 ret += ",\n" + pad
             else:
                 found_first = True
-
-            val = repr(getattr(self, key)).replace(
-                "\n", "\n" + pad + " " * (len(arg_eq))
-            )
             ret += arg_eq + val
     ret += ")"
     return ret
@@ -64,13 +69,14 @@ def add_parameters_to_doc(doc, doc_params):
 
     return "\n".join(doc) + doc_params
 
+
 def get_parameters_doc(doc):
     """
     Extracts the documentation of the parameters
     """
     found = False
     parameters = []
-    for i, line in enumerate(doc.split("\n")):
+    for line in doc.split("\n"):
         words = line.split()
         if not found and len(words) == 1 and words[0].startswith("Parameter"):
             found = True
@@ -100,7 +106,7 @@ def add_kwargs_of(fnc):
             ):
                 args.append(key)
             elif val.kind == val.VAR_POSITIONAL:
-                args.append("*"+key)
+                args.append("*" + key)
             elif val.kind == val.VAR_KEYWORD:
                 var_kwargs = key
             else:
@@ -110,7 +116,7 @@ def add_kwargs_of(fnc):
             var_kwargs is not False
         ), "Cannot append kwargs to a function without **kwargs."
 
-        keys = [key for key,val in kwargs]
+        keys = [key for key, val in kwargs]
         kwargs += [
             (key, val.default)
             for key, val in signature(fnc).parameters.items()
@@ -119,13 +125,14 @@ def add_kwargs_of(fnc):
             and key not in keys
         ]
 
-        args1 = list(args)
-        args.extend(("%s=%s" % (key,val) for key,val in kwargs))
-        args.append("**"+var_kwargs)
-        
+        args.extend(("%s=%s" % (key, val) for key, val in kwargs))
+        args.append("**" + var_kwargs)
+
         args = ", ".join(args)
         fnc2.__dict__["__wrapped__"] = eval("lambda %s: None" % (args))
-        fnc2.__doc__ = add_parameters_to_doc(fnc.__doc__, get_parameters_doc(fnc2.__doc__))
+        fnc2.__doc__ = add_parameters_to_doc(
+            fnc.__doc__, get_parameters_doc(fnc2.__doc__)
+        )
         return fnc2
 
     return decorator
