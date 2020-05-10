@@ -59,12 +59,14 @@ class BaseField(TunableClass):
         coords = coords or ()
 
         if isinstance(field, BaseField):
+            super().__init__(field if value is None else value)
             self._lattice = (lattice or field.lattice).freeze()
             self._axes = self.lattice.expand(axes or field.axes)
             self._coords = self.lattice.coordinates.resolve(
                 *coords, **dict(field.coords)
             )
         else:
+            super().__init__(value)
             self._lattice = (lattice or default_lattice()).freeze()
             self._axes = self.lattice.expand(axes or lattice.dims)
             self._coords = self.lattice.coordinates.resolve(*coords)
@@ -91,8 +93,8 @@ class BaseField(TunableClass):
             )
         )
 
-        super().__init__()
-        self.value = value if value is not None else self.backend.initialize(field)
+        if value is None and not isinstance(field, BaseField):
+            self.value = self.backend.initialize(field)
 
         for key, val in kwargs.items():
             try:
@@ -236,15 +238,27 @@ class BaseField(TunableClass):
 FieldType.Field = BaseField
 
 
-def default_operator(key, doc=None):
+def default_operator(key, fnc=None, doc=None):
     "Default implementation of a field operator"
 
     def method(self, *args, **kwargs):
-        return self.copy(value=getattr(self.backend, key)(*args, **kwargs))
+        if isinstance(self, BaseField):
+            return self.copy(value=getattr(self.backend, key)(*args, **kwargs))
+
+        if fnc is None:
+            raise TypeError(
+                "First argument of %s must be of type Field. Given %s"
+                % (key, type(self).__name__)
+            )
+
+        return fnc(self, *args, **kwargs)
 
     method.__name__ = key
+
     if doc:
         method.__doc__ = doc
+    elif fnc:
+        method.__doc__ = fnc.__doc__
 
     return method
 
@@ -288,8 +302,6 @@ class DummyBackEnd:
 
     def initialize(self, field):
         "Initializes the field value"
-        if isinstance(field, BaseField):
-            return field.value
         if field is None:
             return self.field.indeces_order
         return self.init(self.field)
