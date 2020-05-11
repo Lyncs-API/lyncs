@@ -230,7 +230,7 @@ class BaseField(TunableClass):
         if not isinstance(coords, tuple):
             coords = (coords,)
         self.update(
-            self.backend.setitem(self.lattice.coordinates.resolve(*coords), value)
+            **self.backend.setitem(self.lattice.coordinates.resolve(*coords), value)
         )
 
 
@@ -308,16 +308,17 @@ class BaseBackend:
             return dict(value=self.field.indeces_order)
         return self.init(self.field)
 
-    def not_implemented(self, *args, **kwargs):
-        raise NotImplementedError("%s not implemented" % value)
-
     def __getattr__(self, value):
+        def method(self, *args, **kwargs):
+            raise NotImplementedError("%s not implemented" % value)
+
         def attr(*args, **kwargs):
             return dict(
-                value=Function(
-                    self.not_implemented, label=value, args=[self.field.value],
-                )(*args, **kwargs)
+                value=Function(method, label=value, args=[self.field.value],)(
+                    *args, **kwargs
+                )
             )
 
         attr.__name__ = value
+        method.__name__ = value
         return attr
