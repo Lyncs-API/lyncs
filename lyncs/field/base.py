@@ -77,12 +77,6 @@ class BaseField(TunableClass):
             if isinstance(self, ftype)
         )
 
-        for _, ftype in self.types:
-            try:
-                ftype.__init__(self, **kwargs)
-            except AttributeError:
-                continue
-
         # ordering types by relevance
         self._types = tuple(
             (name, ftype)
@@ -94,23 +88,21 @@ class BaseField(TunableClass):
         )
 
         if value is None and not isinstance(field, BaseField):
-            self.value = self.backend.initialize(field)
+            self.update(**self.backend.initialize(field))
 
-        for key, val in kwargs.items():
-            try:
-                setattr(self, key, val)
-            except AttributeError:
-                continue
+        if (
+            value is None
+            and isinstance(field, BaseField)
+            and self.coords != field.coords
+        ):
+            self.update(**self.backend.getitem(self.coords, field.coords))
 
-        if isinstance(field, BaseField) and self.coords != field.coords:
-            self.value = self.backend.getitem(self.coords, field.coords)
-        elif self.coords:
-            self.value = self.backend.getitem(self.coords)
+        self.update(**kwargs)
 
     @property
     def backend(self):
-        "The backend that implements computations. BaseField has a dummy backend."
-        return DummyBackEnd(self)
+        "Returns the computational backend of the field (dummy)."
+        return BaseBackend(self)
 
     @property
     def lattice(self):
@@ -172,7 +164,7 @@ class BaseField(TunableClass):
     def ordered_shape(self):
         "Shape of the field after fixing the indeces_order"
         shape = dict(self.shape)
-        return tuple(shape[key] for key in self.indeces_order)
+        return tuple(shape[key] for key in self.indeces_order.value)
 
     @property
     def types(self):
@@ -220,9 +212,16 @@ class BaseField(TunableClass):
         "Name of the Field. Equivalent to the most relevant field type."
         return self.types[0][0]
 
+    def update(self, **kwargs):
+        "Updates field attributes"
+        assert kwargs.pop("field", self) is self, "Cannot update the field itself"
+        for key, val in kwargs.items():
+            setattr(self, key, val)
+
     def copy(self, **kwargs):
         "Creates a shallow copy of the field"
-        return type(self)(self, **kwargs)
+        kwargs.setdefault("field", self)
+        return type(self)(**kwargs)
 
     def __getitem__(self, coords):
         return self.copy(coords=coords)
@@ -230,8 +229,8 @@ class BaseField(TunableClass):
     def __setitem__(self, coords, value):
         if not isinstance(coords, tuple):
             coords = (coords,)
-        self.value = self.backend.setitem(
-            self.lattice.coordinates.resolve(*coords), value
+        self.update(
+            self.backend.setitem(self.lattice.coordinates.resolve(*coords), value)
         )
 
 
@@ -243,7 +242,10 @@ def default_operator(key, fnc=None, doc=None):
 
     def method(self, *args, **kwargs):
         if isinstance(self, BaseField):
-            return self.copy(value=getattr(self.backend, key)(*args, **kwargs))
+            back = getattr(self.backend, key)(*args, **kwargs)
+            if isinstance(back, tuple):
+                return tuple((self.copy(**attrs) for attrs in back))
+            return self.copy(**back)
 
         if fnc is None:
             raise TypeError(
@@ -294,8 +296,8 @@ for (op,) in OPERATORS:
     setattr(BaseField, op, default_operator(op))
 
 
-class DummyBackEnd:
-    "Dummy backend for the field class"
+class BaseBackend:
+    "Base backend for the field class"
 
     def __init__(self, field):
         self.field = field
@@ -303,12 +305,19 @@ class DummyBackEnd:
     def initialize(self, field):
         "Initializes the field value"
         if field is None:
-            return self.field.indeces_order
+            return dict(value=self.field.indeces_order)
         return self.init(self.field)
+
+    def not_implemented(self, *args, **kwargs):
+        raise NotImplementedError("%s not implemented" % value)
 
     def __getattr__(self, value):
         def attr(*args, **kwargs):
-            raise NotImplementedError("%s not implemented" % value)
+            return dict(
+                value=Function(
+                    self.not_implemented, label=value, args=[self.field.value],
+                )(*args, **kwargs)
+            )
 
         attr.__name__ = value
-        return Function(attr, label=value, uid=self.field.uid, args=[self.field.value])
+        return attr
