@@ -12,7 +12,13 @@ import re
 from collections import Counter
 from itertools import permutations
 from numpy import arange
-from tunable import TunableClass, tunable_property, derived_property, Function
+from tunable import (
+    TunableClass,
+    tunable_property,
+    derived_property,
+    Function,
+    derived_method,
+)
 from .types.base import FieldType
 from ..utils import default_repr, compute_property
 
@@ -147,6 +153,35 @@ class BaseField(TunableClass):
     def indeces_order(self):
         "Order of the field indeces"
         return permutations(self.indeces)
+
+    def get_indeces(self, *axes):
+        "Returns the corresponding indeces to the given axes/indeces/dimensions"
+        indeces = []
+        for axis in axes:
+            if axis in self.indeces:
+                indeces.append(axis)
+            else:
+                for _ax in self.lattice.expand(axis):
+                    count = self.axes.count(_ax)
+                    if count == 1:
+                        indeces.append(_ax)
+                    else:
+                        indeces.extend([_ax + "_" + str(i) for i in range(count)])
+        return tuple(set(indeces))
+
+    @derived_method(indeces_order)
+    def get_indeces_index(self, *axes):
+        "Returns the position of indeces of the given axes/indeces/dimensions"
+        indeces = self.get_indeces(*axes)
+        return tuple(
+            (i for i, idx in enumerate(self.indeces_order.value) if idx in indeces)
+        )
+
+    @derived_method(indeces_order)
+    def get_indeces_order(self, *axes):
+        "Returns the ordered indeces of the given axes/indeces/dimensions"
+        indeces = self.get_indeces(*axes)
+        return tuple((idx for idx in self.indeces_order.value if idx in indeces))
 
     @compute_property
     def shape(self):
