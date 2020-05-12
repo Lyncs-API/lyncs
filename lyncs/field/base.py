@@ -121,6 +121,11 @@ class BaseField(TunableClass):
         return self._axes
 
     @compute_property
+    def axes_counts(self):
+        "Tuple of axes and counts in the field"
+        return tuple(Counter(self.axes).items())
+
+    @compute_property
     def dims(self):
         "List of dims in the field axes"
         return tuple(key for key in self.axes if key in self.lattice.dims)
@@ -136,7 +141,7 @@ class BaseField(TunableClass):
         List of indeces of the field. Similar to .axes but repeted axis are numerated.
         Order is not significant. See field.indeces_order.
         """
-        counts = Counter(self.axes)
+        counts = dict(self.axes_counts)
         idxs = {axis: 0 for axis in counts}
         indeces = []
         for axis in self.axes:
@@ -154,20 +159,29 @@ class BaseField(TunableClass):
         "Order of the field indeces"
         return permutations(self.indeces)
 
+    def get_axes(self, *axes):
+        "Returns the corresponding field axes to the given axes/dimensions"
+        indeces = set()
+        for axis in axes:
+            for _ax in self.lattice.expand(axis):
+                if _ax in self.axes:
+                    indeces.add(_ax)
+        return tuple(indeces)
+
     def get_indeces(self, *axes):
         "Returns the corresponding indeces to the given axes/indeces/dimensions"
-        indeces = []
+        indeces = set()
         for axis in axes:
             if axis in self.indeces:
-                indeces.append(axis)
+                indeces.add(axis)
             else:
                 for _ax in self.lattice.expand(axis):
                     count = self.axes.count(_ax)
                     if count == 1:
-                        indeces.append(_ax)
+                        indeces.add(_ax)
                     else:
-                        indeces.extend([_ax + "_" + str(i) for i in range(count)])
-        return tuple(set(indeces))
+                        indeces.update([_ax + "_" + str(i) for i in range(count)])
+        return tuple(indeces)
 
     @derived_method(indeces_order)
     def get_indeces_index(self, *axes):
