@@ -105,7 +105,7 @@ def trace_indeces(*field_indeces, axes=None):
     if not axes:
         return (field_indeces,)
 
-    for key, val in tuple(field_indeces[-1]):
+    for key, val in tuple(field_indeces[-1].items()):
         if key in axes and len(val) > 1:
             idx = val[-1]
             if len(val) > 2:
@@ -215,15 +215,12 @@ def dot(
                     if len(new_field_indeces[key]) == 0:
                         del new_field_indeces[key]
 
-    field_indeces.append(new_field_indeces)
+    field_indeces.append(dict(new_field_indeces))
 
     if trace:
         field_indeces = trace_indeces(*field_indeces, axes=closed_indeces)
 
-    if debug:
-        return field_indeces
-
-    return einsum(*fields, indeces=field_indeces)
+    return einsum(*fields, indeces=field_indeces, debug=debug)
 
 
 def trace(field, *axes):
@@ -258,3 +255,70 @@ def trace(field, *axes):
 
     indeces = trace_indeces(indeces, indeces, axes=axes)
     return einsum(field, indeces=indeces)
+
+
+def einsum(*fields, indeces=None, debug=False):
+    """
+    Performs the einsum product between fields.
+    
+    Parameters:
+    -----------
+    fields: Field
+        List of fields to perform the einsum between.
+    indeces: list of dicts of indeces
+        List of dictionaries for each field plus one for output field if not scalar.
+        Each dictionary should have a key per axis of the field.
+        Every key should have a list of indeces for every repetition of the axis in the field.
+        Indeces must be integers.
+
+    Examples:
+    ---------
+    einsum(vector, vector, indeces=[{'x':0,'y':1,'z':2,'t':3,'spin':4,'color':5},
+                                    {'x':0,'y':1,'z':2,'t':3,'spin':4,'color':6},
+                                    {'x':0,'y':1,'z':2,'t':3,'color':(5,6)} ])
+
+      [x,y,z,t,spin,color] x [x,y,z,t,spin,color] -> [x,y,z,t,color,color]
+      [0,1,2,3, 4  ,  5  ] x [0,1,2,3, 4  ,  6  ] -> [0,1,2,3,  5  ,  6  ]
+    """
+    if not all((isinstance(field, ArrayField) for field in fields)):
+        raise ValueError("All fields must be of type field.")
+
+    if isinstance(indeces, dict):
+        indeces = (indeces,)
+    indeces = tuple(indeces)
+
+    if not len(indeces) in (len(fields), len(fields) + 1):
+        raise ValueError("A set of indeces per field must be given.")
+
+    if not all((isinstance(idxs, dict) for idxs in indeces)):
+        raise TypeError("Each set of indeces list must be a dictionary")
+
+    for idxs in indeces:
+        for key, val in list(idxs.items()):
+            if isinstance(val, int):
+                continue
+            if len(val) == 1:
+                idxs[key] = val[0]
+                continue
+            for i, _id in enumerate(val):
+                new_key = key + "_%d" % i
+                assert new_key not in idxs
+                idxs[new_key] = _id
+            del idxs[key]
+
+    for (i, field) in enumerate(fields):
+        if not set(indeces[i].keys()) == set(field.indeces):
+            raise ValueError(
+                """
+                Indeces must be specified for all the field axes/indeces.
+                For field %d,
+                Got indeces: %s
+                Field indeces: %s
+                """
+                % (i, tuple(indeces[i].keys()), field.indeces)
+            )
+
+    if debug:
+        return indeces
+
+    return field[0].copy(**field[0].backend.einsum(*fields[1:], indeces=indeces))
