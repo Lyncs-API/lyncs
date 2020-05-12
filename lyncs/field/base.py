@@ -67,14 +67,14 @@ class BaseField(TunableClass):
         if isinstance(field, BaseField):
             super().__init__(field if value is None else value)
             self._lattice = (lattice or field.lattice).freeze()
-            self._axes = self.lattice.expand(axes or field.axes)
+            self._axes = self.lattice.expand(field.axes if axes is None else axes)
             self._coords = self.lattice.coordinates.resolve(
                 *coords, **dict(field.coords)
             )
         else:
             super().__init__(value)
             self._lattice = (lattice or default_lattice()).freeze()
-            self._axes = self.lattice.expand(axes or lattice.dims)
+            self._axes = self.lattice.expand(lattice.dims if axes is None else axes)
             self._coords = self.lattice.coordinates.resolve(*coords)
 
         self._types = tuple(
@@ -188,7 +188,7 @@ class BaseField(TunableClass):
         "Returns the list of indeces with size. Order is not significant."
 
         def get_size(key):
-            axis = re.sub("_[0-9]+$", "", key)
+            axis = index_to_axis(key)
             if key in self.coords:
                 return len(arange(self.lattice[axis])[self.coords[key]])
             return self.lattice[axis]
@@ -270,6 +270,11 @@ class BaseField(TunableClass):
 
 
 FieldType.Field = BaseField
+
+
+def index_to_axis(index):
+    "Converts and field index to a field axis"
+    return re.sub("_[0-9]+$", "", key)
 
 
 def default_operator(key, fnc=None, doc=None):
