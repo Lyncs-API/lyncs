@@ -5,11 +5,13 @@ Set of contraction functions for array fields
 
 __all__ = [
     "dot",
+    "trace",
 ]
 
 from collections import defaultdict
 from ..utils import count
 from .array import ArrayField, NumpyBackend
+from .base import index_to_axis
 
 
 def dot_indeces(*fields, closed_indeces=None, open_indeces=None):
@@ -222,3 +224,37 @@ def dot(
         return field_indeces
 
     return einsum(*fields, indeces=field_indeces)
+
+
+def trace(field, *axes):
+    """
+    Performs the trace over repeated axes contracting the outer-most index with the inner-most.
+    
+    Parameters
+    ----------
+    axes: str
+        If given, only the listed axes are traced.
+    """
+
+    if (
+        len(axes) == 2
+        and set(axes) <= set(field.indeces)
+        and index_to_axis(axes[0]) == index_to_axis(axes[1])
+    ):
+        return field.copy(**field.backend.trace(*axes))
+
+    _, axes, _ = dot_prepare(field, axes=axes)
+
+    counts = dict(field.axes_counts)
+    axes = tuple(axis for axis in axes if counts[axis] > 1)
+
+    if not axes:
+        return field
+
+    counter = count()
+    indeces = {}
+    for axis, num in counts.items():
+        indeces[axis] = tuple(counter(num))
+
+    indeces = trace_indeces(indeces, indeces, axes=axes)
+    return einsum(field, indeces=indeces)
