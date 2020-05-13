@@ -2,12 +2,14 @@
 Array class of the Field type that implements
 the interface to the numpy array functions
 """
-# pylint: disable=C0303,C0330
+# pylint: disable=C0103,C0303,C0330
 
 __all__ = [
     "ArrayField",
     "NumpyBackend",
     "prepare",
+    "zeros_like",
+    "ones_like",
 ]
 
 from functools import wraps
@@ -27,7 +29,7 @@ class ArrayField(BaseField):
     default_dtype = "complex128"
 
     @add_kwargs_of(BaseField.__init__)
-    def __init__(self, field=None, dtype=None, copy=False, zeros=False, **kwargs):
+    def __init__(self, field=None, dtype=None, copy=False, **kwargs):
         """
         Initializes the field class.
         
@@ -54,13 +56,15 @@ class ArrayField(BaseField):
 
         super().__init__(field, **kwargs)
 
-        if isinstance(field, ArrayField) and self.dtype != field.dtype:
-            self.value = self.backend.astype(self.dtype)
+        if (
+            isinstance(field, ArrayField)
+            and self.dtype != field.dtype
+            and "value" not in kwargs
+        ):
+            self.update(**self.backend.astype(self.dtype))
 
-        if zeros:
-            self.value = self.backend.zeros()
-        elif copy:
-            self.value = self.backend.copy()
+        if copy:
+            self.update(**self.backend.copy())
 
     @property
     def backend(self):
@@ -78,8 +82,138 @@ class ArrayField(BaseField):
             self._dtype = np.dtype(value)
             self.value = self.backend.astype(self.dtype)
 
+    def astype(self, dtype):
+        "Changes the dtype of the field."
+        if self.dtype == dtype:
+            return self
+        return self.copy(dtype=dtype)
+
+    def zeros(self, dtype=None):
+        "Returns the field with all components put to zero"
+        return self.copy(**self.backend.zeros_like(dtype))
+
+    def ones(self, dtype=None):
+        "Returns the field with all components put to one"
+        return self.copy(**self.backend.ones_like(dtype))
+
+    def reshape(self, *args, **kwargs):
+        """
+        *WARNING*: reshape not implemented.
+
+        Does it make sense to reshape a field?
+        If yes, please open a detailed issue on github.com/sbacchio/lyncs
+        and it will be discussed. Thanks! <sbacchio>
+        """
+        raise NotImplementedError(ArrayField.reshape.__doc__)
+
+    def reorder(self, *indeces_order):
+        "Changes the indeces_order of the field."
+        if not set(indeces_order) == set(self.indeces):
+            raise ValueError("All the indeces need to be specified in the reordering")
+        return self.copy(**self.backend.reorder(*indeces_order))
+
+    def squeeze(self, *axes, **kwargs):
+        "Removes axes with size one."
+        axes, kwargs = uniform_input_axes(*axes, **kwargs)
+        indeces = self.get_indeces(*axes) if axes else self.indeces
+        shape = dict(self.shape)
+        indeces = tuple(key for key, val in shape if key in indeces and val == 1)
+        return self.copy(**self.backend.squeeze(*indeces))
+
+    @property
+    def real(self):
+        "Returns the real part of the field"
+        # pylint: disable=E0602
+        return real(self)
+
+    @property
+    def imag(self):
+        "Returns the imaginary part of the field"
+        # pylint: disable=E0602
+        return imag(self)
+
+    @property
+    def T(self):
+        "Transposes the field."
+        return self.transpose()
+
+    def transpose(self, *axes, **axes_order):
+        """
+        Transposes the matrix/tensor indeces of the field.
+
+        *NOTE*: this is conceptually different from numpy.transpose
+                where all the axes are transposed.
+
+        Parameters
+        ----------
+        axes: str
+            If given, only the listed axes are transposed, 
+            otherwise all the tensorial axes are changed.
+            By default the order of the indeces is inverted.
+        axes_order: dict
+            Same as axes, but specifying the reordering of the indeces.
+            The key must be one of the axis and the value the order using
+            an index per repetition of the axis numbering from 0,1,...
+        """
+        counts = dict(self.axes_counts)
+        for (axis, val) in axes_order.items():
+            if not axis in counts:
+                raise ValueError("Axis %s not in field" % (axis))
+            if not len(val) == counts[axis]:
+                raise ValueError(
+                    "%d indeces have been given for axis %s but it has count %d"
+                    % (len(val), axis, counts[axis])
+                )
+            if not set(val) == set(range(counts[axis])):
+                raise ValueError(
+                    "%s has been given for axis %s. Not a permutation of %s."
+                    % (val, axis, tuple(range(counts[axis])))
+                )
+
+        axes = [
+            axis
+            for axis in self.get_axes(axes)
+            if axis not in axes_order and counts[axis] > 1
+        ]
+
+        if not axes and not axes_order:
+            return self
+        return self.copy(**self.backend.transpose(*axes, **axes_order))
+
+    @property
+    def H(self):
+        "Conjugate transpose of the field."
+        return self.dagger()
+
+    def dagger(self, *axes, **axes_order):
+        """
+        Conjugate and transposes the matrix/tensor indeces.
+        See help(transpose) for more details.
+        """
+        return self.conj().transpose(*axes, **axes_order)
+
+    def __matmul__(self, other):
+        return self.dot(other)
+
+    def roll(self, shift, *axes, **kwargs):
+        """
+        Rolls axis of shift.
+        
+        Parameters:
+        -----------
+        shift: int or list of int
+            The number of places by which elements are shifted.
+        axis: str or list of str
+            Axis/axes to roll of shift amount.
+        """
+        axes, kwargs = uniform_input_axes(*axes, **kwargs)
+        indeces = self.get_indeces(axes)
+        return self.copy(**self.backend.roll(shift, *indeces, **kwargs))
+
 
 FieldType.Field = ArrayField
+zeros_like = default_operator("zeros", fnc=np.zeros_like)
+ones_like = default_operator("ones", fnc=np.ones_like)
 
 
 class NumpyBackend(BaseBackend):
@@ -102,6 +236,28 @@ class NumpyBackend(BaseBackend):
         if not field.shape == self.field.ordered_shape:
             raise ValueError("Shape of field and given array do not match")
         return dict(value=tunable(field, label="input"))
+
+    def copy(self):
+        "Returns a copy of the field"
+        return dict(value=function(np.copy, self.field.value))
+
+    def astype(self, dtype):
+        "Changes the dtype of the field"
+        return dict(value=function(np.ndarray.astype, self.field.value, dtype))
+
+    def zeros_like(self, dtype):
+        "Fills the field with zeros"
+        return dict(
+            dtype=dtype,
+            value=function(np.zeros_like, self.field.value, dtype=dtype),
+        )
+
+    def ones_like(self, dtype):
+        "Fills the field with ones"
+        return dict(
+            dtype=dtype,
+            value=function(np.ones_like, self.field.value, dtype=dtype),
+        )
 
 
 def prepare(*fields, elemwise=True, **kwargs):
@@ -175,17 +331,24 @@ def wrap_ufunc(fnc):
     return wrapped
 
 
+def uniform_input_axes(*axes, **kwargs):
+    "Auxiliary function to uniform the axes input parameters"
+    axes = list(axes)
+    tmp = kwargs.pop("axis", [])
+    axes.extend([tmp] if isinstance(tmp, str) else tmp)
+    tmp = kwargs.pop("axes", [])
+    axes.extend([tmp] if isinstance(tmp, str) else tmp)
+
+    return tuple(axes), kwargs
+
+
 def wrap_reduction(fnc):
+    "Wrapper for reduction functions"
     @wraps(fnc)
     def wrapped(self, *axes, **kwargs):
 
         # Extracting the axes to reduce
-        axes = list(axes)
-        tmp = kwargs.pop("axis", [])
-        axes.extend([tmp] if isinstance(tmp, str) else tmp)
-        tmp = kwargs.pop("axes", [])
-        axes.extend([tmp] if isinstance(tmp, str) else tmp)
-
+        axes, kwargs = uniform_input_axes(*axes, **kwargs)
         dtype = fnc(np.ones((1,), dtype=self.field.dtype), **kwargs).dtype
         if axes:
             reduce = self.field.get_indeces(*axes)
@@ -204,7 +367,7 @@ def wrap_reduction(fnc):
             axes=axes,
             value=function(fnc, self.field.value, **kwargs),
             dtype=dtype,
-            # indeces_order=indeces_order,
+            indeces_order=indeces_order,
         )
 
     return wrapped
@@ -339,3 +502,30 @@ for (reduction,) in REDUCTIONS:
     if is_member:
         setattr(ArrayField, reduction, globals()[reduction])
     setattr(NumpyBackend, reduction, wrap_reduction(getattr(np, reduction)))
+
+
+def wrap_method(fnc):
+    "Wrapper for field methods"
+    @wraps(fnc)
+    def wrapped(field, *args, **kwargs):
+        if not isinstance(field, ArrayField):
+            raise TypeError("First argument of %s must be a field." % fnc.__name__)
+        return fnc(field, *args, **kwargs)
+
+    return wrapped
+
+
+METHODS = (
+    ("astype",),
+    ("reorder",),
+    ("squeeze",),
+    ("transpose",),
+    ("dagger",),
+    ("roll",),
+)
+
+for (method,) in METHODS:
+    __all__.append(method)
+    globals()[method] = wrap_method(getattr(ArrayField, method))
+
+setattr(NumpyBackend, "astype", wrap_ufunc(np.ndarray.astype))
