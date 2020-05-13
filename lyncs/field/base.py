@@ -20,7 +20,7 @@ from tunable import (
     Permutation,
 )
 from .types.base import FieldType
-from ..utils import default_repr, compute_property
+from ..utils import default_repr, compute_property, expand_indeces
 
 
 class BaseField(TunableClass):
@@ -62,20 +62,19 @@ class BaseField(TunableClass):
             lattice, Lattice
         ), "lattice must be of Lattice type"
 
-        coords = coords or ()
-
+        self._coords = ()
         if isinstance(field, BaseField):
             super().__init__(field if value is None else value)
             self._lattice = (lattice or field.lattice).freeze()
             self._axes = self.lattice.expand(field.axes if axes is None else axes)
             self._coords = self.lattice.coordinates.resolve(
-                *coords, **dict(field.coords)
+                coords, field=field, **dict(field.coords)
             )
         else:
             super().__init__(value)
             self._lattice = (lattice or default_lattice()).freeze()
             self._axes = self.lattice.expand(lattice.dims if axes is None else axes)
-            self._coords = self.lattice.coordinates.resolve(*coords)
+            self._coords = self.lattice.coordinates.resolve(coords, field=self)
 
         self._types = tuple(
             (name, ftype)
@@ -103,7 +102,7 @@ class BaseField(TunableClass):
 
         if not isinstance(field, BaseField):
             assert (
-                not self.lock_value
+                not self.locked_value
             ), "Does it make sense to give a value without a field?"
             self.update(**self.backend.initialize(field))
 
@@ -207,8 +206,9 @@ class BaseField(TunableClass):
 
         def get_size(key):
             axis = index_to_axis(key)
-            if key in self.coords:
-                return len(arange(self.lattice[axis])[self.coords[key]])
+            coords = dict(self.coords)
+            if key in coords:
+                return len(list(expand_indeces(coords[key])))
             return self.lattice[axis]
 
         return tuple((key, get_size(key)) for key in self.indeces)
