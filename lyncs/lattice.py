@@ -252,6 +252,13 @@ class Lattice:
         )
 
     @property
+    def axes(self):
+        "Complete list of axes of the lattice"
+        keys = set(self.dims.keys())
+        keys.update(self.dofs.keys())
+        return tuple(sorted(keys))
+
+    @property
     def dimensions(self):  # RENAME ?
         "Complete list of dimensions of the lattice"
         if self._dimensions is not None:
@@ -271,8 +278,15 @@ class Lattice:
 
     def expand(self, *dimensions):
         "Expand the list of dimensions into the fundamental dimensions and degrees of freedom"
-        assert dimensions in self
+        if dimensions not in self:
+            raise ValueError("Given unknown dimension: %s" % dimensions)
         return tuple(self._expand(dimensions).split())
+
+    def get_axis_range(self, axis):
+        "Returns the range of the given axis"
+        if axis not in self.axes:
+            raise ValueError("Axis %s is not a lattice axes" % axis)
+        return range(self[axis])
 
     @property
     def coordinates(self):
