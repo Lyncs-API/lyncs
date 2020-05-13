@@ -93,15 +93,19 @@ class BaseField(TunableClass):
             )
         )
 
-        if value is None and not isinstance(field, BaseField):
-            self.update(**self.backend.initialize(field))
+        self.locked_value = value is not None
 
-        if (
-            value is None
-            and isinstance(field, BaseField)
-            and self.coords != field.coords
-        ):
-            self.update(**self.backend.getitem(self.coords, field.coords))
+        if isinstance(field, BaseField):
+            if self.coords != field.coords:
+                self.update(**self.backend.getitem(self.coords, field.coords))
+            if dict(self.axes_counts) != dict(field.axes_counts):
+                self.update(**self.backend.reshape(self.axes, field.axes))
+
+        if not isinstance(field, BaseField):
+            assert (
+                not self.lock_value
+            ), "Does it make sense to give a value without a field?"
+            self.update(**self.backend.initialize(field))
 
         self.update(**kwargs)
 
@@ -271,6 +275,46 @@ class BaseField(TunableClass):
         "Creates a shallow copy of the field"
         kwargs.setdefault("field", self)
         return type(self)(**kwargs)
+
+    def prepare(self, *fields, elemwise=True, **kwargs):
+        """
+        Prepares a set of fields for a calculation and 
+        creates the field where to store the output.
+        
+        Returns:
+        --------
+        fields, out_field
+        where fields is a tuple of the fields to use in the calculation
+        and out_field is the Field type where to store the result
+        
+        Parameters
+        ----------
+        fields: Field(s)
+            List of fields involved in the calculation.
+        elemwise: bool
+            Whether the calculation is performed element-wise,
+            i.e. all the fields must have the same axes and in the same order.
+        kwargs: dict
+            List of field parameters fixed in the calculation (e.g. specific indeces_order)
+        """
+        assert all([isinstance(field, type(self)) for field in fields])
+        # TODO: add more checks for compatibility
+
+        if not fields and not kwargs:
+            return self
+        if not fields:
+            # TODO: should check kwargs and do a copy only if needed
+            return self.copy(**kwargs)
+
+        fields = (self,) + list(fields)
+
+        if elemwise:
+            # TODO: should reorder the field giving the same order
+            pass
+
+        # TODO: should check for coords and restrict all the fields to the intersection
+
+        return fields
 
     def __getitem__(self, coords):
         return self.copy(coords=coords)

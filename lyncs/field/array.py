@@ -7,7 +7,6 @@ the interface to the numpy array functions
 __all__ = [
     "ArrayField",
     "NumpyBackend",
-    "prepare",
     "zeros_like",
     "ones_like",
 ]
@@ -37,8 +36,6 @@ class ArrayField(BaseField):
         ----------
         dtype: str or numpy dtype compatible
             Data type of the field.
-        zeros: bool
-            Initializes the field with zeros.
         copy: bool
             Whether the input field should be copied. 
             If False the field is copied only if needed
@@ -248,51 +245,14 @@ class NumpyBackend(BaseBackend):
     def zeros_like(self, dtype):
         "Fills the field with zeros"
         return dict(
-            dtype=dtype,
-            value=function(np.zeros_like, self.field.value, dtype=dtype),
+            dtype=dtype, value=function(np.zeros_like, self.field.value, dtype=dtype),
         )
 
     def ones_like(self, dtype):
         "Fills the field with ones"
         return dict(
-            dtype=dtype,
-            value=function(np.ones_like, self.field.value, dtype=dtype),
+            dtype=dtype, value=function(np.ones_like, self.field.value, dtype=dtype),
         )
-
-
-def prepare(*fields, elemwise=True, **kwargs):
-    """
-    Prepares a set of fields for a calculation and 
-    creates the field where to store the output.
-
-    Returns:
-    --------
-    fields, out_field
-    where fields is a tuple of the fields to use in the calculation
-    and out_field is the Field type where to store the result
-
-    Parameters
-    ----------
-    fields: Field(s)
-       List of fields involved in the calculation.
-    elemwise: bool
-       Wether the calculation is performed element-wise,
-       i.e. all the fields must have the common axes in the same order
-       and the other axes with shape 1.
-    kwargs: dict
-       List of field parameters fixed in the calculation (e.g. specific indeces_order)
-    """
-    from builtins import all
-
-    assert all([isinstance(field, ArrayField) for field in fields])
-
-    fields = tuple(fields)
-
-    # TODO
-    # - should compute the final dtype if not given
-    # - should reshape the fields in case of element-wise operation
-    # - should take into account coords
-    return fields, fields[0]
 
 
 def wrap_ufunc(fnc):
@@ -311,10 +271,12 @@ def wrap_ufunc(fnc):
         trial = fnc(*tmp_args, **kwargs)
 
         # Uniforming the fields involved
-        idxs = ((i, arg) for i, arg in enumerate(args) if isinstance(arg, ArrayField))
-        fields, out_field = prepare(*(idx[1] for idx in idxs), elemwise=True)
+        i_fields = (
+            (i, arg) for i, arg in enumerate(args) if isinstance(arg, ArrayField)
+        )
+        fields = self.field.prepare(*(field for (_, field) in i_fields), elemwise=True)
 
-        for (i, _), field in zip(idxs, fields):
+        for (i, _), field in zip(i_fields, fields):
             args[i] = field.value
 
         # Calling ufunc
@@ -322,11 +284,11 @@ def wrap_ufunc(fnc):
 
         if isinstance(trial, tuple):
             return tuple(
-                dict(field=out_field, value=res[i], dtype=part.dtype)
+                dict(field=fields[0], value=res[i], dtype=part.dtype)
                 for i, part in enumerate(trial)
             )
 
-        return dict(field=out_field, value=res, dtype=trial.dtype)
+        return dict(field=fields[0], value=res, dtype=trial.dtype)
 
     return wrapped
 
@@ -344,6 +306,7 @@ def uniform_input_axes(*axes, **kwargs):
 
 def wrap_reduction(fnc):
     "Wrapper for reduction functions"
+
     @wraps(fnc)
     def wrapped(self, *axes, **kwargs):
 
@@ -506,6 +469,7 @@ for (reduction,) in REDUCTIONS:
 
 def wrap_method(fnc):
     "Wrapper for field methods"
+
     @wraps(fnc)
     def wrapped(field, *args, **kwargs):
         if not isinstance(field, ArrayField):
