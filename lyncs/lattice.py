@@ -32,14 +32,15 @@ class Lattice:
     last_defined = None
     default_dims_labels = ["t", "x", "y", "z"]
     theories = {
-        "QCD": {"spin": 4, "color": 3, "labels": {"gauge": ["color"],},},
+        "QCD": {"spin": 4, "color": 3, "groups": {"gauge": ["color"],},},
     }
 
     __slots__ = [
         "_dims",
         "_dofs",
         "_labels",
-        "_dimensions",
+        "_groups",
+        "_keys",
         "_coordinates",
         "_fields",
         "_frozen",
@@ -61,49 +62,53 @@ class Lattice:
                     % key
                 )
 
-    def __init__(
-        self, dims=4, dofs="QCD", labels=None,
-    ):
+    def __init__(self, dims=4, dofs="QCD", labels=None, groups=None):
         """
         Lattice initializer.
 
         Notation
         --------
-        Dimensions: (dims) are labelled axes of the Lattice which size is variable.
+        Dimensions: (dims) are axes of the Lattice which size is variable.
             The volume of the lattice, i.e. number of sites, is given by the product
             of dims. Dims are usually the axes where one can parallelize on.
-        Degrees of Freedoms: (dofs) are labelled local axes with fixed size.
-        Axes: Any of the dimensions or degree of freedoms.
+        Degrees of Freedoms: (dofs) are local axes with fixed size (commonly small).
+        Labels: (labels) are labelled axes of the lattice. Similar to dofs but instead
+            of having a size they have a list of unique labels (str, int, hashable)
+        Axes: Any of the above, i.e. list of axes of the field.
 
         Parameters
         ----------
         dims: int, list or dict (default 4)
-            Dimensions (default labels: t,x,y,z if less than 5 or dim0/1/2...)
-            - int: number of dimensions. The default labels will be used.
-            - list: size of the dimensions. The default labels will be used.
-            - dict: labels of the dimensions (keys) and sizes (value)
+            Dimensions (default names: t,x,y,z if less than 5 or dim0/1/2...)
+            - int: number of dimensions. The default names will be used.
+            - list: size of the dimensions. The default names will be used.
+            - dict: names of the dimensions (keys) and sizes (value)
         dofs: str, int, list, dict (default QCD)
             Specifies local degree of freedoms. (default naming: dof0/1/2...)
-            - str: one of the labeled theories (QCD,...). See Lattice.theories
+            - str: one of the defined theories (QCD,...). See Lattice.theories
             - int: size of one degree of freedom
             - list: size per dimension of the degrees of freedom
-            - dict: labels of the degree of freedom (keys) and sizes (value)
+            - dict: names of the degree of freedom (keys) and sizes (value)
         labels: dict
-            Re-labelling or grouping of the dimensions. Each entry of the dictionary
-            must contain a str or a list of strings which name refers to either another
-            label or one of the dimensions or degree of freedoms.
+            Labeled dimensions of the lattice. A dictionary with keys the names of the
+            dimensions and with values the list of labels. The labels must be unique.
+            The size of the dimension is the number of labels.
+        groups: dict
+            Grouping of the dimensions. Each entry of the dictionary must contain a str
+            or a list of strings that refer to either another label a dimension.
         """
         self._frozen = False
         self._dims = {}
         self._dofs = {}
         self._labels = {}
-        self._dimensions = None
+        self._groups = {}
+        self._keys = None
         self._coordinates = Coordinates(self)
         self._fields = None
         self.dims = dims
         self.dofs = dofs
-        if labels is not None:
-            self.labels = labels
+        self.labels = labels
+        self.groups = groups
 
         Lattice.last_defined = self
 
@@ -122,7 +127,8 @@ class Lattice:
             self._dims = MappingProxyType(self._dims)
             self._dofs = MappingProxyType(self._dofs)
             self._labels = MappingProxyType(self._labels)
-            self._dimensions = self.dimensions
+            self._groups = MappingProxyType(self._groups)
+            self._keys = self.keys
             self._fields = self.fields
             self._frozen = True
 
@@ -139,11 +145,6 @@ class Lattice:
         "Map of lattice dimensions and their size"
         return getattr(self, "_dims", {})
 
-    @property
-    def n_dims(self):
-        "Number of dimensions"
-        return len(self._dims)
-
     @dims.setter
     def dims(self, value):
 
@@ -158,10 +159,11 @@ class Lattice:
 
             self._dims = value.copy()
 
-            if self.n_dims > 1:
-                dirs = list(self.dims)
-                self.labels.setdefault("time", dirs[0])
-                self.labels.setdefault("space", dirs[1:])
+            dirs = list(self.dims)
+            self.labels.setdefault("dirs", tuple("dir_" + d for d in dirs))
+            if len(dirs) > 1:
+                self.groups.setdefault("time", (dirs[0],))
+                self.groups.setdefault("space", tuple(dirs[1:]))
 
         elif isinstance(value, int):
             assert value > 0, "Non-positive number of dimensions"
@@ -183,11 +185,6 @@ class Lattice:
         "Map of lattice degrees of freedom and their size"
         return getattr(self, "_dofs", {})
 
-    @property
-    def n_dofs(self):
-        "Number of lattice degrees of freedom"
-        return len(self._dofs)
-
     @dofs.setter
     def dofs(self, value):
 
@@ -205,9 +202,11 @@ class Lattice:
         elif isinstance(value, str):
             assert value in Lattice.theories, "Unknown dofs name"
             value = Lattice.theories[value].copy()
-            props = value.pop("labels", {})
+            labels = value.pop("labels", {})
+            groups = value.pop("groups", {})
             self.dofs = value
-            self.labels = props
+            self.labels = labels
+            self.groups = groups
 
         elif isinstance(value, int):
             assert value > 0, "Non-positive size for dof"
@@ -226,19 +225,40 @@ class Lattice:
 
     @labels.setter
     def labels(self, value):
-        if not value:
-            self._labels = {}
+        if value is None:
+            return
 
-        elif isinstance(value, (dict, MappingProxyType)):
+        if isinstance(value, (dict, MappingProxyType)):
+            Lattice.check_keys(value.keys())
+            assert all(
+                (len(set(v)) == len(v) for v in value.values())
+            ), "Labels must be unique"
+            value = {key: tuple(val) for key, val in value.items()}
+            self._labels.update(value)
+
+        else:
+            assert False, "Not allowed type %s" % type(value)
+
+    @property
+    def groups(self):
+        "List of groups of the lattice"
+        return getattr(self, "_groups", {})
+
+    @groups.setter
+    def groups(self, value):
+        if value is None:
+            return
+
+        if isinstance(value, (dict, MappingProxyType)):
             Lattice.check_keys(value.keys())
             assert all(
                 (v in self for v in value.values())
             ), """
-            Each property must be either a str, a list or a tuple
+            Each group must be either a str, a list or a tuple
             of attributes of the lattice object. See lattice.dimensions.
             """
-
-            self._labels.update(value)
+            value = {key: tuple(val) for key, val in value.items()}
+            self._groups.update(value)
 
         else:
             assert False, "Not allowed type %s" % type(value)
@@ -249,44 +269,54 @@ class Lattice:
             and self.dims == other.dims
             and self.dofs == other.dofs
             and self.labels == other.labels
+            and self.groups == other.groups
         )
 
     @property
     def axes(self):
         "Complete list of axes of the lattice"
-        keys = set(self.dims.keys())
-        keys.update(self.dofs.keys())
-        return tuple(sorted(keys))
+        axes = set(self.dims.keys())
+        axes.update(self.dofs.keys())
+        axes.update(self.labels.keys())
+        return tuple(sorted(axes))
 
     @property
-    def dimensions(self):  # RENAME ?
-        "Complete list of dimensions of the lattice"
-        if self._dimensions is not None:
-            return self._dimensions
-        keys = set(["n_dims", "dims", "n_dofs", "dofs"])
+    def keys(self):
+        "Complete list of keys of the lattice"
+        if self._keys is not None:
+            return self._keys
+        keys = set(["dims", "dofs"])
         keys.update(self.dims.keys())
         keys.update(self.dofs.keys())
         keys.update(self.labels.keys())
+        keys.update(self.groups.keys())
         return tuple(sorted(keys))
-
-    def _expand(self, dims):
-        if isinstance(dims, str):
-            if isinstance(self[dims], int):
-                return dims
-            return " ".join((self._expand(dim) for dim in self[dims]))
-        return " ".join((self._expand(dim) for dim in dims))
 
     def expand(self, *dimensions):
         "Expand the list of dimensions into the fundamental dimensions and degrees of freedom"
-        if dimensions not in self:
-            raise ValueError("Given unknown dimension: %s" % dimensions)
-        return tuple(self._expand(dimensions).split())
+        for dim in dimensions:
+            if dim not in self:
+                raise ValueError("Given unknown dimension: %s" % dimensions)
+            if dim in self.dims or dim in self.dofs or dim in self.labels:
+                yield dim
+            else:
+                yield from self.expand(*self[dim])
 
     def get_axis_range(self, axis):
         "Returns the range of the given axis"
         if axis not in self.axes:
-            raise ValueError("Axis %s is not a lattice axes" % axis)
+            raise ValueError("%s is not a lattice axis" % axis)
+        if axis in self.labels:
+            return self.labels[axis]
         return range(self[axis])
+
+    def get_axis_size(self, axis):
+        "Returns the range of the given axis"
+        if axis not in self.axes:
+            raise ValueError("%s is not a lattice axis" % axis)
+        if axis in self.labels:
+            return len(self.labels[axis])
+        return self[axis]
 
     @property
     def coordinates(self):
@@ -310,14 +340,14 @@ class Lattice:
         return partial(FieldType.Field, lattice=self)
 
     def __dir__(self):
-        keys = set(dir(type(self)))
-        keys.update(self.dimensions)
-        keys.update(self.fields)
-        return sorted(keys)
+        attrs = set(dir(type(self)))
+        attrs.update(self.keys)
+        attrs.update(self.fields)
+        return sorted(attrs)
 
     def __contains__(self, key):
         if isinstance(key, str):
-            return key in self.dimensions
+            return key in self.keys
         return all((k in self for k in key))
 
     def __getitem__(self, key):
@@ -332,6 +362,8 @@ class Lattice:
                 return self.dofs[key]
             if key in self.labels:
                 return self.labels[key]
+            if key in self.groups:
+                return self.groups[key]
             if key in self.fields:
                 return partial(FieldType.s[key], lattice=self)
 
@@ -354,24 +386,24 @@ class Lattice:
                 dofs = self.dofs
                 dofs[key] = value
                 self.dofs = dofs
-            elif key in self.labels:
+            elif key in self.groups:
                 if isinstance(value, (int)):
-                    for attr in self.labels[key]:
+                    for attr in self.groups[key]:
                         self[attr] = value
                 elif isinstance(value, (list, tuple)) and all(
                     (isinstance(v, int) for v in value)
                 ):
                     assert len(value) == len(
-                        self.labels[key]
+                        self.groups[key]
                     ), """
                     When setting a property with a list, the length must match.
                     """
-                    for attr, val in zip(self.labels[key], value):
+                    for attr, val in zip(self.groups[key], value):
                         self[attr] = val
                 else:
-                    labels = self.labels
-                    labels[key] = value
-                    self.labels = labels
+                    groups = self.groups
+                    groups[key] = value
+                    self.groups = groups
             else:
                 raise
 
@@ -392,16 +424,27 @@ class Lattice:
         return self.__copy__()
 
     def __copy__(self):
-        return Lattice(dims=self.dims, dofs=self.dofs, labels=self.labels)
+        # TODO: copy also coordinates
+        return Lattice(
+            dims=self.dims, dofs=self.dofs, groups=self.groups, labels=self.labels
+        )
 
     def __getstate__(self):
         return (
             self._dims.copy(),
             self._dofs.copy(),
             self._labels.copy(),
+            self._groups.copy(),
             self._coordinates.copy(),
             self.frozen,
         )
 
     def __setstate__(self, state):
-        self._dims, self._dofs, self._labels, self._coordinates, self.frozen = state
+        (
+            self._dims,
+            self._dofs,
+            self._labels,
+            self._groups,
+            self._coordinates,
+            self.frozen,
+        ) = state
