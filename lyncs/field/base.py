@@ -10,7 +10,6 @@ __all__ = [
 
 import re
 from collections import Counter
-from itertools import permutations
 from numpy import arange
 from tunable import (
     TunableClass,
@@ -18,6 +17,7 @@ from tunable import (
     derived_property,
     Function,
     derived_method,
+    Permutation,
 )
 from .types.base import FieldType
 from ..utils import default_repr, compute_property
@@ -157,7 +157,7 @@ class BaseField(TunableClass):
     @tunable_property
     def indeces_order(self):
         "Order of the field indeces"
-        return permutations(self.indeces)
+        return Permutation(self.indeces)
 
     def get_axes(self, *axes):
         "Returns the corresponding field axes to the given axes/dimensions"
@@ -282,13 +282,16 @@ class BaseField(TunableClass):
             **self.backend.setitem(self.lattice.coordinates.resolve(*coords), value)
         )
 
+    def __pos__(self):
+        return self
+
 
 FieldType.Field = BaseField
 
 
 def index_to_axis(index):
     "Converts and field index to a field axis"
-    return re.sub("_[0-9]+$", "", key)
+    return re.sub("_[0-9]+$", "", index)
 
 
 def default_operator(key, fnc=None, doc=None):
