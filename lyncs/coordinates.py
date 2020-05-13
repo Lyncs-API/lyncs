@@ -5,10 +5,26 @@ Coordinates on the Lattice
 
 import random
 from itertools import chain
-
+from collections import Iterable
 
 class Coordinates(dict):
     "Coordinates class"
+
+    @classmethod
+    def format_coords(cls, *coords, **kwargs):
+        "Returns a list of args, kwargs from the given coords"
+        args = []
+        for coord in coords:
+            if isinstance(coord, str):
+                args.append(coord)
+            elif isinstance(coord, dict):
+                kwargs.update(coord)
+            else:
+                assert isinstance(coord, Iterable), "coords can be str, dict or iterables"
+                _args, _kwargs = cls.format_coords(*coord)
+                args.extend(_args)
+                kwargs.update(_kwargs)
+        return tuple(args), kwargs
 
     def __init__(self, lattice):
         self.lattice = lattice
