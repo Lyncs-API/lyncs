@@ -56,7 +56,9 @@ class Coordinates(dict):
         "Returns a list of values for the coordinate"
         vals = set()
         for value in values:
-            if isinstance(value, (int, str, range)):
+            if value is None:
+                vals.add(value)
+            elif isinstance(value, (int, str, range)):
                 tmp = tuple(expand_indeces(value))
                 if interval is not None and not set(tmp).issubset(interval):
                     raise ValueError("Value %s out of interval" % value)
@@ -67,6 +69,10 @@ class Coordinates(dict):
                 vals.update(interval[value])
             else:
                 vals.update(cls.format_values(*value, interval=interval, compact=False))
+        if None in vals:
+            if len(vals) == 1:
+                return None
+            vals.remove(None)
         assert not vals.difference(interval), "Trivial assertion"
         if compact:
             if vals == set(interval):
@@ -140,7 +146,12 @@ class Coordinates(dict):
         if field is not None:
             for key, val in field.coords:
                 if key in resolved:
-                    if not set(expand_indeces(val)) >= set(
+                    if resolved[key] is None:
+                        if len(set(expand_indeces(val))) > 1:
+                            raise ValueError(
+                                "None can only be assigned to an axis of size 1."
+                            )
+                    elif not set(expand_indeces(val)) >= set(
                         expand_indeces(resolved[key])
                     ):
                         raise ValueError(

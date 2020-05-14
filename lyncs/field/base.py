@@ -101,13 +101,13 @@ class BaseField(TunableClass):
             if dict(self.axes_counts) != dict(field.axes_counts):
                 self.update(**self.backend.reshape(self.axes, field.axes))
 
+        self.update(**kwargs)
+
         if not isinstance(field, BaseField):
             assert (
                 not self.locked_value
             ), "Does it make sense to give a value without a field?"
             self.update(**self.backend.initialize(field))
-
-        self.update(**kwargs)
 
     @property
     def backend(self):
@@ -173,6 +173,10 @@ class BaseField(TunableClass):
     def indeces_order(self):
         "Order of the field indeces"
         return Permutation(self.indeces)
+
+    @indeces_order.setter
+    def indeces_order(self, value):
+        self.update(**self.backend.reorder(*value))
 
     def reshape(self, *axes):
         """
@@ -249,6 +253,8 @@ class BaseField(TunableClass):
             axis = index_to_axis(key)
             coords = dict(self.coords)
             if key in coords:
+                if coords[key] is None:
+                    return 1
                 return len(tuple(expand_indeces(coords[key])))
             return self.lattice.get_axis_size(axis)
 
