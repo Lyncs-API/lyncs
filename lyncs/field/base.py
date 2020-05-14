@@ -79,7 +79,6 @@ class BaseField(TunableClass):
             )
             self._coords = self.lattice.coordinates.resolve(coords, field=self)
 
-        print(self.axes,)
         self._types = tuple(
             (name, ftype)
             for name, ftype in FieldType.s.items()
@@ -135,12 +134,23 @@ class BaseField(TunableClass):
     @compute_property
     def dims(self):
         "List of dims in the field axes"
-        return tuple(key for key in self.axes if key in self.lattice.dims)
+        return tuple(
+            key for key in self.indeces if index_to_axis(key) in self.lattice.dims
+        )
 
     @compute_property
     def dofs(self):
         "List of dofs in the field axes"
-        return tuple(key for key in self.axes if key in self.lattice.dofs)
+        return tuple(
+            key for key in self.indeces if index_to_axis(key) in self.lattice.dofs
+        )
+
+    @compute_property
+    def labels(self):
+        "List of labels in the field axes"
+        return tuple(
+            key for key in self.indeces if index_to_axis(key) in self.lattice.labels
+        )
 
     @compute_property
     def indeces(self):

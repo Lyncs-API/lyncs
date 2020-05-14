@@ -52,7 +52,7 @@ def expand_indeces(*indeces):
     Opposite of compact_indeces. Expands all the indeces in the list.
     """
     for idx in indeces:
-        if isinstance(idx, int):
+        if isinstance(idx, (int, str)):
             yield idx
         else:
             yield from expand_indeces(*idx)

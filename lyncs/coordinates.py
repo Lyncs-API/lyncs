@@ -56,7 +56,7 @@ class Coordinates(dict):
         "Returns a list of values for the coordinate"
         vals = set()
         for value in values:
-            if isinstance(value, (int, range)):
+            if isinstance(value, (int, str, range)):
                 tmp = tuple(expand_indeces(value))
                 if interval is not None and not set(tmp).issubset(interval):
                     raise ValueError("Value %s out of interval" % value)
@@ -69,6 +69,8 @@ class Coordinates(dict):
                 vals.update(cls.format_values(*value, interval=interval, compact=False))
         assert not vals.difference(interval), "Trivial assertion"
         if compact:
+            if vals == set(interval):
+                return slice(None)
             vals = compact_indeces(*vals)
         return tuple(vals)
 
@@ -117,7 +119,7 @@ class Coordinates(dict):
         if not keys and not coords:
             return ()
         for key in keys:
-            self.add_coords(coords, **self.deduce(key))
+            self.add_coords(coords, **self.deduce(key, field=field))
 
         resolved = {}
         for key, val in coords.items():
@@ -143,7 +145,7 @@ class Coordinates(dict):
 
         return resolved
 
-    def deduce(self, key):
+    def deduce(self, key, field=None):
         """
         Deduces the coordinates from the key.
         
@@ -155,5 +157,13 @@ class Coordinates(dict):
         """
         if key in self:
             return self[key]
+
+        # Looking up in lattice labels
+        for name, labels in self.lattice.labels.items():
+            if field is not None and name not in field.labels:
+                continue
+            if key in labels:
+                return {name: key}
+
         # TODO
         raise NotImplementedError
