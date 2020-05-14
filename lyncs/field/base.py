@@ -10,7 +10,6 @@ __all__ = [
 
 import re
 from collections import Counter
-from numpy import arange
 from tunable import (
     TunableClass,
     tunable_property,
@@ -66,16 +65,21 @@ class BaseField(TunableClass):
         if isinstance(field, BaseField):
             super().__init__(field if value is None else value)
             self._lattice = (lattice or field.lattice).freeze()
-            self._axes = self.lattice.expand(field.axes if axes is None else axes)
+            self._axes = tuple(
+                self.lattice.expand(field.axes if axes is None else axes)
+            )
             self._coords = self.lattice.coordinates.resolve(
                 coords, field=field, **dict(field.coords)
             )
         else:
             super().__init__(value)
             self._lattice = (lattice or default_lattice()).freeze()
-            self._axes = self.lattice.expand(lattice.dims if axes is None else axes)
+            self._axes = tuple(
+                self.lattice.expand(lattice.dims if axes is None else axes)
+            )
             self._coords = self.lattice.coordinates.resolve(coords, field=self)
 
+        print(self.axes,)
         self._types = tuple(
             (name, ftype)
             for name, ftype in FieldType.s.items()
@@ -87,7 +91,7 @@ class BaseField(TunableClass):
             (name, ftype)
             for name, ftype in sorted(
                 self.types,
-                key=lambda item: len(self.lattice.expand(item[1].axes.expand)),
+                key=lambda item: len(tuple(self.lattice.expand(item[1].axes.expand))),
                 reverse=True,
             )
         )
@@ -208,8 +212,8 @@ class BaseField(TunableClass):
             axis = index_to_axis(key)
             coords = dict(self.coords)
             if key in coords:
-                return len(list(expand_indeces(coords[key])))
-            return self.lattice[axis]
+                return len(tuple(expand_indeces(coords[key])))
+            return self.lattice.get_axis_size(axis)
 
         return tuple((key, get_size(key)) for key in self.indeces)
 

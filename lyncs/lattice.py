@@ -299,8 +299,10 @@ class Lattice:
                 raise ValueError("Given unknown dimension: %s" % dimensions)
             if dim in self.dims or dim in self.dofs or dim in self.labels:
                 yield dim
-            else:
+            elif isinstance(dim, str):
                 yield from self.expand(*self[dim])
+            else:
+                yield from self.expand(*dim)
 
     def get_axis_range(self, axis):
         "Returns the range of the given axis"

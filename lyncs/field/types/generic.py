@@ -29,7 +29,7 @@ class Sites(Scalar):
 
 
 class Links(Sites):
-    __axes__ += ["n_dims"]
+    __axes__ += ["dirs"]
     # Oriented links
 
 
