@@ -93,30 +93,6 @@ class ArrayField(BaseField):
         "Returns the field with all components put to one"
         return self.copy(**self.backend.ones_like(dtype))
 
-    def reshape(self, *args, **kwargs):
-        """
-        *WARNING*: reshape not implemented.
-
-        Does it make sense to reshape a field?
-        If yes, please open a detailed issue on github.com/sbacchio/lyncs
-        and it will be discussed. Thanks! <sbacchio>
-        """
-        raise NotImplementedError(ArrayField.reshape.__doc__)
-
-    def reorder(self, *indeces_order):
-        "Changes the indeces_order of the field."
-        if not set(indeces_order) == set(self.indeces):
-            raise ValueError("All the indeces need to be specified in the reordering")
-        return self.copy(**self.backend.reorder(*indeces_order))
-
-    def squeeze(self, *axes, **kwargs):
-        "Removes axes with size one."
-        axes, kwargs = uniform_input_axes(*axes, **kwargs)
-        indeces = self.get_indeces(*axes) if axes else self.indeces
-        shape = dict(self.shape)
-        indeces = tuple(key for key, val in shape if key in indeces and val == 1)
-        return self.copy(**self.backend.squeeze(*indeces))
-
     @property
     def real(self):
         "Returns the real part of the field"

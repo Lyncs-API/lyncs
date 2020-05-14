@@ -117,6 +117,8 @@ class Coordinates(dict):
 
         keys, coords = self.format_coords(*keys, **coords)
         if not keys and not coords:
+            if field is not None:
+                return field.coords
             return ()
         for key in keys:
             coords = self.add_coords(coords, **self.deduce(key, field=field))

@@ -96,7 +96,7 @@ class BaseField(TunableClass):
         self.locked_value = value is not None
 
         if isinstance(field, BaseField):
-            if self.coords != field.coords:
+            if dict(self.coords) != dict(field.coords):
                 self.update(**self.backend.getitem(self.coords, field.coords))
             if dict(self.axes_counts) != dict(field.axes_counts):
                 self.update(**self.backend.reshape(self.axes, field.axes))
@@ -173,6 +173,35 @@ class BaseField(TunableClass):
     def indeces_order(self):
         "Order of the field indeces"
         return Permutation(self.indeces)
+
+    def reshape(self, *axes):
+        """
+        Reshapes the field changing the axes.
+        Note: only axes with size 1 can be removed and
+            new axes are added with size 1 and coord=None
+        """
+        return self.copy(axes=axes)
+
+    def reorder(self, *indeces_order):
+        "Changes the indeces_order of the field."
+        if not set(indeces_order) == set(self.indeces):
+            raise ValueError("All the indeces need to be specified in the reordering")
+        return self.copy(indeces_order=indeces_order)
+
+    def squeeze(self, *axes):
+        "Removes axes with size one."
+        indeces = self.get_indeces(*axes) if axes else self.indeces
+        axes = tuple(
+            index_to_axis(key)
+            for key, val in self.shape
+            if key not in indeces or val > 1
+        )
+        return self.copy(axes=axes)
+
+    def extend(self, *axes):
+        "Adds axes with size one (coord=None)."
+        axes = tuple(self.lattice.expand(*axes))
+        return self.copy(axes=self.axes + axes)
 
     def get_axes(self, *axes):
         "Returns the corresponding field axes to the given axes/dimensions"
