@@ -119,7 +119,7 @@ class Coordinates(dict):
         if not keys and not coords:
             return ()
         for key in keys:
-            self.add_coords(coords, **self.deduce(key, field=field))
+            coords = self.add_coords(coords, **self.deduce(key, field=field))
 
         resolved = {}
         for key, val in coords.items():
@@ -138,12 +138,17 @@ class Coordinates(dict):
         if field is not None:
             for key, val in field.coords:
                 if key in resolved:
-                    if not set(expand_indeces(val)) <= set(
+                    if not set(expand_indeces(val)) >= set(
                         expand_indeces(resolved[key])
                     ):
-                        raise ValueError
+                        raise ValueError(
+                            "%s = %s not in field coordinates that has %s = %s"
+                            % (key, resolved[key], key, val)
+                        )
+                else:
+                    resolved[key] = val
 
-        return resolved
+        return tuple(resolved.items())
 
     def deduce(self, key, field=None):
         """
@@ -156,7 +161,7 @@ class Coordinates(dict):
         "x=0"
         """
         if key in self:
-            return self[key]
+            return dict(self[key])
 
         # Looking up in lattice labels
         for name, labels in self.lattice.labels.items():

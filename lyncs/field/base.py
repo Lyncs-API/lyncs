@@ -68,9 +68,7 @@ class BaseField(TunableClass):
             self._axes = tuple(
                 self.lattice.expand(field.axes if axes is None else axes)
             )
-            self._coords = self.lattice.coordinates.resolve(
-                coords, field=field, **dict(field.coords)
-            )
+            self._coords = self.lattice.coordinates.resolve(coords, field=field)
         else:
             super().__init__(value)
             self._lattice = (lattice or default_lattice()).freeze()
@@ -331,13 +329,19 @@ class BaseField(TunableClass):
         return fields
 
     def __getitem__(self, coords):
-        return self.copy(coords=coords)
+        return self.get(coords)
+
+    def get(self, *keys, **coords):
+        return self.copy(coords=(keys, coords))
 
     def __setitem__(self, coords, value):
-        if not isinstance(coords, tuple):
-            coords = (coords,)
+        return self.set(value, coords)
+
+    def set(self, value, *keys, **coords):
         self.update(
-            **self.backend.setitem(self.lattice.coordinates.resolve(*coords), value)
+            **self.backend.setitem(
+                value, self.lattice.coordinates.resolve(*keys, **coords)
+            )
         )
 
     def __pos__(self):
