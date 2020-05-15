@@ -65,8 +65,8 @@ class BaseField(TunableClass):
         if isinstance(field, BaseField):
             super().__init__(field if value is None else value)
             self._lattice = (lattice or field.lattice).freeze()
-            self._axes = tuple(
-                self.lattice.expand(field.axes if axes is None else axes)
+            self._axes = (
+                field.axes if axes is None else tuple(self.lattice.expand(axes))
             )
             self._coords = self.lattice.coordinates.resolve(coords, field=field)
         else:
@@ -348,12 +348,10 @@ class BaseField(TunableClass):
         # TODO: add more checks for compatibility
 
         if not fields and not kwargs:
-            return self
+            return self, ()
         if not fields:
             # TODO: should check kwargs and do a copy only if needed
-            return self.copy(**kwargs)
-
-        fields = (self,) + list(fields)
+            return self.copy(**kwargs), ()
 
         if elemwise:
             # TODO: should reorder the field giving the same order
@@ -361,7 +359,7 @@ class BaseField(TunableClass):
 
         # TODO: should check for coords and restrict all the fields to the intersection
 
-        return fields
+        return self, fields
 
     def __getitem__(self, coords):
         return self.get(coords)
@@ -391,23 +389,47 @@ def index_to_axis(index):
     return re.sub("_[0-9]+$", "", index)
 
 
-def default_operator(key, fnc=None, doc=None):
-    "Default implementation of a field operator"
+def default_method(key, elemwise=True, fnc=None, doc=None):
+    """
+    Default implementation of a field operator
+    
+    Parameters
+    ----------
+    key: str
+        The key of the method
+    elemwise: bool
+        Whether the calculation is performed element-wise,
+        i.e. all the fields must have the same axes and in the same order.
+    fnc: callable
+        Fallback for the method in case self it is not a field
+    """
 
     def method(self, *args, **kwargs):
-        if isinstance(self, BaseField):
-            back = getattr(self.backend, key)(*args, **kwargs)
-            if isinstance(back, tuple):
-                return tuple((self.copy(**attrs) for attrs in back))
-            return self.copy(**back)
+        if not isinstance(self, BaseField):
+            if fnc is None:
+                raise TypeError(
+                    "First argument of %s must be of type Field. Given %s"
+                    % (key, type(self).__name__)
+                )
 
-        if fnc is None:
-            raise TypeError(
-                "First argument of %s must be of type Field. Given %s"
-                % (key, type(self).__name__)
-            )
+            return fnc(self, *args, **kwargs)
 
-        return fnc(self, *args, **kwargs)
+        # Uniforming the fields involved
+        args = list(args)
+        i_fields = (
+            (i, arg) for i, arg in enumerate(args) if isinstance(arg, BaseField)
+        )
+        self, fields = self.prepare(
+            *(field for (_, field) in i_fields), elemwise=elemwise
+        )
+
+        for (i, _), field in zip(i_fields, fields):
+            args[i] = field
+
+        result = getattr(self.backend, key)(*args, **kwargs)
+        if isinstance(result, tuple):
+            return tuple((self.copy(**attrs) for attrs in result))
+        return self.copy(**result)
 
     method.__name__ = key
 
@@ -417,6 +439,43 @@ def default_operator(key, fnc=None, doc=None):
         method.__doc__ = fnc.__doc__
 
     return method
+
+
+class BaseBackend:
+    "Base backend for the field class"
+
+    def __init__(self, field):
+        self.field = field
+
+    def initialize(self, field):
+        "Initializes the field value"
+        if field is None:
+            return dict(value=self.field.indeces_order.value)
+        return self.init(self.field)
+
+    def __getattr__(self, value):
+        def method(self, *args, **kwargs):
+            raise NotImplementedError("%s not implemented" % value)
+
+        def attr(*args, **kwargs):
+            return dict(
+                value=Function(method, label=value, args=[self.field.value],)(
+                    *args, **kwargs
+                )
+            )
+
+        attr.__name__ = value
+        method.__name__ = value
+        return attr
+
+
+def default_backend_operator(key):
+    def operator(self, *args, **kwargs):
+        args = (arg.value if isinstance(arg, BaseField) else arg for arg in args)
+        fnc = getattr(self.field.value, key)
+        return dict(value=fnc(*args, **kwargs))
+
+    return operator
 
 
 OPERATORS = (
@@ -442,37 +501,8 @@ OPERATORS = (
     ("__rtruediv__",),
     ("__floordiv__",),
     ("__rfloordiv__",),
-    ("__divmod__",),
-    ("__rdivmod__",),
 )
 
 for (op,) in OPERATORS:
-    setattr(BaseField, op, default_operator(op))
-
-
-class BaseBackend:
-    "Base backend for the field class"
-
-    def __init__(self, field):
-        self.field = field
-
-    def initialize(self, field):
-        "Initializes the field value"
-        if field is None:
-            return dict(value=self.field.indeces_order)
-        return self.init(self.field)
-
-    def __getattr__(self, value):
-        def method(self, *args, **kwargs):
-            raise NotImplementedError("%s not implemented" % value)
-
-        def attr(*args, **kwargs):
-            return dict(
-                value=Function(method, label=value, args=[self.field.value],)(
-                    *args, **kwargs
-                )
-            )
-
-        attr.__name__ = value
-        method.__name__ = value
-        return attr
+    setattr(BaseField, op, default_method(op))
+    setattr(BaseBackend, op, default_backend_operator(op))
