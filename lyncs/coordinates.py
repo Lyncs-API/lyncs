@@ -14,9 +14,8 @@ class Coordinates(dict):
     "Coordinates class"
 
     @classmethod
-    def add_coords(cls, coords=None, **kwargs):
+    def add_coords(cls, coords, **kwargs):
         "Add kwargs to coords where coords is a dict"
-        coords = coords or {}
         assert isinstance(coords, dict), "Coords is supposed to be a dict"
         for key, val in kwargs.items():
             if not isinstance(val, tuple):
@@ -27,28 +26,28 @@ class Coordinates(dict):
                 if not isinstance(coords[key], tuple):
                     coords[key] = (coords[key],)
                 coords[key] += val
-        return coords
 
     @classmethod
-    def format_coords(cls, *coords, **kwargs):
-        "Returns a list of args, kwargs from the given coords"
-        args = []
-        kwargs = cls.add_coords(**kwargs)
-        for coord in coords:
-            if coord is None:
+    def format_coords(cls, *keys, field=None, **coords):
+        "Returns a list of args, kwargs from the given keys and coords"
+        args = set()
+        kwargs = {}
+        cls.add_coords(kwargs, **coords)
+        for key in keys:
+            if key is None:
                 continue
-            if isinstance(coord, str):
-                args.append(coord)
-            elif isinstance(coord, dict):
-                kwargs = cls.add_coords(kwargs, **coord)
+            if isinstance(key, str):
+                args.add(key)
+            elif isinstance(key, dict):
+                cls.add_coords(kwargs, **key)
             else:
-                if not isinstance(coord, Iterable):
+                if not isinstance(key, Iterable):
                     raise TypeError(
-                        "coords can be str, dict or iterables. %s not accepted." % coord
+                        "keys can be str, dict or iterables. %s not accepted." % key
                     )
-                _args, _kwargs = cls.format_coords(*coord)
-                kwargs = cls.add_coords(kwargs, **_kwargs)
-                args.extend(_args)
+                _args, _kwargs = cls.format_coords(*key)
+                cls.add_coords(kwargs, **_kwargs)
+                args.update(_args)
         return tuple(args), kwargs
 
     @classmethod
@@ -124,21 +123,33 @@ class Coordinates(dict):
         keys, coords = self.format_coords(*keys, **coords)
         if not keys and not coords:
             if field is not None:
-                return field.coords
+                return ((key, val) for key, val in field.coords if key in field.indeces)
             return ()
-        for key in keys:
-            coords = self.add_coords(coords, **self.deduce(key, field=field))
 
+        # Adding to resolved all the coordinates
         resolved = {}
-        for key, val in coords.items():
+        for axis, val in coords.items():
             if field is not None:
-                keys = field.get_indeces(key)
-                if not keys:
-                    raise ValueError("Index '%s' not in field" % key)
+                indeces = field.get_indeces(axis)
+                if not indeces:
+                    raise ValueError("Index '%s' not in field" % axis)
             else:
-                keys = self.lattice.expand(key)
-            resolved = self.add_coords(resolved, **{idx: val for idx in keys})
+                indeces = self.lattice.expand(axis)
+            self.add_coords(resolved, **{idx: val for idx in indeces})
 
+        for key in keys:
+            coords = self.deduce(key)
+            if field is not None:
+                coords = {
+                    index: val
+                    for axis, val in coords.items()
+                    for index in field.get_indeces(axis)
+                }
+                if not coords:
+                    raise ValueError("'%s' not in field" % key)
+            self.add_coords(resolved, **coords)
+
+        # Checking the coordinates values
         for key, val in resolved.items():
             interval = self.lattice.get_axis_range(index_to_axis(key))
             resolved[key] = self.format_values(*val, interval=interval)
@@ -158,12 +169,17 @@ class Coordinates(dict):
                             "%s = %s not in field coordinates that has %s = %s"
                             % (key, resolved[key], key, val)
                         )
-                else:
+                elif key in field.indeces:
                     resolved[key] = val
+
+        # Removing coordinates that are the whole axis
+        for key, val in list(resolved.items()):
+            if val == slice(None):
+                del resolved[key]
 
         return tuple(resolved.items())
 
-    def deduce(self, key, field=None):
+    def deduce(self, key):
         """
         Deduces the coordinates from the key.
         
@@ -178,8 +194,6 @@ class Coordinates(dict):
 
         # Looking up in lattice labels
         for name, labels in self.lattice.labels.items():
-            if field is not None and name not in field.labels:
-                continue
             if key in labels:
                 return {name: key}
 
