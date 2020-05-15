@@ -19,7 +19,7 @@ from tunable import (
     Permutation,
 )
 from .types.base import FieldType
-from ..utils import default_repr, compute_property, expand_indeces
+from ..utils import default_repr, compute_property, expand_indeces, count, add_kwargs_of
 
 
 class BaseField(TunableClass):
@@ -33,18 +33,14 @@ class BaseField(TunableClass):
 
     __repr__ = default_repr
 
-    def __init__(
-        self, field=None, value=None, axes=None, lattice=None, coords=None, **kwargs
+    def __init_attributes__(
+        self, field, axes=None, lattice=None, coords=None, **kwargs
     ):
         """
-        Initializes the field class.
-        
+        First step of the initialization procedure
+
         Parameters
         ----------
-        field: Field
-            If given, then the missing parameters are deduced from it.
-        value: Tunable
-            The underlying value of the field. Not for the faint of heart.
         axes: list(str)
             List of axes of the field.
         lattice: Lattice
@@ -57,25 +53,27 @@ class BaseField(TunableClass):
 
         from ..lattice import Lattice, default_lattice
 
-        assert lattice is None or isinstance(
-            lattice, Lattice
-        ), "lattice must be of Lattice type"
+        if lattice is not None and not isinstance(lattice, Lattice):
+            raise TypeError("lattice must be of Lattice type")
 
-        self._coords = ()
-        if isinstance(field, BaseField):
-            super().__init__(field if value is None else value)
-            self._lattice = (lattice or field.lattice).freeze()
-            self._axes = (
-                field.axes if axes is None else tuple(self.lattice.expand(axes))
-            )
-            self._coords = self.lattice.coordinates.resolve(coords, field=field)
-        else:
-            super().__init__(value)
-            self._lattice = (lattice or default_lattice()).freeze()
-            self._axes = tuple(
-                self.lattice.expand(lattice.dims if axes is None else axes)
-            )
-            self._coords = self.lattice.coordinates.resolve(coords, field=self)
+        self._lattice = (
+            lattice
+            if lattice is not None
+            else field.lattice
+            if isinstance(field, BaseField)
+            else default_lattice()
+        ).freeze()
+
+        self._axes = tuple(
+            self.lattice.expand(axes)
+            if axes is not None
+            else field.axes
+            if isinstance(field, BaseField)
+            else self.lattice.dims
+        )
+
+        self._coords = tuple(field.coords) if isinstance(field, BaseField) else ()
+        self._coords = tuple(self.lattice.coordinates.resolve(coords, field=self))
 
         self._types = tuple(
             (name, ftype)
@@ -93,20 +91,47 @@ class BaseField(TunableClass):
             )
         )
 
-        self.locked_value = value is not None
+        for (_, ftype) in self.types:
+            try:
+                kwargs = ftype.__init_attributes__(self, field=field, **kwargs)
+            except AttributeError:
+                continue
 
-        if isinstance(field, BaseField):
-            if dict(self.coords) != dict(field.coords):
-                self.update(**self.backend.getitem(self.coords, field.coords))
-            if dict(self.axes_counts) != dict(field.axes_counts):
-                self.update(**self.backend.reshape(self.axes, field.axes))
+        return kwargs
 
-        self.update(**kwargs)
+    def __update_value__(self, field):
+        "Checks if something changed wrt field and updates the field value"
 
-        if not isinstance(field, BaseField):
-            assert (
-                not self.locked_value
-            ), "Does it make sense to give a value without a field?"
+        if dict(self.coords) != dict(field.coords):
+            self.update(**self.backend.getitem(self.coords, field.coords))
+
+        if dict(self.axes_counts) != dict(field.axes_counts):
+            self.update(**self.backend.reshape(self.axes, field.axes))
+
+    @add_kwargs_of(__init_attributes__)
+    def __init__(self, field=None, value=None, **kwargs):
+        """
+        Initializes the field class.
+        
+        Parameters
+        ----------
+        field: Field
+            If given, then the missing parameters are deduced from it.
+        value: Tunable
+            The underlying value of the field. Not for the faint of heart.
+            If it is given, then all the attributes of the initialization
+            are considered proparties of the valu and no transformation
+            will be applied.
+        """
+        kwargs = self.__init_attributes__(field, **kwargs)
+
+        super().__init__(field, **kwargs)
+
+        if value is not None:
+            self.value = value
+        elif isinstance(field, BaseField):
+            self.__update_value__(field)
+        else:
             self.update(**self.backend.initialize(field))
 
     @property
@@ -156,17 +181,11 @@ class BaseField(TunableClass):
         List of indeces of the field. Similar to .axes but repeted axis are numerated.
         Order is not significant. See field.indeces_order.
         """
-        counts = dict(self.axes_counts)
-        idxs = {axis: 0 for axis in counts}
         indeces = []
+        counters = {axis: count() for axis in set(self.axes)}
         for axis in self.axes:
-            if counts[axis] > 1:
-                indeces.append(axis + "_" + str(idxs[axis]))
-                idxs[axis] += 1
-            else:
-                indeces.append(axis)
+            indeces.append(axis + "_" + str(next(counters[axis])))
         assert len(set(indeces)) == len(indeces), "Trivial assertion"
-
         return tuple(indeces)
 
     @tunable_property
@@ -224,11 +243,7 @@ class BaseField(TunableClass):
                 indeces.add(axis)
             else:
                 for _ax in self.lattice.expand(axis):
-                    count = self.axes.count(_ax)
-                    if count == 1:
-                        indeces.add(_ax)
-                    else:
-                        indeces.update([_ax + "_" + str(i) for i in range(count)])
+                    indeces.update([_ax + "_" + str(i) for i in range(self.axes_counts[_ax])])
         return tuple(indeces)
 
     @derived_method(indeces_order)
@@ -365,12 +380,14 @@ class BaseField(TunableClass):
         return self.get(coords)
 
     def get(self, *keys, **coords):
+        "Gets the components at the given coordinates"
         return self.copy(coords=(keys, coords))
 
     def __setitem__(self, coords, value):
         return self.set(value, coords)
 
     def set(self, value, *keys, **coords):
+        "Sets the components at the given coordinates"
         self.update(
             **self.backend.setitem(
                 value, self.lattice.coordinates.resolve(*keys, **coords)
