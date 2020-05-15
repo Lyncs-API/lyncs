@@ -15,6 +15,7 @@ from tunable import (
     tunable_property,
     derived_property,
     Function,
+    function,
     derived_method,
     Permutation,
 )
@@ -37,8 +38,8 @@ class BaseField(TunableClass):
         self, field, axes=None, lattice=None, coords=None, **kwargs
     ):
         """
-        First step of the initialization procedure
-
+        Initializes the field class.
+        
         Parameters
         ----------
         axes: list(str)
@@ -99,14 +100,16 @@ class BaseField(TunableClass):
 
         return kwargs
 
-    def __update_value__(self, field):
+    def __update_value__(self, field, **kwargs):
         "Checks if something changed wrt field and updates the field value"
 
         if dict(self.coords) != dict(field.coords):
-            self.update(**self.backend.getitem(self.coords, field.coords))
+            self.update(**self.backend.getset(self.coords, field.coords))
 
         if dict(self.axes_counts) != dict(field.axes_counts):
             self.update(**self.backend.reshape(self.axes, field.axes))
+
+        return kwargs
 
     @add_kwargs_of(__init_attributes__)
     def __init__(self, field=None, value=None, **kwargs):
@@ -130,7 +133,7 @@ class BaseField(TunableClass):
         if value is not None:
             self.value = value
         elif isinstance(field, BaseField):
-            self.__update_value__(field)
+            self.__update_value__(field, **kwargs)
         else:
             self.update(**self.backend.initialize(field))
 
@@ -242,8 +245,9 @@ class BaseField(TunableClass):
             if axis in self.indeces:
                 indeces.add(axis)
             else:
+                counts = dict(self.axes_counts)
                 for _ax in self.lattice.expand(axis):
-                    indeces.update([_ax + "_" + str(i) for i in range(self.axes_counts[_ax])])
+                    indeces.update([_ax + "_" + str(i) for i in range(counts[_ax])])
         return tuple(indeces)
 
     @derived_method(indeces_order)
@@ -388,11 +392,8 @@ class BaseField(TunableClass):
 
     def set(self, value, *keys, **coords):
         "Sets the components at the given coordinates"
-        self.update(
-            **self.backend.setitem(
-                value, self.lattice.coordinates.resolve(*keys, **coords)
-            )
-        )
+        coords = self.lattice.coordinates.resolve(*keys, **coords)
+        self.update(**self.backend.getset(coords, self.coords, value))
 
     def __pos__(self):
         return self
@@ -469,6 +470,32 @@ class BaseBackend:
         if field is None:
             return dict(value=self.field.indeces_order.value)
         return self.init(self.field)
+
+    def getset(self, coords, old_coords=None, value=None):
+        old_coords = {} if old_coords is None else dict(old_coords)
+        new_coords = dict(coords)
+        for key, vals in tuple(new_coords.items()):
+            vals = tuple(expand_indeces(vals))
+            if key in old_coords:
+                old_vals = tuple(expand_indeces(old_coords[key]))
+                if vals == old_vals:
+                    del new_coords[key]
+                else:
+                    vals = tuple(old_vals.index(val) for val in vals)
+            else:
+                new_coords[key] = vals
+
+        indeces = lambda indeces_order, **coords: [
+            coords[idx] if idx in coords else slice(None) for idx in indeces_order
+        ]
+        indeces.__name__ = "indeces"
+        indeces = function(indeces, self.field.indeces_order.value, **new_coords)
+
+        return dict(
+            value=self.field.value.__getitem__(indeces)
+            if value is None
+            else self.field.value.__setitem__(indeces, value)
+        )
 
     def __getattr__(self, value):
         def method(self, *args, **kwargs):
