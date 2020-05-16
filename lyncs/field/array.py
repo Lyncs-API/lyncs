@@ -2,7 +2,7 @@
 Array class of the Field type that implements
 the interface to the numpy array functions
 """
-# pylint: disable=C0103,C0303,C0330
+# pylint: disable=C0103,C0303,C0330,W0221
 
 __all__ = [
     "ArrayField",
@@ -14,7 +14,7 @@ __all__ = [
 from functools import wraps
 import numpy as np
 from tunable import function, tunable
-from .base import BaseField, BaseBackend, default_operator, OPERATORS, index_to_axis
+from .base import BaseField, BaseBackend, default_method, OPERATORS, index_to_axis
 from .types.base import FieldType
 from ..utils import add_kwargs_of
 
@@ -27,8 +27,7 @@ class ArrayField(BaseField):
 
     default_dtype = "complex128"
 
-    @add_kwargs_of(BaseField.__init__)
-    def __init__(self, field=None, dtype=None, copy=False, **kwargs):
+    def __init_attributes__(self, field, dtype=None, **kwargs):
         """
         Initializes the field class.
         
@@ -42,6 +41,7 @@ class ArrayField(BaseField):
             otherwise the input field will be used;
             if True, the field is copied.
         """
+        kwargs = super().__init_attributes__(field, **kwargs)
 
         self._dtype = np.dtype(
             dtype
@@ -51,17 +51,20 @@ class ArrayField(BaseField):
             else ArrayField.default_dtype
         )
 
-        super().__init__(field, **kwargs)
+        return kwargs
 
-        if (
-            isinstance(field, ArrayField)
-            and self.dtype != field.dtype
-            and "value" not in kwargs
-        ):
-            self.update(**self.backend.astype(self.dtype))
+    __init__ = add_kwargs_of(__init_attributes__)(BaseField.__init__)
 
+    def __update_value__(self, field, copy=False, **kwargs):
         if copy:
             self.update(**self.backend.copy())
+
+        kwargs = super().__update_value__(field, **kwargs)
+
+        if isinstance(field, ArrayField) and self.dtype != field.dtype:
+            self.update(**self.backend.astype(self.dtype))
+
+        return kwargs
 
     @property
     def backend(self):
@@ -76,8 +79,7 @@ class ArrayField(BaseField):
     @dtype.setter
     def dtype(self, value):
         if np.dtype(value) != self.dtype:
-            self._dtype = np.dtype(value)
-            self.value = self.backend.astype(self.dtype)
+            self.update(**self.backend.astype(self.dtype))
 
     def astype(self, dtype):
         "Changes the dtype of the field."
@@ -185,8 +187,8 @@ class ArrayField(BaseField):
 
 
 FieldType.Field = ArrayField
-zeros_like = default_operator("zeros", fnc=np.zeros_like)
-ones_like = default_operator("ones", fnc=np.ones_like)
+zeros_like = default_method("zeros", fnc=np.zeros_like)
+ones_like = default_method("ones", fnc=np.ones_like)
 
 
 class NumpyBackend(BaseBackend):
@@ -427,7 +429,7 @@ REDUCTIONS = (
 
 for (ufunc, is_member) in UFUNCS:
     __all__.append(ufunc)
-    globals()[ufunc] = default_operator(ufunc, fnc=getattr(np, ufunc))
+    globals()[ufunc] = default_method(ufunc, fnc=getattr(np, ufunc))
     if is_member:
         setattr(ArrayField, ufunc, globals()[ufunc])
     setattr(NumpyBackend, ufunc, wrap_ufunc(getattr(np, ufunc)))
@@ -437,7 +439,7 @@ for (ufunc,) in OPERATORS:
 
 for (reduction,) in REDUCTIONS:
     __all__.append(reduction)
-    globals()[reduction] = default_operator(reduction, fnc=getattr(np, reduction))
+    globals()[reduction] = default_method(reduction, fnc=getattr(np, reduction))
     if is_member:
         setattr(ArrayField, reduction, globals()[reduction])
     setattr(NumpyBackend, reduction, wrap_reduction(getattr(np, reduction)))
