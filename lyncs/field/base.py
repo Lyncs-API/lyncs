@@ -34,6 +34,11 @@ class BaseField(TunableClass):
 
     __repr__ = default_repr
 
+    @classmethod
+    def index_to_axis(cls, index):
+        "Converts and field index to a field axis"
+        return re.sub("_[0-9]+$", "", index)
+
     def __init_attributes__(
         self, field, axes=None, lattice=None, coords=None, **kwargs
     ):
@@ -161,21 +166,23 @@ class BaseField(TunableClass):
     def dims(self):
         "List of dims in the field axes"
         return tuple(
-            key for key in self.indeces if index_to_axis(key) in self.lattice.dims
+            key for key in self.indeces if self.index_to_axis(key) in self.lattice.dims
         )
 
     @compute_property
     def dofs(self):
         "List of dofs in the field axes"
         return tuple(
-            key for key in self.indeces if index_to_axis(key) in self.lattice.dofs
+            key for key in self.indeces if self.index_to_axis(key) in self.lattice.dofs
         )
 
     @compute_property
     def labels(self):
         "List of labels in the field axes"
         return tuple(
-            key for key in self.indeces if index_to_axis(key) in self.lattice.labels
+            key
+            for key in self.indeces
+            if self.index_to_axis(key) in self.lattice.labels
         )
 
     @compute_property
@@ -218,7 +225,7 @@ class BaseField(TunableClass):
         "Removes axes with size one."
         indeces = self.get_indeces(*axes) if axes else self.indeces
         axes = tuple(
-            index_to_axis(key)
+            self.index_to_axis(key)
             for key, val in self.shape
             if key not in indeces or val > 1
         )
@@ -269,7 +276,7 @@ class BaseField(TunableClass):
         "Returns the list of indeces with size. Order is not significant."
 
         def get_size(key):
-            axis = index_to_axis(key)
+            axis = self.index_to_axis(key)
             coords = dict(self.coords)
             if key in coords:
                 if coords[key] is None:
@@ -342,44 +349,6 @@ class BaseField(TunableClass):
         kwargs.setdefault("field", self)
         return type(self)(**kwargs)
 
-    def prepare(self, *fields, elemwise=True, **kwargs):
-        """
-        Prepares a set of fields for a calculation and 
-        creates the field where to store the output.
-        
-        Returns:
-        --------
-        fields, out_field
-        where fields is a tuple of the fields to use in the calculation
-        and out_field is the Field type where to store the result
-        
-        Parameters
-        ----------
-        fields: Field(s)
-            List of fields involved in the calculation.
-        elemwise: bool
-            Whether the calculation is performed element-wise,
-            i.e. all the fields must have the same axes and in the same order.
-        kwargs: dict
-            List of field parameters fixed in the calculation (e.g. specific indeces_order)
-        """
-        assert all([isinstance(field, type(self)) for field in fields])
-        # TODO: add more checks for compatibility
-
-        if not fields and not kwargs:
-            return self, ()
-        if not fields:
-            # TODO: should check kwargs and do a copy only if needed
-            return self.copy(**kwargs), ()
-
-        if elemwise:
-            # TODO: should reorder the field giving the same order
-            pass
-
-        # TODO: should check for coords and restrict all the fields to the intersection
-
-        return self, fields
-
     def __getitem__(self, coords):
         return self.get(coords)
 
@@ -402,63 +371,6 @@ class BaseField(TunableClass):
 FieldType.Field = BaseField
 
 
-def index_to_axis(index):
-    "Converts and field index to a field axis"
-    return re.sub("_[0-9]+$", "", index)
-
-
-def default_method(key, elemwise=True, fnc=None, doc=None):
-    """
-    Default implementation of a field operator
-    
-    Parameters
-    ----------
-    key: str
-        The key of the method
-    elemwise: bool
-        Whether the calculation is performed element-wise,
-        i.e. all the fields must have the same axes and in the same order.
-    fnc: callable
-        Fallback for the method in case self it is not a field
-    """
-
-    def method(self, *args, **kwargs):
-        if not isinstance(self, BaseField):
-            if fnc is None:
-                raise TypeError(
-                    "First argument of %s must be of type Field. Given %s"
-                    % (key, type(self).__name__)
-                )
-
-            return fnc(self, *args, **kwargs)
-
-        # Uniforming the fields involved
-        args = list(args)
-        i_fields = (
-            (i, arg) for i, arg in enumerate(args) if isinstance(arg, BaseField)
-        )
-        self, fields = self.prepare(
-            *(field for (_, field) in i_fields), elemwise=elemwise
-        )
-
-        for (i, _), field in zip(i_fields, fields):
-            args[i] = field
-
-        result = getattr(self.backend, key)(*args, **kwargs)
-        if isinstance(result, tuple):
-            return tuple((self.copy(**attrs) for attrs in result))
-        return self.copy(**result)
-
-    method.__name__ = key
-
-    if doc:
-        method.__doc__ = doc
-    elif fnc:
-        method.__doc__ = fnc.__doc__
-
-    return method
-
-
 class BaseBackend:
     "Base backend for the field class"
 
@@ -472,6 +384,7 @@ class BaseBackend:
         return self.init(self.field)
 
     def getset(self, coords, old_coords=None, value=None):
+        "Implementation of get/set field items"
         old_coords = {} if old_coords is None else dict(old_coords)
         new_coords = dict(coords)
         for key, vals in tuple(new_coords.items()):
@@ -511,42 +424,3 @@ class BaseBackend:
         attr.__name__ = value
         method.__name__ = value
         return attr
-
-
-def default_backend_operator(key):
-    def operator(self, *args, **kwargs):
-        args = (arg.value if isinstance(arg, BaseField) else arg for arg in args)
-        fnc = getattr(self.field.value, key)
-        return dict(value=fnc(*args, **kwargs))
-
-    return operator
-
-
-OPERATORS = (
-    ("__abs__",),
-    ("__add__",),
-    ("__radd__",),
-    ("__eq__",),
-    ("__gt__",),
-    ("__ge__",),
-    ("__lt__",),
-    ("__le__",),
-    ("__mod__",),
-    ("__rmod__",),
-    ("__mul__",),
-    ("__rmul__",),
-    ("__ne__",),
-    ("__neg__",),
-    ("__pow__",),
-    ("__rpow__",),
-    ("__sub__",),
-    ("__rsub__",),
-    ("__truediv__",),
-    ("__rtruediv__",),
-    ("__floordiv__",),
-    ("__rfloordiv__",),
-)
-
-for (op,) in OPERATORS:
-    setattr(BaseField, op, default_method(op))
-    setattr(BaseBackend, op, default_backend_operator(op))

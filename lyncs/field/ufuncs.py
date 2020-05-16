@@ -1,0 +1,302 @@
+"""
+Universal functions for the fields
+"""
+# pylint: disable=C0303,C0330
+
+__all__ = [
+    "prepare",
+]
+
+from functools import wraps
+import numpy as np
+from tunable import function
+from .array import ArrayField, NumpyBackend
+
+
+def prepare(self, *fields, elemwise=True, **kwargs):
+    """
+    Prepares a set of fields for a calculation.
+
+    Returns:
+    --------
+    fields, out_field
+    where fields is a tuple of the fields to use in the calculation
+    and out_field is the Field type where to store the result
+
+    Parameters
+    ----------
+    fields: Field(s)
+        List of fields involved in the calculation.
+    elemwise: bool
+        Whether the calculation is performed element-wise,
+        i.e. all the fields must have the same axes and in the same order.
+    kwargs: dict
+        List of field parameters fixed in the calculation (e.g. specific indeces_order)
+    """
+    assert all([isinstance(field, type(self)) for field in fields])
+    # TODO: add more checks for compatibility
+
+    if not fields and not kwargs:
+        return self, ()
+    if not fields:
+        # TODO: should check kwargs and do a copy only if needed
+        return self.copy(**kwargs), ()
+
+    if elemwise:
+        # TODO: should reorder the field giving the same order
+        pass
+
+    # TODO: should check for coords and restrict all the fields to the intersection
+
+    return self, fields
+
+
+ArrayField.prepare = prepare
+
+
+def default_method(key, elemwise=True, fnc=None, doc=None):
+    """
+    Default implementation of a field operator
+    
+    Parameters
+    ----------
+    key: str
+        The key of the method
+    elemwise: bool
+        Whether the calculation is performed element-wise,
+        i.e. all the fields must have the same axes and in the same order.
+    fnc: callable
+        Fallback for the method in case self it is not a field
+    """
+
+    def method(self, *args, **kwargs):
+        if not isinstance(self, ArrayField):
+            if fnc is None:
+                raise TypeError(
+                    "First argument of %s must be of type Field. Given %s"
+                    % (key, type(self).__name__)
+                )
+
+            return fnc(self, *args, **kwargs)
+
+        # Uniforming the fields involved
+        args = list(args)
+        i_fields = (
+            (i, arg) for i, arg in enumerate(args) if isinstance(arg, ArrayField)
+        )
+        self, fields = self.prepare(
+            *(field for (_, field) in i_fields), elemwise=elemwise
+        )
+
+        for (i, _), field in zip(i_fields, fields):
+            args[i] = field
+
+        result = getattr(self.backend, key)(*args, **kwargs)
+        if isinstance(result, tuple):
+            return tuple((self.copy(**attrs) for attrs in result))
+        return self.copy(**result)
+
+    method.__name__ = key
+
+    if doc:
+        method.__doc__ = doc
+    elif fnc:
+        method.__doc__ = fnc.__doc__
+
+    return method
+
+
+def default_backend_method(key, doc=None):
+    """
+    Returns a method for the backend that calls 
+    the given method (key) of the field value.
+    """
+
+    def method(self, *args, **kwargs):
+        # Deducing the dtype of the output
+        tmp_args = (
+            np.ones((1), dtype=arg.dtype) if isinstance(arg, ArrayField) else arg
+            for arg in args
+        )
+        trial = getattr(np.ones((1), dtype=self.field.dtype), key)(*tmp_args, **kwargs)
+
+        args = (arg.value if isinstance(arg, ArrayField) else arg for arg in args)
+        fnc = getattr(self.field.value, key)
+        return dict(value=fnc(*args, **kwargs), dtype=trial.dtype)
+
+    method.__name__ = key
+    if doc is not None:
+        method.__doc__ = doc
+
+    return method
+
+
+OPERATORS = (
+    ("__abs__",),
+    ("__add__",),
+    ("__radd__",),
+    ("__eq__",),
+    ("__gt__",),
+    ("__ge__",),
+    ("__lt__",),
+    ("__le__",),
+    ("__mod__",),
+    ("__rmod__",),
+    ("__mul__",),
+    ("__rmul__",),
+    ("__ne__",),
+    ("__neg__",),
+    ("__pow__",),
+    ("__rpow__",),
+    ("__sub__",),
+    ("__rsub__",),
+    ("__truediv__",),
+    ("__rtruediv__",),
+    ("__floordiv__",),
+    ("__rfloordiv__",),
+)
+
+setattr(
+    NumpyBackend,
+    "astype",
+    default_backend_method("astype", doc="Changes the dtype of the field"),
+)
+for (op,) in OPERATORS:
+    setattr(ArrayField, op, default_method(op))
+    setattr(NumpyBackend, op, default_backend_method(op))
+
+
+def wrap_ufunc(fnc):
+    "Wrapper for numpy ufunc"
+
+    @wraps(fnc)
+    def wrapped(self, *args, **kwargs):
+
+        args = (self.field,) + args
+
+        # Deducing the number of outputs and the output dtype
+        tmp_args = (
+            np.ones((1), dtype=arg.dtype) if isinstance(arg, ArrayField) else arg
+            for arg in args
+        )
+        trial = fnc(*tmp_args, **kwargs)
+
+        # Calling ufunc
+        args = (arg.value if isinstance(arg, ArrayField) else arg for arg in args)
+        res = function(fnc, *args, **kwargs)
+
+        if isinstance(trial, tuple):
+            return tuple(
+                dict(value=res[i], dtype=value.dtype) for i, value in enumerate(trial)
+            )
+
+        return dict(value=res, dtype=trial.dtype)
+
+    return wrapped
+
+
+UFUNCS = (
+    # math operations
+    ("add", True,),
+    ("subtract", True,),
+    ("multiply", True,),
+    ("divide", True,),
+    ("logaddexp", False,),
+    ("logaddexp2", False,),
+    ("true_divide", True,),
+    ("floor_divide", True,),
+    ("negative", True,),
+    ("power", True,),
+    ("float_power", True,),
+    ("remainder", True,),
+    ("mod", True,),
+    ("fmod", True,),
+    ("conj", True,),
+    ("exp", False,),
+    ("exp2", False,),
+    ("log", False,),
+    ("log2", False,),
+    ("log10", False,),
+    ("log1p", False,),
+    ("expm1", False,),
+    ("sqrt", True,),
+    ("square", True,),
+    ("cbrt", False,),
+    ("reciprocal", True,),
+    # trigonometric functions
+    ("sin", False,),
+    ("cos", False,),
+    ("tan", False,),
+    ("arcsin", False,),
+    ("arccos", False,),
+    ("arctan", False,),
+    ("arctan2", False,),
+    ("hypot", False,),
+    ("sinh", False,),
+    ("cosh", False,),
+    ("tanh", False,),
+    ("arcsinh", False,),
+    ("arccosh", False,),
+    ("arctanh", False,),
+    ("deg2rad", False,),
+    ("rad2deg", False,),
+    # comparison functions
+    ("greater", True,),
+    ("greater_equal", True,),
+    ("less", True,),
+    ("less_equal", True,),
+    ("not_equal", True,),
+    ("equal", True,),
+    ("isneginf", False,),
+    ("isposinf", False,),
+    ("logical_and", False,),
+    ("logical_or", False,),
+    ("logical_xor", False,),
+    ("logical_not", False,),
+    ("maximum", False,),
+    ("minimum", False,),
+    ("fmax", False,),
+    ("fmin", False,),
+    # floating functions
+    ("isfinite", True,),
+    ("isinf", True,),
+    ("isnan", True,),
+    ("signbit", False,),
+    ("copysign", False,),
+    ("nextafter", False,),
+    ("spacing", False,),
+    ("modf", False,),
+    ("ldexp", False,),
+    ("frexp", False,),
+    ("fmod", False,),
+    ("floor", True,),
+    ("ceil", True,),
+    ("trunc", False,),
+    ("round", True,),
+    # more math routines
+    ("degrees", False,),
+    ("radians", False,),
+    ("rint", True,),
+    ("fabs", True,),
+    ("sign", True,),
+    ("absolute", True,),
+    # non-ufunc elementwise functions
+    ("clip", True,),
+    ("isreal", True,),
+    ("iscomplex", True,),
+    ("real", False,),
+    ("imag", False,),
+    ("fix", False,),
+    ("i0", False,),
+    ("sinc", False,),
+    ("nan_to_num", True,),
+    ("isclose", True,),
+    ("allclose", True,),
+)
+
+for (ufunc, is_member) in UFUNCS:
+    __all__.append(ufunc)
+    globals()[ufunc] = default_method(ufunc, fnc=getattr(np, ufunc))
+    if is_member:
+        setattr(ArrayField, ufunc, globals()[ufunc])
+    setattr(NumpyBackend, ufunc, wrap_ufunc(getattr(np, ufunc)))

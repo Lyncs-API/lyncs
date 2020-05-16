@@ -7,14 +7,14 @@ the interface to the numpy array functions
 __all__ = [
     "ArrayField",
     "NumpyBackend",
-    "zeros_like",
-    "ones_like",
+    #    "zeros_like",
+    #    "ones_like",
 ]
 
 from functools import wraps
 import numpy as np
 from tunable import function, tunable
-from .base import BaseField, BaseBackend, default_method, OPERATORS, index_to_axis
+from .base import BaseField, BaseBackend
 from .types.base import FieldType
 from ..utils import add_kwargs_of
 
@@ -187,8 +187,8 @@ class ArrayField(BaseField):
 
 
 FieldType.Field = ArrayField
-zeros_like = default_method("zeros", fnc=np.zeros_like)
-ones_like = default_method("ones", fnc=np.ones_like)
+# zeros_like = default_method("zeros", fnc=np.zeros_like)
+# ones_like = default_method("ones", fnc=np.ones_like)
 
 
 class NumpyBackend(BaseBackend):
@@ -233,44 +233,6 @@ class NumpyBackend(BaseBackend):
         )
 
 
-def wrap_ufunc(fnc):
-    "Wrapper for numpy ufunc"
-
-    @wraps(fnc)
-    def wrapped(self, *args, **kwargs):
-
-        args = [self.field,] + list(args)
-
-        # Deducing the number of outputs and the output dtype
-        tmp_args = (
-            np.ones((1), dtype=arg.dtype) if isinstance(arg, ArrayField) else arg
-            for arg in args
-        )
-        trial = fnc(*tmp_args, **kwargs)
-
-        # Uniforming the fields involved
-        i_fields = (
-            (i, arg) for i, arg in enumerate(args) if isinstance(arg, ArrayField)
-        )
-        fields = self.field.prepare(*(field for (_, field) in i_fields), elemwise=True)
-
-        for (i, _), field in zip(i_fields, fields):
-            args[i] = field.value
-
-        # Calling ufunc
-        res = function(fnc, *args, **kwargs)
-
-        if isinstance(trial, tuple):
-            return tuple(
-                dict(field=fields[0], value=res[i], dtype=part.dtype)
-                for i, part in enumerate(trial)
-            )
-
-        return dict(field=fields[0], value=res, dtype=trial.dtype)
-
-    return wrapped
-
-
 def uniform_input_axes(*axes, **kwargs):
     "Auxiliary function to uniform the axes input parameters"
     axes = list(axes)
@@ -280,169 +242,6 @@ def uniform_input_axes(*axes, **kwargs):
     axes.extend([tmp] if isinstance(tmp, str) else tmp)
 
     return tuple(axes), kwargs
-
-
-def wrap_reduction(fnc):
-    "Wrapper for reduction functions"
-
-    @wraps(fnc)
-    def wrapped(self, *axes, **kwargs):
-
-        # Extracting the axes to reduce
-        axes, kwargs = uniform_input_axes(*axes, **kwargs)
-        dtype = fnc(np.ones((1,), dtype=self.field.dtype), **kwargs).dtype
-        if axes:
-            reduce = self.field.get_indeces(*axes)
-            indeces = list(self.field.indeces)
-            for idx in set(reduce):
-                indeces.remove(idx)
-
-            axes = [index_to_axis(idx) for idx in indeces]
-            indeces_order = self.field.get_indeces_order(indeces)
-            kwargs["axis"] = self.field.get_indeces_index(*reduce)
-        else:
-            axes = ()
-            indeces_order = ()
-
-        return dict(
-            axes=axes,
-            value=function(fnc, self.field.value, **kwargs),
-            dtype=dtype,
-            indeces_order=indeces_order,
-        )
-
-    return wrapped
-
-
-UFUNCS = (
-    # math operations
-    ("add", True,),
-    ("subtract", True,),
-    ("multiply", True,),
-    ("divide", True,),
-    ("logaddexp", False,),
-    ("logaddexp2", False,),
-    ("true_divide", True,),
-    ("floor_divide", True,),
-    ("negative", True,),
-    ("power", True,),
-    ("float_power", True,),
-    ("remainder", True,),
-    ("mod", True,),
-    ("fmod", True,),
-    ("conj", True,),
-    ("exp", False,),
-    ("exp2", False,),
-    ("log", False,),
-    ("log2", False,),
-    ("log10", False,),
-    ("log1p", False,),
-    ("expm1", False,),
-    ("sqrt", True,),
-    ("square", True,),
-    ("cbrt", False,),
-    ("reciprocal", True,),
-    # trigonometric functions
-    ("sin", False,),
-    ("cos", False,),
-    ("tan", False,),
-    ("arcsin", False,),
-    ("arccos", False,),
-    ("arctan", False,),
-    ("arctan2", False,),
-    ("hypot", False,),
-    ("sinh", False,),
-    ("cosh", False,),
-    ("tanh", False,),
-    ("arcsinh", False,),
-    ("arccosh", False,),
-    ("arctanh", False,),
-    ("deg2rad", False,),
-    ("rad2deg", False,),
-    # comparison functions
-    ("greater", True,),
-    ("greater_equal", True,),
-    ("less", True,),
-    ("less_equal", True,),
-    ("not_equal", True,),
-    ("equal", True,),
-    ("isneginf", False,),
-    ("isposinf", False,),
-    ("logical_and", False,),
-    ("logical_or", False,),
-    ("logical_xor", False,),
-    ("logical_not", False,),
-    ("maximum", False,),
-    ("minimum", False,),
-    ("fmax", False,),
-    ("fmin", False,),
-    # floating functions
-    ("isfinite", True,),
-    ("isinf", True,),
-    ("isnan", True,),
-    ("signbit", False,),
-    ("copysign", False,),
-    ("nextafter", False,),
-    ("spacing", False,),
-    ("modf", False,),
-    ("ldexp", False,),
-    ("frexp", False,),
-    ("fmod", False,),
-    ("floor", True,),
-    ("ceil", True,),
-    ("trunc", False,),
-    ("round", True,),
-    # more math routines
-    ("degrees", False,),
-    ("radians", False,),
-    ("rint", True,),
-    ("fabs", True,),
-    ("sign", True,),
-    ("absolute", True,),
-    # non-ufunc elementwise functions
-    ("clip", True,),
-    ("isreal", True,),
-    ("iscomplex", True,),
-    ("real", False,),
-    ("imag", False,),
-    ("fix", False,),
-    ("i0", False,),
-    ("sinc", False,),
-    ("nan_to_num", True,),
-    ("isclose", True,),
-    ("allclose", True,),
-)
-
-REDUCTIONS = (
-    ("any",),
-    ("all",),
-    ("min",),
-    ("max",),
-    ("argmin",),
-    ("argmax",),
-    ("sum",),
-    ("prod",),
-    ("mean",),
-    ("std",),
-    ("var",),
-)
-
-for (ufunc, is_member) in UFUNCS:
-    __all__.append(ufunc)
-    globals()[ufunc] = default_method(ufunc, fnc=getattr(np, ufunc))
-    if is_member:
-        setattr(ArrayField, ufunc, globals()[ufunc])
-    setattr(NumpyBackend, ufunc, wrap_ufunc(getattr(np, ufunc)))
-
-for (ufunc,) in OPERATORS:
-    setattr(NumpyBackend, ufunc, wrap_ufunc(getattr(np.ndarray, ufunc)))
-
-for (reduction,) in REDUCTIONS:
-    __all__.append(reduction)
-    globals()[reduction] = default_method(reduction, fnc=getattr(np, reduction))
-    if is_member:
-        setattr(ArrayField, reduction, globals()[reduction])
-    setattr(NumpyBackend, reduction, wrap_reduction(getattr(np, reduction)))
 
 
 def wrap_method(fnc):
@@ -458,7 +257,6 @@ def wrap_method(fnc):
 
 
 METHODS = (
-    ("astype",),
     ("reorder",),
     ("squeeze",),
     ("transpose",),
@@ -469,5 +267,3 @@ METHODS = (
 for (method,) in METHODS:
     __all__.append(method)
     globals()[method] = wrap_method(getattr(ArrayField, method))
-
-setattr(NumpyBackend, "astype", wrap_ufunc(np.ndarray.astype))
