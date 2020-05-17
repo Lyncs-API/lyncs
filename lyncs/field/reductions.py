@@ -26,7 +26,7 @@ def wrap_reduction(fnc):
             for idx in set(reduce):
                 indeces.remove(idx)
 
-            axes = [self.field.index_to_axis(idx) for idx in indeces]
+            axes = self.field.indeces_to_axes(*indeces)
             indeces_order = self.field.get_indeces_order(indeces)
             kwargs["axis"] = self.field.get_indeces_index(*reduce)
         else:

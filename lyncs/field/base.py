@@ -18,6 +18,7 @@ from tunable import (
     function,
     derived_method,
     Permutation,
+    Variable,
 )
 from .types.base import FieldType
 from ..utils import default_repr, compute_property, expand_indeces, count, add_kwargs_of
@@ -34,13 +35,28 @@ class BaseField(TunableClass):
 
     __repr__ = default_repr
 
+    _index_to_axis = re.compile("_[0-9]+$")
+
+    @classmethod
+    def indeces_to_axes(cls, *indeces):
+        "Converts field indeces to lattice axes"
+        return tuple(re.sub(BaseField._index_to_axis, "", index) for index in indeces)
+
     @classmethod
     def index_to_axis(cls, index):
-        "Converts and field index to a field axis"
-        return re.sub("_[0-9]+$", "", index)
+        "Converts a field index to a lattice axis"
+        return re.sub(BaseField._index_to_axis, "", index)
+
+    @classmethod
+    def axes_to_indeces(cls, *axes):
+        "Converts lattice axes to field indeces"
+        # pylint: disable=E1101
+        axes = tuple(cls.lattice.expand(*axes)) if isinstance(cls, BaseField) else axes
+        counters = {axis: count() for axis in set(axes)}
+        return tuple(axis + "_" + str(next(counters[axis])) for axis in axes)
 
     def __init_attributes__(
-        self, field, axes=None, lattice=None, coords=None, **kwargs
+        self, field, axes=None, lattice=None, coords=None, indeces_order=None, **kwargs
     ):
         """
         Initializes the field class.
@@ -53,6 +69,10 @@ class BaseField(TunableClass):
             The lattice on which the field is defined.
         coords: list/dict
             Coordinates of the field.
+        indeces_order: tuple
+            The order of the field indeces (field.indeces).
+            This also fixes the field shape (field.ordered_shape).
+            It is a tunable parameter and the decision can be postpone.
         kwargs: dict
             Extra parameters that will be passed to the field types.
         """
@@ -78,6 +98,9 @@ class BaseField(TunableClass):
             else self.lattice.dims
         )
 
+        self.indeces_order = self._get_indeces_order(
+            field if isinstance(field, BaseField) else None, indeces_order
+        )
         self._coords = tuple(field.coords) if isinstance(field, BaseField) else ()
         self._coords = tuple(self.lattice.coordinates.resolve(coords, field=self))
 
@@ -102,6 +125,17 @@ class BaseField(TunableClass):
                 kwargs = ftype.__init_attributes__(self, field=field, **kwargs)
             except AttributeError:
                 continue
+
+        return kwargs
+
+    def __validate_value__(self, value, **kwargs):
+        "Checks if the field is well defined to have a value"
+
+        if isinstance(self.indeces_order, Variable) and not self.indeces_order.fixed:
+            # TODO better to check if the value depends on the field indeces order
+            raise ValueError("Value has been given but indeces_order is not fixed.")
+
+        self.value = value
 
         return kwargs
 
@@ -133,14 +167,19 @@ class BaseField(TunableClass):
         """
         kwargs = self.__init_attributes__(field, **kwargs)
 
-        super().__init__(field, **kwargs)
+        super().__init__(field)
 
         if value is not None:
-            self.value = value
+            kwargs = self.__validate_value__(value, **kwargs)
         elif isinstance(field, BaseField):
-            self.__update_value__(field, **kwargs)
+            kwargs = self.__update_value__(field, **kwargs)
         else:
-            self.update(**self.backend.initialize(field))
+            kwargs = self.update(
+                return_not_found=True, **self.backend.initialize(field, **kwargs)
+            )
+
+        if kwargs:
+            raise ValueError("Could not resolve the following kwargs.\n %s" % kwargs)
 
     @property
     def backend(self):
@@ -191,50 +230,72 @@ class BaseField(TunableClass):
         List of indeces of the field. Similar to .axes but repeted axis are numerated.
         Order is not significant. See field.indeces_order.
         """
-        indeces = []
-        counters = {axis: count() for axis in set(self.axes)}
-        for axis in self.axes:
-            indeces.append(axis + "_" + str(next(counters[axis])))
-        assert len(set(indeces)) == len(indeces), "Trivial assertion"
-        return tuple(indeces)
+        return self.axes_to_indeces(self.axes)
 
     @tunable_property
     def indeces_order(self):
         "Order of the field indeces"
         return Permutation(self.indeces)
 
-    @indeces_order.setter
-    def indeces_order(self, value):
-        self.update(**self.backend.reorder(*value))
+    def _get_indeces_order(self, field=None, indeces_order=None):
+        if indeces_order is not None:
+            if set(indeces_order) != set(self.indeces):
+                raise ValueError(
+                    "Not valid indeces_order. It has %s, while expected %s"
+                    % (indeces_order, self.indeces)
+                )
+            return indeces_order
+        if field is None:
+            return None
+        if set(self.indeces) == set(field.indeces):
+            return field.indeces_order
+        if set(self.indeces) <= set(field.indeces):
+            select = lambda indeces: (idx for idx in indeces if idx in self.indeces)
+            select.__name__ = "select"
+            return function(select, field.indeces_order)
+        return None
 
-    def reshape(self, *axes):
+    def reorder(self, *indeces_order, **kwargs):
+        "Changes the indeces_order of the field."
+        indeces_order = kwargs.pop("indeces_order", indeces_order)
+        if not set(indeces_order) == set(self.indeces):
+            raise ValueError("All the indeces need to be specified in the reordering")
+        return self.copy(indeces_order=indeces_order, **kwargs)
+
+    def reshape(self, *axes, **kwargs):
         """
         Reshapes the field changing the axes.
         Note: only axes with size 1 can be removed and
             new axes are added with size 1 and coord=None
         """
-        return self.copy(axes=axes)
+        axes = kwargs.pop("axes", axes)
+        indeces = self.axes_to_indeces(axes)
+        shape = dict(self.shape)
+        _squeeze = (index for index in self.indeces if index not in indeces)
+        for index in _squeeze:
+            if not shape[index] == 1:
+                raise ValueError("Can only remove axes which size is 1")
+        _extend = (index for index in indeces if index not in self.indeces)
+        coords = kwargs.pop("coords", {})
+        for index in _extend:
+            coords.setdefault(index, None)
+        return self.copy(axes=axes, coords=coords, **kwargs)
 
-    def reorder(self, *indeces_order):
-        "Changes the indeces_order of the field."
-        if not set(indeces_order) == set(self.indeces):
-            raise ValueError("All the indeces need to be specified in the reordering")
-        return self.copy(indeces_order=indeces_order)
-
-    def squeeze(self, *axes):
+    def squeeze(self, *axes, **kwargs):
         "Removes axes with size one."
+        axes = kwargs.pop("axes", axes)
         indeces = self.get_indeces(*axes) if axes else self.indeces
         axes = tuple(
             self.index_to_axis(key)
             for key, val in self.shape
             if key not in indeces or val > 1
         )
-        return self.copy(axes=axes)
+        return self.copy(axes=axes, **kwargs)
 
-    def extend(self, *axes):
+    def extend(self, *axes, **kwargs):
         "Adds axes with size one (coord=None)."
-        axes = tuple(self.lattice.expand(*axes))
-        return self.copy(axes=self.axes + axes)
+        axes = kwargs.pop("axes", axes)
+        return self.reshape(self.axes + axes, **kwargs)
 
     def get_axes(self, *axes):
         "Returns the corresponding field axes to the given axes/dimensions"
@@ -246,15 +307,16 @@ class BaseField(TunableClass):
         return tuple(indeces)
 
     def get_indeces(self, *axes):
-        "Returns the corresponding indeces to the given axes/indeces/dimensions"
+        "Returns the corresponding indeces of the given axes/indeces/dimensions"
         indeces = set()
+        counts = dict(self.axes_counts)
         for axis in axes:
             if axis in self.indeces:
                 indeces.add(axis)
             else:
-                counts = dict(self.axes_counts)
-                for _ax in self.lattice.expand(axis):
-                    indeces.update([_ax + "_" + str(i) for i in range(counts[_ax])])
+                for _ax in self.lattice.expand(self.index_to_axis(axis)):
+                    if _ax in self.axes:
+                        indeces.update([_ax + "_" + str(i) for i in range(counts[_ax])])
         return tuple(indeces)
 
     @derived_method(indeces_order)
@@ -338,11 +400,22 @@ class BaseField(TunableClass):
         "Name of the Field. Equivalent to the most relevant field type."
         return self.types[0][0]
 
-    def update(self, **kwargs):
+    def update(self, return_not_found=False, **kwargs):
         "Updates field attributes"
-        assert kwargs.pop("field", self) is self, "Cannot update the field itself"
+        if not kwargs.pop("field", self) is self:
+            raise ValueError("Cannot update the field itself")
+
+        not_found = {}
         for key, val in kwargs.items():
-            setattr(self, key, val)
+            try:
+                setattr(self, key, val)
+            except AttributeError:
+                if return_not_found:
+                    not_found[key] = val
+                else:
+                    raise AttributeError("%s is not an attribute of the field" % key)
+
+        return not_found
 
     def copy(self, **kwargs):
         "Creates a shallow copy of the field"
