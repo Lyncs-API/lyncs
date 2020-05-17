@@ -19,6 +19,8 @@ from tunable import (
     derived_method,
     Permutation,
     Variable,
+    Tunable,
+    finalize,
 )
 from .types.base import FieldType
 from ..utils import default_repr, compute_property, expand_indeces, count, add_kwargs_of
@@ -47,11 +49,9 @@ class BaseField(TunableClass):
         "Converts a field index to a lattice axis"
         return re.sub(BaseField._index_to_axis, "", index)
 
-    @classmethod
-    def axes_to_indeces(cls, *axes):
+    def axes_to_indeces(self, *axes):
         "Converts lattice axes to field indeces"
-        # pylint: disable=E1101
-        axes = tuple(cls.lattice.expand(*axes)) if isinstance(cls, BaseField) else axes
+        axes = tuple(self.lattice.expand(*axes))
         counters = {axis: count() for axis in set(axes)}
         return tuple(axis + "_" + str(next(counters[axis])) for axis in axes)
 
@@ -98,9 +98,11 @@ class BaseField(TunableClass):
             else self.lattice.dims
         )
 
-        self.indeces_order = self._get_indeces_order(
+        indeces_order = self._get_indeces_order(
             field if isinstance(field, BaseField) else None, indeces_order
         )
+        if indeces_order is not None:
+            self.indeces_order = indeces_order
         self._coords = tuple(field.coords) if isinstance(field, BaseField) else ()
         self._coords = tuple(self.lattice.coordinates.resolve(coords, field=self))
 
@@ -131,8 +133,7 @@ class BaseField(TunableClass):
     def __validate_value__(self, value, **kwargs):
         "Checks if the field is well defined to have a value"
 
-        if isinstance(self.indeces_order, Variable) and not self.indeces_order.fixed:
-            # TODO better to check if the value depends on the field indeces order
+        if not self.indeces_order.fixed and not finalize(self.value).depends_on(self.indeces_order):
             raise ValueError("Value has been given but indeces_order is not fixed.")
 
         self.value = value
@@ -147,6 +148,9 @@ class BaseField(TunableClass):
 
         if dict(self.axes_counts) != dict(field.axes_counts):
             self.update(**self.backend.reshape(self.axes, field.axes))
+
+        if not finalize(self.value).depends_on(self.indeces_order):
+            self.update(**self.backend.reorder(self.indeces_order.value, field.indeces_order.value))
 
         return kwargs
 
@@ -165,9 +169,9 @@ class BaseField(TunableClass):
             are considered proparties of the valu and no transformation
             will be applied.
         """
-        kwargs = self.__init_attributes__(field, **kwargs)
-
         super().__init__(field)
+
+        kwargs = self.__init_attributes__(field, **kwargs)
 
         if value is not None:
             kwargs = self.__validate_value__(value, **kwargs)
@@ -239,7 +243,7 @@ class BaseField(TunableClass):
 
     def _get_indeces_order(self, field=None, indeces_order=None):
         if indeces_order is not None:
-            if set(indeces_order) != set(self.indeces):
+            if not isinstance(indeces_order, Variable) and not isinstance(indeces_order, Tunable) and set(indeces_order) != set(self.indeces):
                 raise ValueError(
                     "Not valid indeces_order. It has %s, while expected %s"
                     % (indeces_order, self.indeces)
@@ -258,7 +262,9 @@ class BaseField(TunableClass):
     def reorder(self, *indeces_order, **kwargs):
         "Changes the indeces_order of the field."
         indeces_order = kwargs.pop("indeces_order", indeces_order)
-        if not set(indeces_order) == set(self.indeces):
+        if indeces_order is ():
+            indeces_order = self.indeces_order.new()
+        if not isinstance(indeces_order, Variable) and not set(indeces_order) == set(self.indeces):
             raise ValueError("All the indeces need to be specified in the reordering")
         return self.copy(indeces_order=indeces_order, **kwargs)
 
