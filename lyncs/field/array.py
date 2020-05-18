@@ -7,14 +7,12 @@ the interface to the numpy array functions
 __all__ = [
     "ArrayField",
     "NumpyBackend",
-    #    "zeros_like",
-    #    "ones_like",
 ]
 
 from functools import wraps
 import numpy as np
 from tunable import function, tunable
-from .base import BaseField, BaseBackend
+from .base import BaseField, BaseBackend, backend_method
 from .types.base import FieldType
 from ..utils import add_kwargs_of
 
@@ -55,14 +53,29 @@ class ArrayField(BaseField):
 
     __init__ = add_kwargs_of(__init_attributes__)(BaseField.__init__)
 
+    def __initialize_value__(self, value, **kwargs):
+        "Initializes the value of the field"
+
+        if value is not None:
+            if not self.indeces_order.fixed:
+                raise ValueError(
+                    "Cannot initilize a field with an array without fixing the indeces_order"
+                )
+            value = np.array(value)
+            if not value.shape == self.ordered_shape:
+                raise ValueError("Shape of field and given array do not match")
+
+        self.value = self.backend.init(value, self.ordered_shape, self.dtype)
+        return kwargs
+
     def __update_value__(self, field, copy=False, **kwargs):
         if copy:
-            self.update(**self.backend.copy())
+            self.value = self.backend.copy()
 
         kwargs = super().__update_value__(field, **kwargs)
 
         if isinstance(field, ArrayField) and self.dtype != field.dtype:
-            self.update(**self.backend.astype(self.dtype))
+            self.value = self.backend.astype(self.dtype)
 
         return kwargs
 
@@ -79,7 +92,7 @@ class ArrayField(BaseField):
     @dtype.setter
     def dtype(self, value):
         if np.dtype(value) != self.dtype:
-            self.update(**self.backend.astype(self.dtype))
+            self.value = self.backend.astype(self.dtype)
 
     def astype(self, dtype):
         "Changes the dtype of the field."
@@ -87,13 +100,13 @@ class ArrayField(BaseField):
             return self
         return self.copy(dtype=dtype)
 
-    def zeros(self, dtype=None):
+    def zeros(self, dtype=None, **kwargs):
         "Returns the field with all components put to zero"
-        return self.copy(**self.backend.zeros_like(dtype))
+        return self.copy(self.backend.zeros(dtype), **kwargs)
 
-    def ones(self, dtype=None):
+    def ones(self, dtype=None, **kwargs):
         "Returns the field with all components put to one"
-        return self.copy(**self.backend.ones_like(dtype))
+        return self.copy(self.backend.ones(dtype), **kwargs)
 
     @property
     def real(self):
@@ -153,7 +166,7 @@ class ArrayField(BaseField):
 
         if not axes and not axes_order:
             return self
-        return self.copy(**self.backend.transpose(*axes, **axes_order))
+        return self.copy(self.backend.transpose(*axes, **axes_order))
 
     @property
     def H(self):
@@ -183,54 +196,42 @@ class ArrayField(BaseField):
         """
         axes, kwargs = uniform_input_axes(*axes, **kwargs)
         indeces = self.get_indeces(axes)
-        return self.copy(**self.backend.roll(shift, *indeces, **kwargs))
+        return self.copy(self.backend.roll(shift, *indeces, **kwargs))
 
 
 FieldType.Field = ArrayField
-# zeros_like = default_method("zeros", fnc=np.zeros_like)
-# ones_like = default_method("ones", fnc=np.ones_like)
 
 
 class NumpyBackend(BaseBackend):
     "Numpy array backend for the field class"
 
-    def initialize(self, field):
+    @backend_method
+    def init(self, field, shape, dtype):
         "Initializes a new field"
         if field is None:
-            return dict(
-                value=function(
-                    np.ndarray, self.field.ordered_shape, dtype=self.field.dtype
-                )
-            )
+            return np.ndarray(shape, dtype=dtype)
 
-        field = np.array(field)
-        if not self.field.indeces_order.fixed:
-            raise ValueError(
-                "Cannot initilize a field with an array without fixing the indeces_order"
-            )
-        if not field.shape == self.field.ordered_shape:
-            raise ValueError("Shape of field and given array do not match")
-        return dict(value=tunable(field, label="input"))
+        return np.array(field, dtype=dtype)
 
-    def copy(self):
+    @backend_method
+    def copy(self, dtype=None):
         "Returns a copy of the field"
-        return dict(value=function(np.copy, self.field.value))
+        return self.copy()
 
+    @backend_method
     def astype(self, dtype):
         "Changes the dtype of the field"
-        return dict(value=function(np.ndarray.astype, self.field.value, dtype))
+        return self.astype(dtype)
 
-    def zeros_like(self, dtype):
+    @backend_method
+    def zeros(self, dtype):
         "Fills the field with zeros"
-        return dict(
-            dtype=dtype, value=function(np.zeros_like, self.field.value, dtype=dtype),
-        )
+        return np.zeros_like(self, dtype=dtype)
 
-    def ones_like(self, dtype):
+    @backend_method
+    def ones(self, dtype):
         "Fills the field with ones"
-        return dict(
-            dtype=dtype, value=function(np.ones_like, self.field.value, dtype=dtype),
-        )
+        return np.ones_like(self, dtype=dtype)
 
 
 def uniform_input_axes(*axes, **kwargs):

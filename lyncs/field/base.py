@@ -10,6 +10,7 @@ __all__ = [
 
 import re
 from collections import Counter
+from functools import wraps
 from tunable import (
     TunableClass,
     tunable_property,
@@ -21,6 +22,7 @@ from tunable import (
     Variable,
     Tunable,
     finalize,
+    nameit,
 )
 from .types.base import FieldType
 from ..utils import default_repr, compute_property, expand_indeces, count, add_kwargs_of
@@ -130,10 +132,18 @@ class BaseField(TunableClass):
 
         return kwargs
 
+    def __initialize_value__(self, value, **kwargs):
+        "Initializes the value of the field"
+
+        self.value = self.backend.init(value, self.indeces_order)
+        return kwargs
+
     def __validate_value__(self, value, **kwargs):
         "Checks if the field is well defined to have a value"
 
-        if not self.indeces_order.fixed and not finalize(self.value).depends_on(self.indeces_order):
+        if not self.indeces_order.fixed and not finalize(self.value).depends_on(
+            self.indeces_order
+        ):
             raise ValueError("Value has been given but indeces_order is not fixed.")
 
         self.value = value
@@ -143,14 +153,16 @@ class BaseField(TunableClass):
     def __update_value__(self, field, **kwargs):
         "Checks if something changed wrt field and updates the field value"
 
-        if dict(self.coords) != dict(field.coords):
-            self.update(**self.backend.getset(self.coords, field.coords))
+        if {idx: val for idx, val in self.coords if idx in field.indeces} != {
+            idx: val for idx, val in field.coords if idx in self.indeces
+        }:
+            self.value = self.backend.getset(self.coords, field.coords)
 
-        if dict(self.axes_counts) != dict(field.axes_counts):
-            self.update(**self.backend.reshape(self.axes, field.axes))
+        if set(self.indeces) != set(field.indeces):
+            self.value = self.backend.reshape(self.indeces_order, field.indeces_order)
 
         if not finalize(self.value).depends_on(self.indeces_order):
-            self.update(**self.backend.reorder(self.indeces_order.value, field.indeces_order.value))
+            self.value = self.backend.reorder(self.indeces_order, field.indeces_order)
 
         return kwargs
 
@@ -178,9 +190,7 @@ class BaseField(TunableClass):
         elif isinstance(field, BaseField):
             kwargs = self.__update_value__(field, **kwargs)
         else:
-            kwargs = self.update(
-                return_not_found=True, **self.backend.initialize(field, **kwargs)
-            )
+            kwargs = self.__initialize_value__(field, **kwargs)
 
         if kwargs:
             raise ValueError("Could not resolve the following kwargs.\n %s" % kwargs)
@@ -231,7 +241,7 @@ class BaseField(TunableClass):
     @compute_property
     def indeces(self):
         """
-        List of indeces of the field. Similar to .axes but repeted axis are numerated.
+        List of indeces of the field. Similar to .axes but axis are enumerated.
         Order is not significant. See field.indeces_order.
         """
         return self.axes_to_indeces(self.axes)
@@ -243,7 +253,11 @@ class BaseField(TunableClass):
 
     def _get_indeces_order(self, field=None, indeces_order=None):
         if indeces_order is not None:
-            if not isinstance(indeces_order, Variable) and not isinstance(indeces_order, Tunable) and set(indeces_order) != set(self.indeces):
+            if (
+                not isinstance(indeces_order, Variable)
+                and not isinstance(indeces_order, Tunable)
+                and set(indeces_order) != set(self.indeces)
+            ):
                 raise ValueError(
                     "Not valid indeces_order. It has %s, while expected %s"
                     % (indeces_order, self.indeces)
@@ -263,8 +277,10 @@ class BaseField(TunableClass):
         "Changes the indeces_order of the field."
         indeces_order = kwargs.pop("indeces_order", indeces_order)
         if indeces_order is ():
-            indeces_order = self.indeces_order.new()
-        if not isinstance(indeces_order, Variable) and not set(indeces_order) == set(self.indeces):
+            indeces_order = self.indeces_order.copy(uid=True)
+        if not isinstance(indeces_order, Variable) and not set(indeces_order) == set(
+            self.indeces
+        ):
             raise ValueError("All the indeces need to be specified in the reordering")
         return self.copy(indeces_order=indeces_order, **kwargs)
 
@@ -406,26 +422,10 @@ class BaseField(TunableClass):
         "Name of the Field. Equivalent to the most relevant field type."
         return self.types[0][0]
 
-    def update(self, return_not_found=False, **kwargs):
-        "Updates field attributes"
-        if not kwargs.pop("field", self) is self:
-            raise ValueError("Cannot update the field itself")
-
-        not_found = {}
-        for key, val in kwargs.items():
-            try:
-                setattr(self, key, val)
-            except AttributeError:
-                if return_not_found:
-                    not_found[key] = val
-                else:
-                    raise AttributeError("%s is not an attribute of the field" % key)
-
-        return not_found
-
-    def copy(self, **kwargs):
+    def copy(self, value=None, **kwargs):
         "Creates a shallow copy of the field"
         kwargs.setdefault("field", self)
+        kwargs["value"] = value
         return type(self)(**kwargs)
 
     def __getitem__(self, coords):
@@ -441,7 +441,7 @@ class BaseField(TunableClass):
     def set(self, value, *keys, **coords):
         "Sets the components at the given coordinates"
         coords = self.lattice.coordinates.resolve(*keys, **coords)
-        self.update(**self.backend.getset(coords, self.coords, value))
+        self.value = self.backend.getset(coords, self.coords, value)
 
     def __pos__(self):
         return self
@@ -450,17 +450,21 @@ class BaseField(TunableClass):
 FieldType.Field = BaseField
 
 
+def backend_method(fnc):
+    "Decorator for backend methods"
+
+    @wraps(fnc)
+    def method(self, *args, **kwargs):
+        return function(fnc, self.field.value, *args, **kwargs)
+
+    return method
+
+
 class BaseBackend:
     "Base backend for the field class"
 
     def __init__(self, field):
         self.field = field
-
-    def initialize(self, field):
-        "Initializes the field value"
-        if field is None:
-            return dict(value=self.field.indeces_order.value)
-        return self.init(self.field)
 
     def getset(self, coords, old_coords=None, value=None):
         "Implementation of get/set field items"
@@ -477,27 +481,39 @@ class BaseBackend:
             else:
                 new_coords[key] = vals
 
-        indeces = lambda indeces_order, **coords: [
-            coords[idx] if idx in coords else slice(None) for idx in indeces_order
-        ]
-        indeces.__name__ = "indeces"
-        indeces = function(indeces, self.field.indeces_order.value, **new_coords)
+        if value is None:
+            return self.getitem(self.field.indeces_order, coords)
+        return self.setitem(self.field.indeces_order, coords, value)
 
-        return dict(
-            value=self.field.value.__getitem__(indeces)
-            if value is None
-            else self.field.value.__setitem__(indeces, value)
+    @backend_method
+    def getitem(self, indeces_order, coords):
+        "Direct implementation of getitem"
+        indeces = tuple(
+            coords[idx] if idx in coords else slice(None) for idx in indeces_order
         )
+        return self.__getitem__(indeces)
+
+    @backend_method
+    def setitem(self, indeces_order, coords, value):
+        "Direct implementation of setitem"
+        indeces = tuple(
+            coords[idx] if idx in coords else slice(None) for idx in indeces_order
+        )
+        return self.__setitem__(indeces, value)
+
+    @backend_method
+    def reorder(self, new_order, old_order):
+        "Direct implementation of reordering"
+        indeces = tuple(new_order.index(idx) for idx in old_order)
+        return self.transpose(axes=indeces)
 
     def __getattr__(self, value):
         def method(self, *args, **kwargs):
             raise NotImplementedError("%s not implemented" % value)
 
         def attr(*args, **kwargs):
-            return dict(
-                value=Function(method, label=value, args=[self.field.value],)(
-                    *args, **kwargs
-                )
+            return Function(method, label=value, args=[self.field.value],)(
+                *args, **kwargs
             )
 
         attr.__name__ = value
