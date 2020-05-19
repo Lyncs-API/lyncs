@@ -52,9 +52,9 @@ def prepare(self, *fields, elemwise=True, **kwargs):
 ArrayField.prepare = prepare
 
 
-def default_method(key, elemwise=True, fnc=None, doc=None):
+def ufunc_method(key, elemwise=True, fnc=None, doc=None):
     """
-    Default implementation of a field operator
+    Implementation of a field ufunc
     
     Parameters
     ----------
@@ -85,9 +85,7 @@ def default_method(key, elemwise=True, fnc=None, doc=None):
         if fnc is not None:
             trial = fnc(np.ones((1), dtype=self.dtype), *tmp_args, **kwargs)
         else:
-            trial = getattr(np.ones((1), dtype=self.dtype), key)(
-                *tmp_args, **kwargs
-            )
+            trial = getattr(np.ones((1), dtype=self.dtype), key)(*tmp_args, **kwargs)
 
         # Uniforming the fields involved
         args = list(args)
@@ -121,7 +119,7 @@ def default_method(key, elemwise=True, fnc=None, doc=None):
     return method
 
 
-def default_backend_method(key, fnc=None, doc=None):
+def backend_ufunc_method(key, fnc=None, doc=None):
     """
     Returns a method for the backend that calls 
     the given method (key) of the field value.
@@ -167,8 +165,8 @@ OPERATORS = (
 )
 
 for (op,) in OPERATORS:
-    setattr(ArrayField, op, default_method(op))
-    setattr(NumpyBackend, op, default_backend_method(op))
+    setattr(ArrayField, op, ufunc_method(op))
+    setattr(NumpyBackend, op, backend_ufunc_method(op))
 
 
 UFUNCS = (
@@ -272,14 +270,20 @@ UFUNCS = (
 
 for (ufunc, is_member) in UFUNCS:
     __all__.append(ufunc)
-    globals()[ufunc] = default_method(ufunc, fnc=getattr(np, ufunc))
+    globals()[ufunc] = ufunc_method(ufunc, fnc=getattr(np, ufunc))
     if is_member:
         setattr(ArrayField, ufunc, globals()[ufunc])
     if hasattr(np.ndarray, ufunc):
-        setattr(NumpyBackend, ufunc, default_backend_method(ufunc, doc=getattr(np, ufunc).__doc__))
+        setattr(
+            NumpyBackend,
+            ufunc,
+            backend_ufunc_method(ufunc, doc=getattr(np, ufunc).__doc__),
+        )
     else:
-        setattr(NumpyBackend, ufunc, default_backend_method(ufunc, fnc=getattr(np, ufunc)))
-        
+        setattr(
+            NumpyBackend, ufunc, backend_ufunc_method(ufunc, fnc=getattr(np, ufunc))
+        )
+
 
 setattr(ArrayField, "real", property(globals()["real"]))
 setattr(ArrayField, "imag", property(globals()["imag"]))
