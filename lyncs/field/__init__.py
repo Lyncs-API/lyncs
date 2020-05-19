@@ -1,5 +1,6 @@
 from . import types
 from .base import *
 from .array import *
-from .reductions import *
+from .ufuncs import *
 from .contractions import *
+from .reductions import *
