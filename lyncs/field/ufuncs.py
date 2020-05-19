@@ -7,10 +7,8 @@ __all__ = [
     "prepare",
 ]
 
-from functools import wraps
 import numpy as np
-from tunable import function
-from .array import ArrayField, NumpyBackend
+from .array import ArrayField, NumpyBackend, backend_method
 
 
 def prepare(self, *fields, elemwise=True, **kwargs):
@@ -79,9 +77,21 @@ def default_method(key, elemwise=True, fnc=None, doc=None):
 
             return fnc(self, *args, **kwargs)
 
+        # Deducing the dtype of the output
+        tmp_args = (
+            np.ones((1), dtype=arg.dtype) if isinstance(arg, ArrayField) else arg
+            for arg in args
+        )
+        if fnc is not None:
+            trial = fnc(np.ones((1), dtype=self.dtype), *tmp_args, **kwargs)
+        else:
+            trial = getattr(np.ones((1), dtype=self.dtype), key)(
+                *tmp_args, **kwargs
+            )
+
         # Uniforming the fields involved
         args = list(args)
-        i_fields = (
+        i_fields = tuple(
             (i, arg) for i, arg in enumerate(args) if isinstance(arg, ArrayField)
         )
         self, fields = self.prepare(
@@ -89,12 +99,17 @@ def default_method(key, elemwise=True, fnc=None, doc=None):
         )
 
         for (i, _), field in zip(i_fields, fields):
-            args[i] = field
+            args[i] = field.value
 
         result = getattr(self.backend, key)(*args, **kwargs)
-        if isinstance(result, tuple):
-            return tuple((self.copy(**attrs) for attrs in result))
-        return self.copy(**result)
+        if isinstance(trial, tuple):
+            return tuple(
+                (
+                    self.copy(result[i], dtype=trial.dtype)
+                    for i, trial in enumerate(trial)
+                )
+            )
+        return self.copy(result, dtype=trial.dtype)
 
     method.__name__ = key
 
@@ -106,29 +121,24 @@ def default_method(key, elemwise=True, fnc=None, doc=None):
     return method
 
 
-def default_backend_method(key, doc=None):
+def default_backend_method(key, fnc=None, doc=None):
     """
     Returns a method for the backend that calls 
     the given method (key) of the field value.
     """
 
     def method(self, *args, **kwargs):
-        # Deducing the dtype of the output
-        tmp_args = (
-            np.ones((1), dtype=arg.dtype) if isinstance(arg, ArrayField) else arg
-            for arg in args
-        )
-        trial = getattr(np.ones((1), dtype=self.field.dtype), key)(*tmp_args, **kwargs)
-
-        args = (arg.value if isinstance(arg, ArrayField) else arg for arg in args)
-        fnc = getattr(self.field.value, key)
-        return dict(value=fnc(*args, **kwargs), dtype=trial.dtype)
+        if fnc is None:
+            return getattr(self, key)(*args, **kwargs)
+        return fnc(self, *args, **kwargs)
 
     method.__name__ = key
     if doc is not None:
         method.__doc__ = doc
+    elif fnc is not None:
+        method.__doc__ = fnc.__doc__
 
-    return method
+    return backend_method(method)
 
 
 OPERATORS = (
@@ -156,43 +166,9 @@ OPERATORS = (
     ("__rfloordiv__",),
 )
 
-setattr(
-    NumpyBackend,
-    "astype",
-    default_backend_method("astype", doc="Changes the dtype of the field"),
-)
 for (op,) in OPERATORS:
     setattr(ArrayField, op, default_method(op))
     setattr(NumpyBackend, op, default_backend_method(op))
-
-
-def wrap_ufunc(fnc):
-    "Wrapper for numpy ufunc"
-
-    @wraps(fnc)
-    def wrapped(self, *args, **kwargs):
-
-        args = (self.field,) + args
-
-        # Deducing the number of outputs and the output dtype
-        tmp_args = (
-            np.ones((1), dtype=arg.dtype) if isinstance(arg, ArrayField) else arg
-            for arg in args
-        )
-        trial = fnc(*tmp_args, **kwargs)
-
-        # Calling ufunc
-        args = (arg.value if isinstance(arg, ArrayField) else arg for arg in args)
-        res = function(fnc, *args, **kwargs)
-
-        if isinstance(trial, tuple):
-            return tuple(
-                dict(value=res[i], dtype=value.dtype) for i, value in enumerate(trial)
-            )
-
-        return dict(value=res, dtype=trial.dtype)
-
-    return wrapped
 
 
 UFUNCS = (
@@ -299,4 +275,11 @@ for (ufunc, is_member) in UFUNCS:
     globals()[ufunc] = default_method(ufunc, fnc=getattr(np, ufunc))
     if is_member:
         setattr(ArrayField, ufunc, globals()[ufunc])
-    setattr(NumpyBackend, ufunc, wrap_ufunc(getattr(np, ufunc)))
+    if hasattr(np.ndarray, ufunc):
+        setattr(NumpyBackend, ufunc, default_backend_method(ufunc, doc=getattr(np, ufunc).__doc__))
+    else:
+        setattr(NumpyBackend, ufunc, default_backend_method(ufunc, fnc=getattr(np, ufunc)))
+        
+
+setattr(ArrayField, "real", property(globals()["real"]))
+setattr(ArrayField, "imag", property(globals()["imag"]))
