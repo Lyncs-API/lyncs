@@ -8,14 +8,13 @@ from . import io
 from .lattice import *
 from .field import *
 from .creation import *
-from .field_methods import *
 from . import utils
 
 for extra in [
-        "lyncs_mpi",
-        "lyncs_cppyy",
-        "lyncs_clime",
-        "lyncs_DDalphaAMG",
+    "lyncs_mpi",
+    "lyncs_cppyy",
+    "lyncs_clime",
+    "lyncs_DDalphaAMG",
 ]:
     try:
         exec("import %s as %s" % (extra, extra[6:]))
