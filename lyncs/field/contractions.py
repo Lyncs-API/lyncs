@@ -5,13 +5,22 @@ Set of contraction functions for array fields
 
 __all__ = [
     "dot",
-    "trace",
     "einsum",
 ]
 
 from collections import defaultdict
+import numpy as np
+from tunable import Permutation
 from ..utils import count
-from .array import ArrayField, NumpyBackend
+from .array import ArrayField, NumpyBackend, backend_method
+
+
+def prepare_fields(*fields):
+    "Auxiliary function for preparing the fields"
+
+    fields = list(fields)
+    fields[0], fields[1:] = fields[0].prepare(*fields[1:], elemwise=False)
+    return tuple(fields)
 
 
 def dot_indeces(*fields, closed_indeces=None, open_indeces=None):
@@ -56,9 +65,6 @@ def dot_indeces(*fields, closed_indeces=None, open_indeces=None):
 
 def dot_prepare(*fields, axes=None, axis=None, closed_indeces=None, open_indeces=None):
     "Auxiliary function that prepares for a dot product checking the input"
-
-    if not all((isinstance(field, ArrayField) for field in fields)):
-        raise ValueError("All fields must be of type field.")
 
     if (axis, axes, closed_indeces).count(None) < 2:
         raise KeyError(
@@ -174,13 +180,13 @@ def dot(
       [x,y,z,t,color,color] x [x,y,z,t,color,color] -> [x,y,z,t]
       [X,Y,Z,T, c_0 , c_1 ] x [X,Y,Z,T, c_1 , c_0 ] -> [X,Y,Z,T]
     """
-
+    fields = prepare_fields(*fields)
     axes, closed_indeces, open_indeces = dot_prepare(
         *fields,
         axis=axis,
         axes=axes,
         closed_indeces=closed_indeces,
-        open_indeces=open_indeces
+        open_indeces=open_indeces,
     )
 
     counter = count()
@@ -223,38 +229,8 @@ def dot(
     return einsum(*fields, indeces=field_indeces, debug=debug)
 
 
-def trace(field, *axes):
-    """
-    Performs the trace over repeated axes contracting the outer-most index with the inner-most.
-    
-    Parameters
-    ----------
-    axes: str
-        If given, only the listed axes are traced.
-    """
-
-    if (
-        len(axes) == 2
-        and set(axes) <= set(field.indeces)
-        and field.index_to_axis(axes[0]) == field.index_to_axis(axes[1])
-    ):
-        return field.copy(**field.backend.trace(*axes))
-
-    _, axes, _ = dot_prepare(field, axes=axes)
-
-    counts = dict(field.axes_counts)
-    axes = tuple(axis for axis in axes if counts[axis] > 1)
-
-    if not axes:
-        return field
-
-    counter = count()
-    indeces = {}
-    for axis, num in counts.items():
-        indeces[axis] = tuple(counter(num))
-
-    indeces = trace_indeces(indeces, indeces, axes=axes)
-    return einsum(field, indeces=indeces)
+ArrayField.dot = dot
+ArrayField.__matmul__ = dot
 
 
 def einsum(*fields, indeces=None, debug=False):
@@ -280,9 +256,7 @@ def einsum(*fields, indeces=None, debug=False):
       [x,y,z,t,spin,color] x [x,y,z,t,spin,color] -> [x,y,z,t,color,color]
       [0,1,2,3, 4  ,  5  ] x [0,1,2,3, 4  ,  6  ] -> [0,1,2,3,  5  ,  6  ]
     """
-    if not all((isinstance(field, ArrayField) for field in fields)):
-        raise ValueError("All fields must be of type field.")
-
+    fields = prepare_fields(*fields)
     if isinstance(indeces, dict):
         indeces = (indeces,)
     indeces = tuple(indeces)
@@ -295,10 +269,11 @@ def einsum(*fields, indeces=None, debug=False):
 
     for idxs in indeces:
         for key, val in list(idxs.items()):
-            if isinstance(val, int):
-                continue
-            if len(val) == 1:
-                idxs[key] = val[0]
+            if isinstance(val, int) or len(val) == 1:
+                new_key = fields[0].axes_to_indeces(key)[0]
+                idxs[new_key] = val if isinstance(val, int) else val[0]
+                if new_key != key:
+                    del idxs[key]
                 continue
             for i, _id in enumerate(val):
                 new_key = key + "_%d" % i
@@ -321,4 +296,42 @@ def einsum(*fields, indeces=None, debug=False):
     if debug:
         return indeces
 
-    return field[0].copy(**field[0].backend.einsum(*fields[1:], indeces=indeces))
+    indeces_order = Permutation(
+        list(indeces[-1].keys()), label="indeces_order", uid=True
+    ).value
+    # TODO: coords
+    return fields[0].copy(
+        fields[0].backend.contract(
+            *(field.value for field in fields[1:]),
+            *(field.indeces_order for field in fields),
+            indeces=indeces,
+            indeces_order=indeces_order,
+        ),
+        axes=fields[0].indeces_to_axes(*indeces[-1].keys()),
+        indeces_order=indeces_order,
+    )
+
+
+ArrayField.einsum = einsum
+
+SYMBOLS = list("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+
+@backend_method
+def contract(*fields_orders, indeces=None, indeces_order=None):
+    "Implementation of contraction via einsum"
+    assert len(fields_orders) % 2 == 0
+    fields = fields_orders[: len(fields_orders) // 2]
+    orders = fields_orders[len(fields_orders) // 2 :]
+
+    symbols = []
+    for order, idxs in zip(orders + (indeces_order,), indeces):
+        symbols.append("")
+        for idx in order:
+            symbols[-1] += SYMBOLS[idxs[idx]]
+
+    string = ",".join(symbols[:-1]) + "->" + symbols[-1]
+    return np.einsum(string, *fields)
+
+
+NumpyBackend.contract = contract
