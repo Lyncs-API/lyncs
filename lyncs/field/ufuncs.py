@@ -31,7 +31,15 @@ def prepare(self, *fields, elemwise=True, **kwargs):
     kwargs: dict
         List of field parameters fixed in the calculation (e.g. specific indeces_order)
     """
-    assert all([isinstance(field, type(self)) for field in fields])
+    if not isinstance(self, ArrayField):
+        raise ValueError("First field is not of ArrayField type")
+    for idx, field in enumerate(fields):
+        if not isinstance(field, type(self)):
+            raise ValueError(
+                "Field #%d of type %s is not compatible with %s"
+                % (idx + 1, type(field), type(self))
+            )
+
     # TODO: add more checks for compatibility
 
     if not fields and not kwargs:
