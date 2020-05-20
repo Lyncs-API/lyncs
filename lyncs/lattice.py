@@ -9,11 +9,12 @@ __all__ = [
 ]
 
 import re
+import random
 from types import MappingProxyType
 from functools import partial, wraps
-from dask.base import normalize_token
-from .utils import default_repr, isiterable, FrozenDict
-from .coordinates import Coordinates
+# from dask.base import normalize_token
+from .utils import default_repr, isiterable, compact_indeces, expand_indeces, FrozenDict
+from .field.base import BaseField
 from .field.types.base import Axes, FieldType
 
 
@@ -46,7 +47,7 @@ class LatticeDict(FrozenDict):
             super().__init__(val)
 
     def __setitem__(self, key, val):
-        if not LatticeAxes.regex.match(key):
+        if not type(self).regex.match(key):
             raise KeyError(
                 """
                 Invalid key: %s. Keys can only contain letters, numbers or '_'.
@@ -55,7 +56,7 @@ class LatticeDict(FrozenDict):
                 % key
             )
         if key not in self and self.lattice is not None:
-            if key in self.lattice.keys():
+            if key in self.lattice.__dir__():
                 raise KeyError("%s is already in use" % (key))
         super().__setitem__(key, val)
 
@@ -107,14 +108,16 @@ class LatticeLabels(LatticeDict):
         labels = set(self.labels())
         if key in self:
             labels = labels.difference(self[key])
-        if labels.intersection(val):
-            raise ValueError("%s are labels already in use" % labels.intersection(val))
+        inter = labels.intersection(val)
+        if inter:
+            raise ValueError("%s are labels already in use" % inter)
 
         super().__setitem__(key, val)
 
 
 class LatticeGroups(LatticeDict):
     "Dictionary for lattice groups. Values must be a set of lattice keys."
+    regex = re.compile("[a-zA-Z_][a-zA-Z0-9_]*$")
 
     def __setitem__(self, key, val):
         if key in self and isinstance(val, int):
@@ -152,7 +155,7 @@ class Lattice:
         "_dofs",
         "_labels",
         "_groups",
-        "_coordinates",
+        "_coords",
         "_fields",
         "_frozen",
     ]
@@ -161,14 +164,16 @@ class Lattice:
     def __new__(cls, *args, **kwargs):
         # pylint: disable=W0613
         self = super().__new__(cls)
+        self._fields = None
         self._frozen = False
         self.dims = None
         self.dofs = None
         self.labels = None
         self.groups = None
+        self.coords = None
         return self
 
-    def __init__(self, dims=4, dofs="QCD", labels=None, groups=None):
+    def __init__(self, dims=4, dofs="QCD", labels=None, groups=None, coords=None):
         """
         Lattice initializer.
 
@@ -202,13 +207,15 @@ class Lattice:
         groups: dict
             Grouping of the dimensions. Each entry of the dictionary must contain a str
             or a list of strings that refer to either another label a dimension.
+        coords: dict
+            Coordinates of the lattice. Each entry of the dictionary must contain a set
+            of coordinates
         """
         self.dims = dims
         self.dofs = dofs
         self.labels.update(labels)
         self.groups.update(groups)
-        self._coordinates = Coordinates(self)
-        self._fields = None
+        self.coords.update(coords)
 
         Lattice.last_defined = self
 
@@ -283,6 +290,7 @@ class Lattice:
 
         if isiterable(value, str):
             self.dims = {v: 1 for v in value}
+            return
 
         raise TypeError("Not allowed type %s for dims" % type(value))
 
@@ -324,6 +332,7 @@ class Lattice:
 
         if isiterable(value, str):
             self.dofs = {v: 1 for v in value}
+            return
 
         raise TypeError("Not allowed type %s for dofs" % type(value))
 
@@ -361,6 +370,23 @@ class Lattice:
 
         raise TypeError("Not allowed type %s for groups" % type(value))
 
+    @property
+    def coords(self):
+        "List of coordinates of the lattice"
+        return self._coords
+
+    @coords.setter
+    def coords(self, value):
+        if not value:
+            self._coords = Coordinates(lattice=self)
+            return
+
+        if isinstance(value, (dict, MappingProxyType)):
+            self.coords.reset(value)
+            return
+
+        raise TypeError("Not allowed type %s for coordinates" % type(value))
+
     def __eq__(self, other):
         return self is other or (
             isinstance(other, Lattice)
@@ -382,6 +408,7 @@ class Lattice:
         "Complete list of keys of the lattice"
         yield "dims"
         yield "dofs"
+        yield "labels"
         yield from self.dims.keys()
         yield from self.dofs.keys()
         yield from self.labels.keys()
@@ -416,11 +443,6 @@ class Lattice:
         return self[axis]
 
     @property
-    def coordinates(self):
-        "Coordinates on the lattice"
-        return self._coordinates
-
-    @property
     def fields(self):
         "List of available field types on the lattice"
         if self._fields is not None:
@@ -437,10 +459,10 @@ class Lattice:
         return partial(FieldType.Field, lattice=self)
 
     def __dir__(self):
-        attrs = set(dir(type(self)))
-        attrs.update(self.keys())
-        attrs.update(self.fields)
-        return sorted(attrs)
+        yield from dir(type(self))
+        yield from self.keys()
+        yield from self.coords
+        yield from self.fields
 
     def __contains__(self, key):
         if isinstance(key, str):
@@ -452,8 +474,6 @@ class Lattice:
         try:
             return getattr(type(self), key).__get__(self)
         except AttributeError:
-            if key in type(self).__slots__:
-                raise
             if key in self.dims:
                 return self.dims[key]
             if key in self.dofs:
@@ -462,9 +482,10 @@ class Lattice:
                 return self.labels[key]
             if key in self.groups:
                 return self.groups[key]
+            if key in self.coords:
+                return self.coords[key]
             if key in self.fields:
                 return partial(FieldType.s[key], lattice=self)
-
             raise
 
     __getattr__ = __getitem__
@@ -485,21 +506,27 @@ class Lattice:
             if key in self.groups:
                 self.groups[key] = value
                 return
+            if key in self.coords:
+                self.coords[key] = value
+                return
             raise
 
     __setattr__ = __setitem__
 
-    def __dask_tokenize__(self):
-        return normalize_token((type(self), self.__getstate__()))
+    # def __dask_tokenize__(self):
+    #     return normalize_token((type(self), self.__getstate__()))
 
     def copy(self):
         "Returns a copy of the lattice."
         return self.__copy__()
 
     def __copy__(self):
-        # TODO: copy also coordinates
         return Lattice(
-            dims=self.dims, dofs=self.dofs, groups=self.groups, labels=self.labels
+            dims=self.dims,
+            dofs=self.dofs,
+            groups=self.groups,
+            labels=self.labels,
+            coords=self.coords,
         )
 
     def __getstate__(self):
@@ -508,7 +535,7 @@ class Lattice:
             self.dofs,
             self.labels,
             self.groups,
-            self.coordinates,
+            self.coords,
             self.frozen,
         )
 
@@ -518,6 +545,197 @@ class Lattice:
             self.dofs,
             self.labels,
             self.groups,
-            self._coordinates,
+            self.coords,
             self.frozen,
         ) = state
+
+
+class Coordinates(LatticeDict):
+    "Coordinates class"
+    regex = re.compile("[a-zA-Z_][a-zA-Z0-9_]*$")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.lattice is None:
+            raise ValueError("Coordinates requires a lattice")
+
+    def __getitem__(self, key):
+        try:
+            return super().__getitem__(key)
+        except KeyError:
+            return self.deduce(key)
+
+    def __setitem__(self, key, value):
+        if key in self.lattice.labels.labels():
+            raise KeyError("%s is already used in lattice labels" % key)
+
+        super().__setitem__(key, self.resolve(value))
+
+    @classmethod
+    def add_coords(cls, coords, **kwargs):
+        "Add kwargs to coords where coords is a dict"
+        assert isinstance(coords, dict), "Coords is supposed to be a dict"
+        for key, val in kwargs.items():
+            if not isinstance(val, tuple):
+                val = (val,)
+            if key not in coords:
+                coords[key] = val
+            else:
+                if not isinstance(coords[key], tuple):
+                    coords[key] = (coords[key],)
+                coords[key] += val
+
+    @classmethod
+    def format_coords(cls, *keys, **coords):
+        "Returns a list of args, kwargs from the given keys and coords"
+        args = set()
+        kwargs = {}
+        cls.add_coords(kwargs, **coords)
+        for key in keys:
+            if key is None:
+                continue
+            if isinstance(key, str):
+                args.add(key)
+            elif isinstance(key, dict):
+                cls.add_coords(kwargs, **key)
+            else:
+                if not isiterable(key):
+                    raise TypeError(
+                        "keys can be str, dict or iterables. %s not accepted." % key
+                    )
+                _args, _kwargs = cls.format_coords(*key)
+                cls.add_coords(kwargs, **_kwargs)
+                args.update(_args)
+        return tuple(args), kwargs
+
+    @classmethod
+    def format_values(cls, *values, interval=None, compact=True):
+        "Returns a list of values for the coordinate"
+        vals = set()
+        for value in values:
+            if value is None:
+                vals.add(value)
+            elif isinstance(value, (int, str, range)):
+                tmp = tuple(expand_indeces(value))
+                if interval is not None and not set(tmp).issubset(interval):
+                    raise ValueError("Value %s out of interval" % value)
+                vals.update(tmp)
+            elif isinstance(value, slice):
+                if interval is None:
+                    raise ValueError("Slice requires an interval")
+                vals.update(interval[value])
+            else:
+                vals.update(cls.format_values(*value, interval=interval, compact=False))
+        if None in vals:
+            if len(vals) == 1:
+                return None
+            vals.remove(None)
+        assert not vals.difference(interval), "Trivial assertion"
+        if compact:
+            if vals == set(interval):
+                return slice(None)
+            vals = compact_indeces(*vals)
+        return tuple(vals)
+
+    def random(self, *axes, label=None):
+        "A random coordinate in the lattice dims and dofs"
+        if not axes:
+            axes = self.lattice.axes
+        else:
+            axes = self.lattice.expand(axes)
+
+        coord = {key: random.choice(self.lattice.get_axis_range(key)) for key in axes}
+
+        if label is not None:
+            self[label] = coord
+
+        return coord
+
+    def random_source(self, label=None):
+        "A random coordinate in the lattice dims"
+        return self.random("dims", label=label)
+
+    def resolve(self, *keys, field=None, **coords):
+        "Combines a set of coordinates"
+        if field is not None and not isinstance(field, BaseField):
+            raise ValueError("field must be a Field type")
+
+        keys, coords = self.format_coords(*keys, **coords)
+        if not keys and not coords:
+            if field is not None:
+                return ((key, val) for key, val in field.coords if key in field.indeces)
+            return ()
+
+        # Adding to resolved all the coordinates
+        resolved = {}
+        for axis, val in coords.items():
+            if field is not None:
+                indeces = field.get_indeces(axis)
+                if not indeces:
+                    raise ValueError("Index '%s' not in field" % axis)
+            else:
+                indeces = self.lattice.expand(axis)
+            self.add_coords(resolved, **{idx: val for idx in indeces})
+
+        for key in keys:
+            coords = self.deduce(key)
+            if field is not None:
+                coords = {
+                    index: val
+                    for axis, val in coords.items()
+                    for index in field.get_indeces(axis)
+                }
+                if not coords:
+                    raise ValueError("'%s' not in field" % key)
+            self.add_coords(resolved, **coords)
+
+        # Checking the coordinates values
+        for key, val in resolved.items():
+            interval = self.lattice.get_axis_range(BaseField.index_to_axis(key))
+            resolved[key] = self.format_values(*val, interval=interval)
+
+        if field is not None:
+            for key, val in field.coords:
+                if key in resolved:
+                    if resolved[key] is None:
+                        if len(set(expand_indeces(val))) > 1:
+                            raise ValueError(
+                                "None can only be assigned to an axis of size 1."
+                            )
+                    elif not set(expand_indeces(val)) >= set(
+                        expand_indeces(resolved[key])
+                    ):
+                        raise ValueError(
+                            "%s = %s not in field coordinates that has %s = %s"
+                            % (key, resolved[key], key, val)
+                        )
+                elif key in field.indeces:
+                    resolved[key] = val
+
+        # Removing coordinates that are the whole axis
+        for key, val in list(resolved.items()):
+            if val == slice(None):
+                del resolved[key]
+
+        return tuple(resolved.items())
+
+    def deduce(self, key):
+        """
+        Deduces the coordinates from the key.
+        
+        E.g.
+        ----
+        "random source"
+        "color diagonal"
+        "x=0"
+        """
+        if key in self:
+            return dict(self[key])
+
+        # Looking up in lattice labels
+        for name, labels in self.lattice.labels.items():
+            if key in labels:
+                return {name: key}
+
+        # TODO
+        raise NotImplementedError
