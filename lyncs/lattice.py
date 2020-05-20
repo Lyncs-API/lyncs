@@ -12,7 +12,7 @@ import re
 from types import MappingProxyType
 from functools import partial, wraps
 from dask.base import normalize_token
-from .utils import default_repr, isiterable
+from .utils import default_repr, isiterable, FrozenDict
 from .coordinates import Coordinates
 from .field.types.base import Axes, FieldType
 
@@ -23,21 +23,18 @@ def default_lattice():
     return Lattice.last_defined
 
 
-class LatticeDict(dict):
+class LatticeDict(FrozenDict):
     "Dictionary for lattice attributes. Checks the given keys."
     regex = re.compile(Axes._get_label.pattern + "$")
 
     def __new__(cls, *args, **kwargs):
         self = super().__new__(cls, *args, **kwargs)
-        self._frozen = False
         self.lattice = None
         return self
 
     def __init__(self, val=None, lattice=None, check=True):
         if lattice is not None and not isinstance(lattice, Lattice):
             raise ValueError("Lattice must be of Lattice type")
-
-        self._frozen = False
         self.lattice = lattice
 
         if check:
@@ -48,43 +45,7 @@ class LatticeDict(dict):
         else:
             super().__init__(val)
 
-    @property
-    def frozen(self):
-        """
-        Returns if the current instance is frozen, i.e. cannot be changed anymore.
-        To unfreeze it use .copy().
-        """
-        return getattr(self, "_frozen", False)
-
-    @frozen.setter
-    def frozen(self, value):
-        if value != self.frozen:
-            if not value is True:
-                raise ValueError(
-                    "Frozen can only be changed to True. To unfreeze do a copy."
-                )
-            self._frozen = True
-
-    def freeze(self):
-        "Returns a frozen copy of the lattice"
-        if self.frozen:
-            return self
-        copy = self.copy()
-        copy.frozen = True
-        return copy
-
-    def __delitem__(self, key):
-        if self.frozen:
-            raise RuntimeError(
-                "The lattice has been frozen and %s cannot be deleted." % key
-            )
-        super().__delitem__(key)
-
     def __setitem__(self, key, val):
-        if self.frozen:
-            raise RuntimeError(
-                "The lattice has been frozen and %s cannot be changed." % key
-            )
         if not LatticeAxes.regex.match(key):
             raise KeyError(
                 """
@@ -102,19 +63,7 @@ class LatticeDict(dict):
     def copy(self):
         return type(self)(self, lattice=self.lattice, check=False)
 
-    @wraps(dict.update)
-    def update(self, val):
-        if not val:
-            return
-        for _k, _v in dict(val).items():
-            self[_k] = _v
-
-    @wraps(dict.setdefault)
-    def setdefault(self, key, val):
-        if key not in self:
-            self[key] = val
-
-    def reset(self, val):
+    def reset(self, val=None):
         "Resets the content of the dictionary"
         tmp = self.copy()
         self.clear()
@@ -269,7 +218,7 @@ class Lattice:
         Returns if the current lattice instance is frozen, i.e. cannot be changed anymore.
         To unfreeze it use lattice.copy.
         """
-        return getattr(self, "_frozen", False)
+        return self._frozen
 
     @frozen.setter
     def frozen(self, value):
@@ -278,10 +227,11 @@ class Lattice:
                 raise ValueError(
                     "Frozen can only be changed to True. To unfreeze do a copy."
                 )
-            self._dims.frozen = True
-            self._dofs.frozen = True
-            self._labels.frozen = True
-            self._groups.frozen = True
+            self.dims.frozen = True
+            self.dofs.frozen = True
+            self.labels.frozen = True
+            self.groups.allows_changes = False
+            self.groups.allows_changes = False
             self._fields = self.fields
             self._frozen = True
 
@@ -296,7 +246,7 @@ class Lattice:
     @property
     def dims(self):
         "Map of lattice dimensions and their size"
-        return getattr(self, "_dims", {})
+        return self._dims
 
     @dims.setter
     def dims(self, value):
@@ -380,7 +330,7 @@ class Lattice:
     @property
     def labels(self):
         "List of labels of the lattice"
-        return getattr(self, "_labels", {})
+        return self._labels
 
     @labels.setter
     def labels(self, value):
@@ -397,7 +347,7 @@ class Lattice:
     @property
     def groups(self):
         "List of groups of the lattice"
-        return getattr(self, "_groups", {})
+        return self._groups
 
     @groups.setter
     def groups(self, value):
