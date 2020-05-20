@@ -9,11 +9,25 @@ __all__ = [
     "add_parameters_to_doc",
     "add_kwargs_of",
     "compute_property",
+    "single_true",
+    "isiterable",
 ]
 
+from collections.abc import Iterable
 from types import MethodType
 from copy import copy
 from inspect import signature, _empty
+
+
+def isiterable(obj, types=None):
+    if types is None:
+        return isinstance(obj, Iterable)
+    return isiterable(obj) and all((isinstance(val, types) for val in obj))
+
+
+def single_true(iterable):
+    i = iter(iterable)
+    return any(i) and not any(i)
 
 
 def default_repr(self):
