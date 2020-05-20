@@ -10,9 +10,9 @@ __all__ = [
 
 import re
 from types import MappingProxyType
-from functools import partial
+from functools import partial, wraps
 from dask.base import normalize_token
-from .utils import default_repr
+from .utils import default_repr, isiterable
 from .coordinates import Coordinates
 from .field.types.base import Axes, FieldType
 
@@ -21,6 +21,169 @@ def default_lattice():
     "Returns the last defined lattice if any"
     assert Lattice.last_defined is not None, "Any lattice has been defined yet."
     return Lattice.last_defined
+
+
+class LatticeDict(dict):
+    "Dictionary for lattice attributes. Checks the given keys."
+    regex = re.compile(Axes._get_label.pattern + "$")
+
+    def __new__(cls, *args, **kwargs):
+        self = super().__new__(cls, *args, **kwargs)
+        self._frozen = False
+        self.lattice = None
+        return self
+
+    def __init__(self, val=None, lattice=None, check=True):
+        if lattice is not None and not isinstance(lattice, Lattice):
+            raise ValueError("Lattice must be of Lattice type")
+
+        self._frozen = False
+        self.lattice = lattice
+
+        if check:
+            super().__init__()
+            if val is not None:
+                for _k, _v in dict(val).items():
+                    self[_k] = _v
+        else:
+            super().__init__(val)
+
+    @property
+    def frozen(self):
+        """
+        Returns if the current instance is frozen, i.e. cannot be changed anymore.
+        To unfreeze it use .copy().
+        """
+        return getattr(self, "_frozen", False)
+
+    @frozen.setter
+    def frozen(self, value):
+        if value != self.frozen:
+            if not value is True:
+                raise ValueError(
+                    "Frozen can only be changed to True. To unfreeze do a copy."
+                )
+            self._frozen = True
+
+    def freeze(self):
+        "Returns a frozen copy of the lattice"
+        if self.frozen:
+            return self
+        copy = self.copy()
+        copy.frozen = True
+        return copy
+
+    def __delitem__(self, key):
+        if self.frozen:
+            raise RuntimeError(
+                "The lattice has been frozen and %s cannot be deleted." % key
+            )
+        super().__delitem__(key)
+
+    def __setitem__(self, key, val):
+        if self.frozen:
+            raise RuntimeError(
+                "The lattice has been frozen and %s cannot be changed." % key
+            )
+        if not LatticeAxes.regex.match(key):
+            raise KeyError(
+                """
+                Invalid key: %s. Keys can only contain letters, numbers or '_'.
+                Keys must start with a letter and cannot end with '_' followed by number.
+                """
+                % key
+            )
+        if key not in self and self.lattice is not None:
+            if key in self.lattice.keys():
+                raise KeyError("%s is already in use" % (key))
+        super().__setitem__(key, val)
+
+    @wraps(dict.copy)
+    def copy(self):
+        return type(self)(self, lattice=self.lattice, check=False)
+
+    @wraps(dict.update)
+    def update(self, val):
+        if not val:
+            return
+        for _k, _v in dict(val).items():
+            self[_k] = _v
+
+    @wraps(dict.setdefault)
+    def setdefault(self, key, val):
+        if key not in self:
+            self[key] = val
+
+    def reset(self, val):
+        "Resets the content of the dictionary"
+        tmp = self.copy()
+        self.clear()
+        try:
+            self.update(val)
+        except (ValueError, TypeError, KeyError):
+            self.clear()
+            self.update(tmp)
+            raise
+
+
+class LatticeAxes(LatticeDict):
+    "Dictionary for lattice axes. Values must be positive integers."
+
+    def __setitem__(self, key, val):
+        if not isinstance(val, int) or val <= 0:
+            raise ValueError(
+                "%s = %s not allowed. The value must be a positive int." % (key, val)
+            )
+        super().__setitem__(key, val)
+
+
+class LatticeLabels(LatticeDict):
+    "Dictionary for lattice labels. Values must be unique strings."
+
+    def labels(self):
+        "Returns all the field labels"
+        for value in self.values():
+            yield from value
+
+    def __setitem__(self, key, val):
+        if isinstance(val, str):
+            val = (val,)
+        if not isiterable(val, str):
+            raise TypeError("Labels value can only be a list of strings")
+
+        val = tuple(val)
+        if not len(set(val)) == len(val):
+            raise ValueError("%s contains repeated labels" % (val,))
+
+        labels = set(self.labels())
+        if key in self:
+            labels = labels.difference(self[key])
+        if labels.intersection(val):
+            raise ValueError("%s are labels already in use" % labels.intersection(val))
+
+        super().__setitem__(key, val)
+
+
+class LatticeGroups(LatticeDict):
+    "Dictionary for lattice groups. Values must be a set of lattice keys."
+
+    def __setitem__(self, key, val):
+        if key in self and isinstance(val, int):
+            for _k in self[key]:
+                self.lattice[_k] = val
+            return
+        if isinstance(val, str):
+            val = (val,)
+        if not isiterable(val, str):
+            raise TypeError("Groups value can only be a list of strings")
+
+        if self.lattice is not None:
+            val = tuple(val)
+            keys = set(self.lattice.keys())
+            if not keys >= set(val):
+                raise ValueError("%s are not lattice keys" % set(val).difference(keys))
+
+        super().__setitem__(key, val)
 
 
 class Lattice:
@@ -40,27 +203,21 @@ class Lattice:
         "_dofs",
         "_labels",
         "_groups",
-        "_keys",
         "_coordinates",
         "_fields",
         "_frozen",
     ]
     __repr__ = default_repr
 
-    _check_key = re.compile(Axes._get_label.pattern + "$")
-
-    @classmethod
-    def check_keys(cls, keys):
-        "Checks if the given list of keys if compatible to be label of lattice axes"
-        for key in keys:
-            if not cls._check_key.match(key):
-                raise KeyError(
-                    """
-                    Invalid key: %s. Keys can only contain only letters, numbers or '_'.
-                    Keys must start with a letter and cannot end with '_' followed by number.
-                    """
-                    % key
-                )
+    def __new__(cls, *args, **kwargs):
+        # pylint: disable=W0613
+        self = super().__new__(cls)
+        self._frozen = False
+        self.dims = None
+        self.dofs = None
+        self.labels = None
+        self.groups = None
+        return self
 
     def __init__(self, dims=4, dofs="QCD", labels=None, groups=None):
         """
@@ -97,18 +254,12 @@ class Lattice:
             Grouping of the dimensions. Each entry of the dictionary must contain a str
             or a list of strings that refer to either another label a dimension.
         """
-        self._frozen = False
-        self._dims = {}
-        self._dofs = {}
-        self._labels = {}
-        self._groups = {}
-        self._keys = None
-        self._coordinates = Coordinates(self)
-        self._fields = None
         self.dims = dims
         self.dofs = dofs
-        self.labels = labels
-        self.groups = groups
+        self.labels.update(labels)
+        self.groups.update(groups)
+        self._coordinates = Coordinates(self)
+        self._fields = None
 
         Lattice.last_defined = self
 
@@ -123,12 +274,14 @@ class Lattice:
     @frozen.setter
     def frozen(self, value):
         if value != self.frozen:
-            assert value is True, "Frozen can be only changed to True"
-            self._dims = MappingProxyType(self._dims)
-            self._dofs = MappingProxyType(self._dofs)
-            self._labels = MappingProxyType(self._labels)
-            self._groups = MappingProxyType(self._groups)
-            self._keys = self.keys
+            if value is False:
+                raise ValueError(
+                    "Frozen can only be changed to True. To unfreeze do a copy."
+                )
+            self._dims.frozen = True
+            self._dofs.frozen = True
+            self._labels.frozen = True
+            self._groups.frozen = True
             self._fields = self.fields
             self._frozen = True
 
@@ -149,74 +302,80 @@ class Lattice:
     def dims(self, value):
 
         if not value:
-            self._dims = {}
+            self._dims = LatticeAxes(lattice=self)
+            return
 
-        elif isinstance(value, (dict, MappingProxyType)):
-            Lattice.check_keys(value.keys())
-            assert all(
-                (isinstance(v, int) and v > 0 for v in value.values())
-            ), "All sizes of dims must be positive integers"
+        if isinstance(value, (dict, MappingProxyType)):
+            self.dims.reset(value)
 
-            self._dims = value.copy()
-
+            # Adding default labels and groups
             dirs = list(self.dims)
             self.labels.setdefault("dirs", tuple("dir_" + d for d in dirs))
             if len(dirs) > 1:
                 self.groups.setdefault("time", (dirs[0],))
                 self.groups.setdefault("space", tuple(dirs[1:]))
+            return
 
-        elif isinstance(value, int):
-            assert value > 0, "Non-positive number of dimensions"
+        if isinstance(value, int):
+            if value < 0:
+                raise ValueError("Non-positive number of dims")
             self.dims = [1] * value
+            return
 
-        elif isinstance(value, (list, tuple)):
+        if isiterable(value, int):
             if len(value) <= len(Lattice.default_dims_labels):
                 self.dims = {
                     Lattice.default_dims_labels[i]: v for i, v in enumerate(value)
                 }
             else:
                 self.dims = {"dim%d" % i: v for i, v in enumerate(value)}
+            return
 
-        else:
-            assert False, "Not allowed type %s" % type(value)
+        if isiterable(value, str):
+            self.dims = {v: 1 for v in value}
+
+        raise TypeError("Not allowed type %s for dims" % type(value))
 
     @property
     def dofs(self):
         "Map of lattice degrees of freedom and their size"
-        return getattr(self, "_dofs", {})
+        return self._dofs
 
     @dofs.setter
     def dofs(self, value):
 
         if not value:
-            self._dofs = {}
+            self._dofs = LatticeAxes(lattice=self)
+            return
 
-        elif isinstance(value, (dict, MappingProxyType)):
-            Lattice.check_keys(value.keys())
-            assert all(
-                (isinstance(v, int) and v > 0 for v in value.values())
-            ), "All dimensions of the dofs must be positive integers"
+        if isinstance(value, (dict, MappingProxyType)):
+            self.dofs.reset(value)
+            return
 
-            self._dofs = value.copy()
-
-        elif isinstance(value, str):
+        if isinstance(value, str):
             assert value in Lattice.theories, "Unknown dofs name"
             value = Lattice.theories[value].copy()
             labels = value.pop("labels", {})
             groups = value.pop("groups", {})
             self.dofs = value
-            self.labels = labels
-            self.groups = groups
+            self.labels.update(labels)
+            self.groups.update(groups)
+            return
 
-        elif isinstance(value, int):
-            assert value > 0, "Non-positive size for dof"
+        if isinstance(value, int):
+            if value < 0:
+                raise ValueError("Non-positive number of dofs")
             self.dofs = [1] * value
+            return
 
-        elif isinstance(value, (list, tuple)):
+        if isiterable(value, int):
             self.dofs = {"dof%d" % i: v for i, v in enumerate(value)}
+            return
 
-        else:
-            assert False, "Not allowed type %s" % type(value)
+        if isiterable(value, str):
+            self.dofs = {v: 1 for v in value}
+
+        raise TypeError("Not allowed type %s for dofs" % type(value))
 
     @property
     def labels(self):
@@ -225,19 +384,15 @@ class Lattice:
 
     @labels.setter
     def labels(self, value):
-        if value is None:
+        if not value:
+            self._labels = LatticeLabels(lattice=self)
             return
 
         if isinstance(value, (dict, MappingProxyType)):
-            Lattice.check_keys(value.keys())
-            assert all(
-                (len(set(v)) == len(v) for v in value.values())
-            ), "Labels must be unique"
-            value = {key: tuple(val) for key, val in value.items()}
-            self._labels.update(value)
+            self.labels.reset(value)
+            return
 
-        else:
-            assert False, "Not allowed type %s" % type(value)
+        raise TypeError("Not allowed type %s for labels" % type(value))
 
     @property
     def groups(self):
@@ -246,22 +401,15 @@ class Lattice:
 
     @groups.setter
     def groups(self, value):
-        if value is None:
+        if not value:
+            self._groups = LatticeGroups(lattice=self)
             return
 
         if isinstance(value, (dict, MappingProxyType)):
-            Lattice.check_keys(value.keys())
-            assert all(
-                (v in self for v in value.values())
-            ), """
-            Each group must be either a str, a list or a tuple
-            of attributes of the lattice object. See lattice.dimensions.
-            """
-            value = {key: tuple(val) for key, val in value.items()}
-            self._groups.update(value)
+            self.groups.reset(value)
+            return
 
-        else:
-            assert False, "Not allowed type %s" % type(value)
+        raise TypeError("Not allowed type %s for groups" % type(value))
 
     def __eq__(self, other):
         return self is other or (
@@ -280,17 +428,14 @@ class Lattice:
         axes.update(self.labels.keys())
         return tuple(sorted(axes))
 
-    @property
     def keys(self):
         "Complete list of keys of the lattice"
-        if self._keys is not None:
-            return self._keys
-        keys = set(["dims", "dofs"])
-        keys.update(self.dims.keys())
-        keys.update(self.dofs.keys())
-        keys.update(self.labels.keys())
-        keys.update(self.groups.keys())
-        return tuple(sorted(keys))
+        yield "dims"
+        yield "dofs"
+        yield from self.dims.keys()
+        yield from self.dofs.keys()
+        yield from self.labels.keys()
+        yield from self.groups.keys()
 
     def expand(self, *dimensions):
         "Expand the list of dimensions into the fundamental dimensions and degrees of freedom"
@@ -343,14 +488,15 @@ class Lattice:
 
     def __dir__(self):
         attrs = set(dir(type(self)))
-        attrs.update(self.keys)
+        attrs.update(self.keys())
         attrs.update(self.fields)
         return sorted(attrs)
 
     def __contains__(self, key):
         if isinstance(key, str):
-            return key in self.keys
-        return all((k in self for k in key))
+            return key in self.keys()
+        keys = list(self.keys())
+        return all((k in keys for k in key))
 
     def __getitem__(self, key):
         try:
@@ -374,52 +520,27 @@ class Lattice:
     __getattr__ = __getitem__
 
     def __setitem__(self, key, value):
-        assert not self.frozen, """
-        Cannot change a lattice in use by a field. Do a copy first.
-        """
         try:
             getattr(type(self), key).__set__(self, value)
         except AttributeError:
             if key in self.dims:
-                dims = self.dims
-                dims[key] = value
-                self.dims = dims
-            elif key in self.dofs:
-                dofs = self.dofs
-                dofs[key] = value
-                self.dofs = dofs
-            elif key in self.groups:
-                if isinstance(value, (int)):
-                    for attr in self.groups[key]:
-                        self[attr] = value
-                elif isinstance(value, (list, tuple)) and all(
-                    (isinstance(v, int) for v in value)
-                ):
-                    assert len(value) == len(
-                        self.groups[key]
-                    ), """
-                    When setting a property with a list, the length must match.
-                    """
-                    for attr, val in zip(self.groups[key], value):
-                        self[attr] = val
-                else:
-                    groups = self.groups
-                    groups[key] = value
-                    self.groups = groups
-            else:
-                raise
+                self.dims[key] = value
+                return
+            if key in self.dofs:
+                self.dofs[key] = value
+                return
+            if key in self.labels:
+                self.labels[key] = value
+                return
+            if key in self.groups:
+                self.groups[key] = value
+                return
+            raise
 
     __setattr__ = __setitem__
 
     def __dask_tokenize__(self):
         return normalize_token((type(self), self.__getstate__()))
-
-    def check(self):
-        "Checks if the lattice is valid"
-        try:
-            return self == self.copy()
-        except AssertionError:
-            return False
 
     def copy(self):
         "Returns a copy of the lattice."
@@ -433,20 +554,20 @@ class Lattice:
 
     def __getstate__(self):
         return (
-            self._dims.copy(),
-            self._dofs.copy(),
-            self._labels.copy(),
-            self._groups.copy(),
-            self._coordinates.copy(),
+            self.dims,
+            self.dofs,
+            self.labels,
+            self.groups,
+            self.coordinates,
             self.frozen,
         )
 
     def __setstate__(self, state):
         (
-            self._dims,
-            self._dofs,
-            self._labels,
-            self._groups,
+            self.dims,
+            self.dofs,
+            self.labels,
+            self.groups,
             self._coordinates,
             self.frozen,
         ) = state
