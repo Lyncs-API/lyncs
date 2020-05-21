@@ -12,7 +12,6 @@ import re
 import random
 from types import MappingProxyType
 from functools import partial, wraps
-# from dask.base import normalize_token
 from .utils import default_repr, isiterable, compact_indeces, expand_indeces, FrozenDict
 from .field.base import BaseField
 from .field.types.base import Axes, FieldType
@@ -399,10 +398,10 @@ class Lattice:
     @property
     def axes(self):
         "Complete list of axes of the lattice"
-        axes = set(self.dims.keys())
-        axes.update(self.dofs.keys())
-        axes.update(self.labels.keys())
-        return tuple(sorted(axes))
+        axes = list(self.dims.keys())
+        axes.extend(self.dofs.keys())
+        axes.extend(self.labels.keys())
+        return tuple(axes)
 
     def keys(self):
         "Complete list of keys of the lattice"
@@ -417,14 +416,17 @@ class Lattice:
     def expand(self, *dimensions):
         "Expand the list of dimensions into the fundamental dimensions and degrees of freedom"
         for dim in dimensions:
-            if dim not in self:
-                raise ValueError("Given unknown dimension: %s" % dimensions)
-            if dim in self.dims or dim in self.dofs or dim in self.labels:
-                yield dim
-            elif isinstance(dim, str):
-                yield from self.expand(*self[dim])
-            else:
+            if isinstance(dim, str):
+                if dim not in self.keys():
+                    raise ValueError("Given unknown dimension: %s" % dimensions)
+                if dim in self.axes:
+                    yield dim
+                else:
+                    yield from self.expand(self[dim])
+            elif isiterable(dim):
                 yield from self.expand(*dim)
+            else:
+                raise TypeError("Unexpected type %s with value %s", type(dim), dim)
 
     def get_axis_range(self, axis):
         "Returns the range of the given axis"
@@ -514,6 +516,7 @@ class Lattice:
     __setattr__ = __setitem__
 
     # def __dask_tokenize__(self):
+    #     from dask.base import normalize_token
     #     return normalize_token((type(self), self.__getstate__()))
 
     def copy(self):
