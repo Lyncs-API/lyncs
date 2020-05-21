@@ -24,16 +24,16 @@ def complete_kwargs(*args, **kwargs):
     kwargs.setdefault("url", "https://lyncs.readthedocs.io/en/latest")
     kwargs.setdefault("download_url", "https://github.com/sbacchio/lyncs")
     kwargs.setdefault("version", find_version())
-    
+
     packages = find_packages()
     test_dir = kwargs.pop("test_dir", "tests")
     if test_dir in packages:
         packages.remove(test_dir)
     kwargs.setdefault("packages", packages)
     kwargs.setdefault("name", packages[0])
-    
+
     kwargs.setdefault("classifiers", classifiers)
-    
+
     if "long_description" not in kwargs:
         dshort, dlong, dtype = find_description()
         kwargs.setdefault("description", dshort)

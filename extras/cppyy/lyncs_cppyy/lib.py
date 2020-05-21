@@ -79,7 +79,8 @@ class Lib:
                 cppyy.include(header)
 
         for library in self.library:
-            if not isinstance(library, str): continue
+            if not isinstance(library, str):
+                continue
             tmp = library
             if not tmp.startswith(os.sep):
                 tmp = self._cwd + "/" + tmp

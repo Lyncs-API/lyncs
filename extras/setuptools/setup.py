@@ -6,9 +6,5 @@ setup(
         "console_scripts": ["lyncs_setuptools = lyncs_setuptools:print_keys"]
     },
     data_files=[("tests", ["tests/CMakeLists.txt"])],
-    keywords=[
-        "Lyncs",
-        "setuptools",
-        "cmake",
-    ],
+    keywords=["Lyncs", "setuptools", "cmake",],
 )
