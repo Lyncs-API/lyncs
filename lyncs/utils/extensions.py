@@ -10,6 +10,7 @@ from itertools import count as _count
 
 class count(_count):
     "Extension of itertools.count. Add __call__ method"
+
     def __call__(self, num):
         for _ in range(num):
             yield next(self)
@@ -17,6 +18,7 @@ class count(_count):
 
 class FrozenDict(dict):
     "Frozable dictionary"
+
     def __new__(cls, *args, **kwargs):
         self = super().__new__(cls, *args, **kwargs)
         self._allows_new = True
