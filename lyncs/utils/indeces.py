@@ -4,11 +4,12 @@ Utils for indeces
 
 __all__ = [
     "compact_indeces",
-    "expand_indeces",
 ]
 
+from .class_utils import isiterable
 
-def compact_indeces(*indeces):
+
+def compact_indeces(indeces):
     """
     Returns a list of ranges or integers
     as they occur sequentially in the list
@@ -18,9 +19,11 @@ def compact_indeces(*indeces):
     >>> list(compact_indeces([1, 2, 4, 6, 7, 8, 10, 12, 13]))
     [1, range(2, 7, 2), 7, range(8, 13, 2), 13]
     """
+    if not isiterable(indeces, int):
+        raise ValueError("Compact_indeces requires a list of integers")
     tmp = []
     step = 0
-    for idx in expand_indeces(*indeces):
+    for idx in indeces:
         if len(tmp) < 2:
             tmp.append(idx)
         else:
@@ -45,14 +48,3 @@ def compact_indeces(*indeces):
         yield from tmp
     else:
         yield range(tmp[0], tmp[1] + (1 if step > 0 else -1), step)
-
-
-def expand_indeces(*indeces):
-    """
-    Opposite of compact_indeces. Expands all the indeces in the list.
-    """
-    for idx in indeces:
-        if idx is None or isinstance(idx, (int, str)):
-            yield idx
-        else:
-            yield from expand_indeces(*idx)

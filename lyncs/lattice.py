@@ -12,7 +12,7 @@ import re
 import random
 from types import MappingProxyType
 from functools import partial, wraps
-from .utils import default_repr, isiterable, FrozenDict
+from .utils import default_repr, isiterable, FrozenDict, compact_indeces
 from .field.base import BaseField
 from .field.types.base import Axes, FieldType
 
@@ -601,7 +601,7 @@ class Coordinates(FrozenDict):
             if isinstance(value, int):
                 values.add(interval[value])
                 continue
-            assert isinstance(value, slice), "Trivial assertion"
+            assert isinstance(value, (slice, range)), "Trivial assertion"
             if isinstance(value, range):
                 value = slice(value.start, value.stop, value.step)
             values.update(interval[value])
@@ -610,6 +610,10 @@ class Coordinates(FrozenDict):
             values = slice(None)
         elif isiterable(values, str):
             values = tuple(sorted(values, key=interval.index))
+        else:
+            tmp = tuple(compact_indeces(sorted(values)))
+            if len(tmp) == 1:
+                values = tmp[0]
         self[key] = values
 
     def cleaned(self):

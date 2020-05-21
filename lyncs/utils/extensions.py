@@ -69,6 +69,9 @@ class FrozenDict(dict):
                 raise ValueError(
                     "Allows_changes can only be changed to False. To unfreeze do a copy."
                 )
+            for key, val in self.items():
+                if isinstance(val, FrozenDict):
+                    self[key] = val.freeze()
             self._allows_changes = value
 
     def freeze(self, allows_new=False, allows_changes=False):
@@ -95,6 +98,8 @@ class FrozenDict(dict):
                 )
         elif not self.allows_new:
             raise RuntimeError("The dict has been frozen and %s cannot be added." % key)
+        if not self.allows_changes and isinstance(val, FrozenDict):
+            val = val.freeze()
         super().__setitem__(key, val)
 
     @wraps(dict.copy)
