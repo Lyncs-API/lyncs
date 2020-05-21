@@ -1,0 +1,67 @@
+import pytest
+from lyncs.field import BaseField, squeeze
+from lyncs import Lattice
+
+lat = Lattice()
+lat.space = 4
+lat.time = 8
+
+
+def test_init():
+
+    with pytest.raises(TypeError):
+        squeeze("foo")
+    with pytest.raises(TypeError):
+        BaseField(lattice="foo")
+    with pytest.raises(ValueError):
+        BaseField(foo="bar")
+
+    field = BaseField(axes=["dims", "dofs", "dofs"], lattice=lat)
+
+    assert field == field
+    assert field == +field
+    assert field == field.copy()
+    assert dir(field) == field.__dir__()
+
+    assert field.size == 4 * 4 * 4 * 8 * 3 * 3 * 4 * 4
+    assert len(field.axes) == 8
+    assert len(field.axes) == len(field.indeces)
+    assert field.indeces_to_axes(*field.indeces) == field.axes
+    assert field.axes_to_indeces(*field.axes) == field.indeces
+    assert field.indeces_to_axes(*field.dims) == tuple(field.lattice.expand("dims"))
+    assert field.indeces_to_axes(*field.dofs) == tuple(
+        field.lattice.expand("dofs", "dofs")
+    )
+    assert field.labels == ()
+    assert set(field.get_axes(field.axes)) == set(field.axes)
+
+    types = dict(field.types)
+    assert field.type == "Propagator"
+    assert field.type == next(iter(types))
+    assert "Sites" in types
+    assert "Scalar" in types
+    assert "Degrees" in types
+
+    source = field.lattice.coords.random_source("source")
+    point = field[source]
+    assert field["source"] == field[source]
+    shape = dict(point.shape)
+    for dim in point.dims:
+        assert shape[dim] == 1
+
+    dofs = point.squeeze()
+    assert point.size == dofs.size
+    assert dofs == squeeze(dofs)
+    assert not dofs.dims
+    assert dofs.dofs == dofs.indeces
+    assert point.reshape(dofs.axes) == dofs
+    with pytest.raises(ValueError):
+        point.reshape(point.axes[:-1])
+    assert point == dofs.reshape(point.axes)[source]
+    assert dofs.reshape(point.axes) == dofs.extend(lat.dims)
+
+    extended = dofs.extend(lat.dims)[{"x": (0, 1)}]
+    assert extended.size == 2 * dofs.size
+
+    everywhere = point.unsqueeze()
+    assert everywhere == dofs.extend("dims")

@@ -633,8 +633,10 @@ class Coordinates(FrozenDict):
                 continue
             if val is None or val == slice(None):
                 continue
+            if res[key] is None and isinstance(val, (int, str)):
+                continue
             if res[key] is None:
-                raise ValueError("None can only be assigned to None")
+                raise ValueError("None can only be assigned axis of size one")
             if res[key] == slice(None):
                 raise ValueError("slice(None) can only be assigned to slice(None)")
             if not set(val) >= set(res[key]):

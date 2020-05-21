@@ -53,6 +53,7 @@ class FieldType(type):
 
     __types__ = OrderedDict()
     s = MappingProxyType(__types__)
+    BaseField = None
     Field = None
 
     @classmethod
@@ -117,7 +118,7 @@ class FieldType(type):
 
     def __instancecheck__(cls, field):
         "Checks if field is compatible with the class"
-        if not isinstance(field, cls.Field):
+        if not isinstance(field, cls.BaseField):
             return False
         if cls.axes.labels not in field.lattice:
             return False

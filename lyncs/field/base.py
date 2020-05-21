@@ -12,7 +12,7 @@ import re
 from collections import Counter
 from functools import wraps
 from .types.base import FieldType
-from ..utils import default_repr, compute_property, expand_indeces, count, add_kwargs_of
+from ..utils import default_repr, compute_property, count, add_kwargs_of
 
 
 class BaseField:
@@ -83,8 +83,12 @@ class BaseField:
             else self.lattice.dims
         )
 
-        self._coords = tuple(field.coords) if isinstance(field, BaseField) else ()
-        self._coords = tuple(self.lattice.coordinates.resolve(coords, field=self))
+        self._coords = (
+            {key: field.coords[key] for key in field.indeces if key in self.indeces}
+            if isinstance(field, BaseField)
+            else {}
+        )
+        self._coords = self.lattice.coords.resolve(coords, field=self)
 
         self._types = tuple(
             (name, ftype)
@@ -202,6 +206,16 @@ class BaseField:
         )
         return self.copy(axes=axes, **kwargs)
 
+    def unsqueeze(self, *axes, **kwargs):
+        "Sets coordinate to None of axes with size one."
+        axes = kwargs.pop("axes", axes)
+        indeces = self.get_indeces(*axes) if axes else self.indeces
+        coords = kwargs.pop("coords", {})
+        coords.update(
+            {key: None for key, val in self.shape if key in indeces and val == 1}
+        )
+        return self.copy(coords=coords, **kwargs)
+
     def extend(self, *axes, **kwargs):
         "Adds axes with size one (coord=None)."
         axes = kwargs.pop("axes", axes)
@@ -237,9 +251,9 @@ class BaseField:
             axis = self.index_to_axis(key)
             coords = dict(self.coords)
             if key in coords:
-                if coords[key] is None:
+                if isinstance(coords[key], (int, str, type(None))):
                     return 1
-                return len(tuple(expand_indeces(coords[key])))
+                return len(coords[key])
             return self.lattice.get_axis_size(axis)
 
         return tuple((key, get_size(key)) for key in self.indeces)
@@ -312,7 +326,16 @@ class BaseField:
     def __pos__(self):
         return self
 
+    def __eq__(self, other):
+        return self is other or (
+            isinstance(other, type(self))
+            and self.lattice == other.lattice
+            and set(self.indeces) == set(other.indeces)
+            and self.coords == other.coords
+        )
 
+
+FieldType.BaseField = BaseField
 FieldType.Field = BaseField
 
 
