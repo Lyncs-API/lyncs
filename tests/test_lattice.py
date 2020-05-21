@@ -1,7 +1,13 @@
 import pickle
 import pytest
 from lyncs import Lattice, default_lattice
-from lyncs.lattice import LatticeDict, LatticeAxes, LatticeLabels, LatticeGroups
+from lyncs.lattice import (
+    LatticeDict,
+    LatticeAxes,
+    LatticeLabels,
+    LatticeGroups,
+    Coordinates,
+)
 
 
 def test_keys():
@@ -77,6 +83,9 @@ def test_init():
     assert set(["t", "x", "y", "z"]) == set(lat.dims.keys())
     assert default_lattice() == lat
 
+    with pytest.raises(AttributeError):
+        lat.foo
+
     with pytest.raises(ValueError):
         list(lat.expand("foo"))
 
@@ -89,8 +98,6 @@ def test_init():
     with pytest.raises(AttributeError):
         lat.foo = "bar"
 
-    assert set(lat.expand("space")) == set(["x", "y", "z"])
-        
     lat.x = 5
     assert lat.x == 5 and lat.dims["x"] == lat.x
     lat.dof0 = 6
@@ -136,14 +143,14 @@ def test_init_dims():
     lattice = Lattice(dims=5)
     assert len(lattice.dims) == 5
 
-    lattice = Lattice(dims=["x","y","z"])
+    lattice = Lattice(dims=["x", "y", "z"])
     assert len(lattice.dims) == 3
-    lattice.x=8
+    lattice.x = 8
     assert lattice.x == lattice.get_axis_size("x")
 
     with pytest.raises(TypeError):
         Lattice(dims=3.5)
-        
+
     with pytest.raises(ValueError):
         Lattice(dims=-1)
 
@@ -157,9 +164,9 @@ def test_init_dofs():
     lattice = Lattice(dofs=5)
     assert len(lattice.dofs) == 5
 
-    lattice = Lattice(dofs=["a","b","c"])
+    lattice = Lattice(dofs=["a", "b", "c"])
     assert len(lattice.dofs) == 3
-    
+
     with pytest.raises(TypeError):
         Lattice(dofs=3.5)
 
@@ -173,17 +180,18 @@ def test_init_labels():
     assert no_labels == Lattice(labels=[])
     assert no_labels == Lattice(labels=0)
 
-    lattice = Lattice(labels={"trial":["foo", "bar"]})
+    lattice = Lattice(labels={"trial": ["foo", "bar"]})
     assert "trial" in lattice.labels
     assert lattice.trial == ("foo", "bar")
     assert lattice.trial == lattice.get_axis_range("trial")
     assert len(lattice.trial) == lattice.get_axis_size("trial")
 
     with pytest.raises(TypeError):
-        lattice.labels=3.5
-        
+        lattice.labels = 3.5
+
     with pytest.raises(TypeError):
-        Lattice(labels={"trial":3.5})
+        Lattice(labels={"trial": 3.5})
+
 
 def test_init_groups():
     no_groups = Lattice(groups=None)
@@ -191,18 +199,19 @@ def test_init_groups():
     assert no_groups == Lattice(groups=[])
     assert no_groups == Lattice(groups=0)
 
-    lattice = Lattice(groups={"trial":"x"})
+    lattice = Lattice(groups={"trial": "x"})
     assert "trial" in lattice.groups
     assert lattice.trial == ("x",)
 
     with pytest.raises(TypeError):
-        lattice.groups=3.5
-        
+        lattice.groups = 3.5
+
     with pytest.raises(TypeError):
-        Lattice(groups={"trial":3.5})
+        Lattice(groups={"trial": 3.5})
 
     with pytest.raises(ValueError):
-        Lattice(groups={"trial":"foo"})
+        Lattice(groups={"trial": "foo"})
+
 
 def test_init_coords():
     no_coords = Lattice(coords=None)
@@ -210,7 +219,7 @@ def test_init_coords():
     assert no_coords == Lattice(coords=[])
     assert no_coords == Lattice(coords=0)
 
-    lattice = Lattice(coords={"trial":{"x":0, "y":0}})
+    lattice = Lattice(coords={"trial": {"x": 0, "y": 0}})
     assert "trial" in lattice.coords
 
     with pytest.raises(KeyError):
@@ -219,15 +228,54 @@ def test_init_coords():
     val = lattice.coords.random_source("source")
     assert "source" in lattice.coords
     set(dict(lattice.source).keys()) == set(lattice.dims)
-    
-    lattice.coords={"trial":{"x":0, "y":0}}
-    assert "source" not in lattice.coords
-    lattice.trial = {"x":0, "y":0}
-    
-    with pytest.raises(TypeError):
-        lattice.coords=3.5
-        
-    with pytest.raises(TypeError):
-        Lattice(coords={"trial":3.5})
 
-    
+    lattice.coords = {"trial": {"x": 0, "y": 0}}
+    assert "source" not in lattice.coords
+    lattice.trial = {"x": 0, "y": 0}
+
+    with pytest.raises(TypeError):
+        lattice.coords = 3.5
+
+    with pytest.raises(TypeError):
+        Lattice(coords={"trial": 3.5})
+
+
+def test_default():
+    lat = Lattice()
+    assert len(lat.dims) == 4
+    assert set(lat.dims) == set(["x", "y", "z", "t"])
+    assert len(lat.dofs) == 2
+    assert set(lat.dofs) == set(["spin", "color"])
+    assert lat.spin == 4
+    assert lat.color == 3
+    assert "dirs" in lat and len(lat.dirs) == 4
+
+
+def test_coords():
+    lat = Lattice()
+    lat.space = 4
+    lat.time = 8
+
+    assert lat.coords.resolve(y=slice(None)) == {}
+    assert lat.coords.resolve({"y": (2, 3)}, y=(0, 1)) == {}
+    assert lat.coords.resolve(lat.dirs) == {}
+
+
+def test_expand():
+    lat = Lattice()
+    assert set(lat.expand("space")) == set(["x", "y", "z"])
+    assert set(lat.expand("dims")) == set(lat.expand("space", "time"))
+    with pytest.raises(TypeError):
+        list(lat.expand(1))
+
+
+def test_coordinates():
+    coords = Coordinates()
+    with pytest.raises(TypeError):
+        coords["x"] = 3.5
+    for val in None, (None,), (None, None), [None, [None,]]:
+        coords["x"] = val
+        assert coords["x"] == None
+        coords.update({"x": val})
+        assert coords["x"] == None
+    assert coords["y"] == slice(None)

@@ -12,7 +12,7 @@ import re
 import random
 from types import MappingProxyType
 from functools import partial, wraps
-from .utils import default_repr, isiterable, compact_indeces, expand_indeces, FrozenDict
+from .utils import default_repr, isiterable, FrozenDict
 from .field.base import BaseField
 from .field.types.base import Axes, FieldType
 
@@ -65,6 +65,8 @@ class LatticeDict(FrozenDict):
 
     def reset(self, val=None):
         "Resets the content of the dictionary"
+        # TODO: in case of reset/delitem the it should check if all the other
+        # entries of the lattice are still valid. And in case remove them.
         tmp = self.copy()
         self.clear()
         try:
@@ -377,7 +379,7 @@ class Lattice:
     @coords.setter
     def coords(self, value):
         if not value:
-            self._coords = Coordinates(lattice=self)
+            self._coords = LatticeCoords(lattice=self)
             return
 
         if isinstance(value, (dict, MappingProxyType)):
@@ -418,7 +420,7 @@ class Lattice:
         for dim in dimensions:
             if isinstance(dim, str):
                 if dim not in self.keys():
-                    raise ValueError("Given unknown dimension: %s" % dimensions)
+                    raise ValueError("Unknown dimension: %s" % dim)
                 if dim in self.axes:
                     yield dim
                 else:
@@ -426,7 +428,7 @@ class Lattice:
             elif isiterable(dim):
                 yield from self.expand(*dim)
             else:
-                raise TypeError("Unexpected type %s with value %s", type(dim), dim)
+                raise TypeError("Unexpected type %s with value %s" % (type(dim), dim))
 
     def get_axis_range(self, axis):
         "Returns the range of the given axis"
@@ -476,16 +478,9 @@ class Lattice:
         try:
             return getattr(type(self), key).__get__(self)
         except AttributeError:
-            if key in self.dims:
-                return self.dims[key]
-            if key in self.dofs:
-                return self.dofs[key]
-            if key in self.labels:
-                return self.labels[key]
-            if key in self.groups:
-                return self.groups[key]
-            if key in self.coords:
-                return self.coords[key]
+            for attr in ["dims", "dofs", "labels", "groups", "coords"]:
+                if key in getattr(self, attr):
+                    return getattr(self, attr)[key]
             if key in self.fields:
                 return partial(FieldType.s[key], lattice=self)
             raise
@@ -496,21 +491,10 @@ class Lattice:
         try:
             getattr(type(self), key).__set__(self, value)
         except AttributeError:
-            if key in self.dims:
-                self.dims[key] = value
-                return
-            if key in self.dofs:
-                self.dofs[key] = value
-                return
-            if key in self.labels:
-                self.labels[key] = value
-                return
-            if key in self.groups:
-                self.groups[key] = value
-                return
-            if key in self.coords:
-                self.coords[key] = value
-                return
+            for attr in ["dims", "dofs", "labels", "groups", "coords"]:
+                if key in getattr(self, attr):
+                    getattr(self, attr).__setitem__(key, value)
+                    return
             raise
 
     __setattr__ = __setitem__
@@ -553,14 +537,117 @@ class Lattice:
         ) = state
 
 
-class Coordinates(LatticeDict):
-    "Coordinates class"
+class Coordinates(FrozenDict):
+    "Dictionary for coordinates"
+
+    def __init__(self, val=None):
+        super().__init__()
+        if val is not None:
+            for _k, _v in dict(val).items():
+                self[_k] = _v
+
+    @classmethod
+    def expand(cls, *indeces):
+        "Expands all the indeces in the list."
+        for idx in indeces:
+            if isinstance(idx, (int, str, slice, range, type(None))):
+                yield idx
+            elif isiterable(idx):
+                yield from cls.expand(*idx)
+            else:
+                raise TypeError("Unexpected type %s" % type(idx))
+
+    def __setitem__(self, key, value):
+        value = list(self.expand(value))
+        while None in value and len(value) > 1:
+            value.remove(None)
+        if len(value) == 1:
+            value = value[0]
+        else:
+            value = tuple(value)
+        super().__setitem__(key, value)
+
+    def __getitem__(self, key):
+        try:
+            return super().__getitem__(key)
+        except KeyError:
+            return slice(None)
+
+    def update(self, value=None):
+        "Updates the values of existing keys"
+        if not value:
+            return
+        for key, val in dict(value).items():
+            if key in self:
+                self[key] = (self[key], val)
+                continue
+            self[key] = val
+
+    def finalize(self, key, interval):
+        "Finalizes the list of values for the coordinate"
+        if key not in self:
+            raise KeyError("Unknown key %s" % key)
+        if self[key] is None or self[key] == slice(None):
+            return
+
+        values = set()
+        interval = tuple(interval)
+        for value in self.expand(self[key]):
+            if isinstance(value, str):
+                if value not in interval:
+                    raise ValueError("Value %s not in interval" % value)
+                values.add(value)
+                continue
+            if isinstance(value, int):
+                values.add(interval[value])
+                continue
+            assert isinstance(value, slice), "Trivial assertion"
+            if isinstance(value, range):
+                value = slice(value.start, value.stop, value.step)
+            values.update(interval[value])
+        assert values <= set(interval), "Trivial assertion"
+        if values == set(interval):
+            values = slice(None)
+        elif isiterable(values, str):
+            values = tuple(sorted(values, key=interval.index))
+        self[key] = values
+
+    def cleaned(self):
+        "Removes keys that are slice(None)"
+        res = self.copy()
+        for key in self.keys():
+            if self[key] == slice(None):
+                del res[key]
+        return res
+
+    def intersection(self, coords):
+        "Returns the intersection with the given set of coords"
+        res = self.copy()
+        for key, val in Coordinates(coords).items():
+            if key not in res:
+                res[key] = val
+                continue
+            if val is None or val == slice(None):
+                continue
+            if res[key] is None:
+                raise ValueError("None can only be assigned to None")
+            if res[key] == slice(None):
+                raise ValueError("slice(None) can only be assigned to slice(None)")
+            if not set(val) >= set(res[key]):
+                raise ValueError(
+                    "%s not in field coordinates" % (set(res[key]).difference(set(val)))
+                )
+        return res
+
+
+class LatticeCoords(LatticeDict):
+    "LatticeCoords class"
     regex = re.compile("[a-zA-Z_][a-zA-Z0-9_]*$")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.lattice is None:
-            raise ValueError("Coordinates requires a lattice")
+            raise ValueError("LatticeCoords requires a lattice")
 
     def __getitem__(self, key):
         try:
@@ -575,70 +662,26 @@ class Coordinates(LatticeDict):
         super().__setitem__(key, self.resolve(value))
 
     @classmethod
-    def add_coords(cls, coords, **kwargs):
-        "Add kwargs to coords where coords is a dict"
-        assert isinstance(coords, dict), "Coords is supposed to be a dict"
-        for key, val in kwargs.items():
-            if not isinstance(val, tuple):
-                val = (val,)
-            if key not in coords:
-                coords[key] = val
-            else:
-                if not isinstance(coords[key], tuple):
-                    coords[key] = (coords[key],)
-                coords[key] += val
-
-    @classmethod
     def format_coords(cls, *keys, **coords):
-        "Returns a list of args, kwargs from the given keys and coords"
+        "Returns a list of keys, coords from the given keys and coords"
         args = set()
-        kwargs = {}
-        cls.add_coords(kwargs, **coords)
+        coords = Coordinates(coords)
         for key in keys:
             if key is None:
                 continue
             if isinstance(key, str):
                 args.add(key)
             elif isinstance(key, dict):
-                cls.add_coords(kwargs, **key)
+                coords.update(key)
             else:
                 if not isiterable(key):
                     raise TypeError(
                         "keys can be str, dict or iterables. %s not accepted." % key
                     )
-                _args, _kwargs = cls.format_coords(*key)
-                cls.add_coords(kwargs, **_kwargs)
+                _args, _coords = cls.format_coords(*key)
+                coords.update(_coords)
                 args.update(_args)
-        return tuple(args), kwargs
-
-    @classmethod
-    def format_values(cls, *values, interval=None, compact=True):
-        "Returns a list of values for the coordinate"
-        vals = set()
-        for value in values:
-            if value is None:
-                vals.add(value)
-            elif isinstance(value, (int, str, range)):
-                tmp = tuple(expand_indeces(value))
-                if interval is not None and not set(tmp).issubset(interval):
-                    raise ValueError("Value %s out of interval" % value)
-                vals.update(tmp)
-            elif isinstance(value, slice):
-                if interval is None:
-                    raise ValueError("Slice requires an interval")
-                vals.update(interval[value])
-            else:
-                vals.update(cls.format_values(*value, interval=interval, compact=False))
-        if None in vals:
-            if len(vals) == 1:
-                return None
-            vals.remove(None)
-        assert not vals.difference(interval), "Trivial assertion"
-        if compact:
-            if vals == set(interval):
-                return slice(None)
-            vals = compact_indeces(*vals)
-        return tuple(vals)
+        return tuple(args), coords
 
     def random(self, *axes, label=None):
         "A random coordinate in the lattice dims and dofs"
@@ -666,11 +709,11 @@ class Coordinates(LatticeDict):
         keys, coords = self.format_coords(*keys, **coords)
         if not keys and not coords:
             if field is not None:
-                return ((key, val) for key, val in field.coords if key in field.indeces)
-            return ()
+                return Coordinates(field.coords).cleaned().freeze()
+            return Coordinates().freeze()
 
         # Adding to resolved all the coordinates
-        resolved = {}
+        resolved = Coordinates()
         for axis, val in coords.items():
             if field is not None:
                 indeces = field.get_indeces(axis)
@@ -678,7 +721,7 @@ class Coordinates(LatticeDict):
                     raise ValueError("Index '%s' not in field" % axis)
             else:
                 indeces = self.lattice.expand(axis)
-            self.add_coords(resolved, **{idx: val for idx in indeces})
+            resolved.update({idx: val for idx in indeces})
 
         for key in keys:
             coords = self.deduce(key)
@@ -690,37 +733,17 @@ class Coordinates(LatticeDict):
                 }
                 if not coords:
                     raise ValueError("'%s' not in field" % key)
-            self.add_coords(resolved, **coords)
+            resolved.update(coords)
 
-        # Checking the coordinates values
+        # Finalizing the coordinates values
         for key, val in resolved.items():
             interval = self.lattice.get_axis_range(BaseField.index_to_axis(key))
-            resolved[key] = self.format_values(*val, interval=interval)
+            resolved.finalize(key, interval=interval)
 
         if field is not None:
-            for key, val in field.coords:
-                if key in resolved:
-                    if resolved[key] is None:
-                        if len(set(expand_indeces(val))) > 1:
-                            raise ValueError(
-                                "None can only be assigned to an axis of size 1."
-                            )
-                    elif not set(expand_indeces(val)) >= set(
-                        expand_indeces(resolved[key])
-                    ):
-                        raise ValueError(
-                            "%s = %s not in field coordinates that has %s = %s"
-                            % (key, resolved[key], key, val)
-                        )
-                elif key in field.indeces:
-                    resolved[key] = val
+            resolved = resolved.intersection(field.coords)
 
-        # Removing coordinates that are the whole axis
-        for key, val in list(resolved.items()):
-            if val == slice(None):
-                del resolved[key]
-
-        return tuple(resolved.items())
+        return resolved.cleaned().freeze()
 
     def deduce(self, key):
         """
