@@ -83,11 +83,11 @@ class BaseField:
             else self.lattice.dims
         )
 
-        self._coords = (
-            {key: field.coords[key] for key in field.indeces if key in self.indeces}
-            if isinstance(field, BaseField)
-            else {}
-        )
+        if isinstance(field, BaseField):
+            same_indeces = set(self.indeces).intersection(field.indeces)
+            self._coords = field.coords.extract(same_indeces)
+        else:
+            self._coords = {}
         self._coords = self.lattice.coords.resolve(coords, field=self)
 
         self._types = tuple(
@@ -207,7 +207,7 @@ class BaseField:
         return self.copy(axes=axes, **kwargs)
 
     def unsqueeze(self, *axes, **kwargs):
-        "Sets coordinate to None of axes with size one."
+        "Sets coordinate to None for the axes with size one."
         axes = kwargs.pop("axes", axes)
         indeces = self.get_indeces(*axes) if axes else self.indeces
         coords = kwargs.pop("coords", {})

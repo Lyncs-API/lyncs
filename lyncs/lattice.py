@@ -645,6 +645,10 @@ class Coordinates(FrozenDict):
                 )
         return res
 
+    def extract(self, keys):
+        "Returns a copy of self including the given keys"
+        return type(self)({key: self[key] for key in keys})
+
 
 class LatticeCoords(LatticeDict):
     "LatticeCoords class"
