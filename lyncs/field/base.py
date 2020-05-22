@@ -243,11 +243,11 @@ class BaseField:
                         indeces.update([_ax + "_" + str(i) for i in range(counts[_ax])])
         return tuple(indeces)
 
-    def get_size(self, key):
-        "Returns the size of the given index/axis."
+    def get_range(self, key):
+        "Returns the range of the given index/axis."
         tmp = self.get_indeces(key)
         if len(tmp) > 1:
-            tmp = set(self.get_size(_k) for _k in tmp)
+            tmp = set(self.get_range(_k) for _k in tmp)
             if len(tmp) == 1:
                 return tuple(tmp)[0]
             raise ValueError(
@@ -256,12 +256,19 @@ class BaseField:
         if len(tmp) == 0:
             raise KeyError("%s not in field" % key)
         key = tmp[0]
-        axis = self.index_to_axis(key)
-        if self.coords[key] == slice(None):
-            return self.lattice.get_axis_size(axis)
-        if isinstance(self.coords[key], (int, str, type(None))):
-            return 1
-        return len(self.coords[key])
+        val = self.coords[key]
+        if val == slice(None):
+            axis = self.index_to_axis(key)
+            return self.lattice.get_axis_range(axis)
+        if isinstance(val, (int, str, type(None))):
+            return (val,)
+        if isinstance(val, slice):
+            return range(val.start, val.stop, val.step)
+        return val
+
+    def get_size(self, key):
+        "Returns the size of the given index/axis."
+        return len(self.get_range(key))
 
     @compute_property
     def shape(self):
