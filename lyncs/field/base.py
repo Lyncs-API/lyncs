@@ -243,20 +243,30 @@ class BaseField:
                         indeces.update([_ax + "_" + str(i) for i in range(counts[_ax])])
         return tuple(indeces)
 
+    def get_size(self, key):
+        "Returns the size of the given index/axis."
+        tmp = self.get_indeces(key)
+        if len(tmp) > 1:
+            tmp = set(self.get_size(_k) for _k in tmp)
+            if len(tmp) == 1:
+                return tuple(tmp)[0]
+            raise ValueError(
+                "%s corresponds to more than one index with different size" % key
+            )
+        if len(tmp) == 0:
+            raise KeyError("%s not in field" % key)
+        key = tmp[0]
+        axis = self.index_to_axis(key)
+        if self.coords[key] == slice(None):
+            return self.lattice.get_axis_size(axis)
+        if isinstance(self.coords[key], (int, str, type(None))):
+            return 1
+        return len(self.coords[key])
+
     @compute_property
     def shape(self):
         "Returns the list of indeces with size. Order is not significant."
-
-        def get_size(key):
-            axis = self.index_to_axis(key)
-            coords = dict(self.coords)
-            if key in coords:
-                if isinstance(coords[key], (int, str, type(None))):
-                    return 1
-                return len(coords[key])
-            return self.lattice.get_axis_size(axis)
-
-        return tuple((key, get_size(key)) for key in self.indeces)
+        return tuple((key, self.get_size(key)) for key in self.indeces)
 
     @compute_property
     def size(self):
