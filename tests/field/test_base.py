@@ -65,3 +65,33 @@ def test_init():
 
     everywhere = point.unsqueeze()
     assert everywhere == dofs.extend("dims")
+
+
+def test_size():
+    field = BaseField(axes=["dims", "dirs", "color", "color"], lattice=lat)
+    with pytest.raises(KeyError):
+        field.get_size("spin")
+    assert field.get_size("color") == 3
+    with pytest.raises(ValueError):
+        field.get_size("dims")
+
+
+def test_coords():
+    field = BaseField(axes=["dims", "dirs", "color", "color"], lattice=lat)
+
+    field.lattice.coords["spin0"] = {"spin": 0}
+    assert "spin0" in field.lattice.coords
+    with pytest.raises(KeyError):
+        field.get(spin=0)
+    with pytest.raises(KeyError):
+        field["spin0"]
+
+    field.lattice.coords["col0"] = {"color": 0}
+    assert "col0" in field.lattice.coords
+    assert field["col0"] == field.get(color=0)
+
+    highX = field.get(x=(2, 3))
+    assert highX.get_size("x") == 2
+    assert highX.get(x=(2, 3)) == highX
+    assert highX != field
+    assert highX.get(x=(2)).get_size("x") == 1
