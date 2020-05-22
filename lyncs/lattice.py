@@ -633,21 +633,72 @@ class Coordinates(FrozenDict):
                 continue
             if val is None or val == slice(None):
                 continue
-            if res[key] is None and isinstance(val, (int, str)):
-                continue
             if res[key] is None:
+                if isinstance(val, (int, str)):
+                    continue
                 raise ValueError("None can only be assigned axis of size one")
             if res[key] == slice(None):
                 raise ValueError("slice(None) can only be assigned to slice(None)")
+            if isinstance(val, (str, int)):
+                raise ValueError("%s=%s not compatible with %s" % (key, res[key], val))
+            if isinstance(res[key], (str, int)):
+                if res[key] in val:
+                    continue
+                raise ValueError("%s=%s not in %s" % (key, res[key], val))
             if not set(val) >= set(res[key]):
                 raise ValueError(
-                    "%s not in field coordinates" % (set(res[key]).difference(set(val)))
+                    "%s=%s not in field coordinates"
+                    % (key, set(res[key]).difference(set(val)))
                 )
         return res
 
     def extract(self, keys):
         "Returns a copy of self including the given keys"
         return type(self)({key: self[key] for key in keys})
+
+    def get_indeces(self, coords):
+        "Returns the indeces of the values of coords"
+        if self == coords:
+            return {}
+        print(self, coords)
+        indeces = coords.copy()
+        for key, val in coords.items():
+            if self[key] == val:
+                continue
+            if val is None:
+                if isinstance(self[key], (int, str)):
+                    continue
+                raise ValueError("None can only be assigned axis of size one")
+            if self[key] == slice(None):
+                continue
+            if self[key] is None:
+                indeces[key] = None
+                continue
+            if isinstance(self[key], (str, int)):
+                raise ValueError(
+                    "Key %s with value %s is not compatible with %s"
+                    % (key, val, self[key])
+                )
+            if isinstance(val, (str, int)):
+                if val not in self[key]:
+                    raise ValueError("%s not in field coordinates" % (val))
+                if isinstance(val, int):
+                    indeces[key] = self[key].index(val)
+                continue
+            if isiterable(self[key], str):
+                if set(val) <= set(self[key]):
+                    continue
+                raise ValueError(
+                    "%s not in field coordinates" % (set(val).difference(self[key]))
+                )
+            assert isiterable(self[key], int), "Unexpected value %s" % self[key]
+            if set(val) <= set(self[key]):
+                indeces[key] = tuple(self[key].index(idx) for idx in val)
+                continue
+            raise ValueError(
+                "%s not in field coordinates" % (set(val).difference(self[key]))
+            )
+        return indeces.cleaned()
 
 
 class LatticeCoords(LatticeDict):
@@ -728,7 +779,7 @@ class LatticeCoords(LatticeDict):
             if field is not None:
                 indeces = field.get_indeces(axis)
                 if not indeces:
-                    raise ValueError("Index '%s' not in field" % axis)
+                    raise KeyError("Index '%s' not in field" % axis)
             else:
                 indeces = self.lattice.expand(axis)
             resolved.update({idx: val for idx in indeces})
@@ -742,7 +793,7 @@ class LatticeCoords(LatticeDict):
                     for index in field.get_indeces(axis)
                 }
                 if not coords:
-                    raise ValueError("'%s' not in field" % key)
+                    raise KeyError("Coord '%s' not in field" % key)
             resolved.update(coords)
 
         # Finalizing the coordinates values
