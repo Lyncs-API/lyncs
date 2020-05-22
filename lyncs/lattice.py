@@ -268,7 +268,7 @@ class Lattice:
 
             # Adding default labels and groups
             dirs = list(self.dims)
-            self.labels.setdefault("dirs", tuple("dir_" + d for d in dirs))
+            self.labels.setdefault("dirs", dirs)
             if len(dirs) > 1:
                 self.groups.setdefault("time", (dirs[0],))
                 self.groups.setdefault("space", tuple(dirs[1:]))
@@ -660,7 +660,7 @@ class Coordinates(FrozenDict):
         "Returns the indeces of the values of coords"
         if self == coords:
             return {}
-        print(self, coords)
+
         indeces = coords.copy()
         for key, val in coords.items():
             if self[key] == val:
