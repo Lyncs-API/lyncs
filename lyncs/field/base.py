@@ -225,7 +225,9 @@ class BaseField:
         "Returns the corresponding field axes to the given axes/dimensions"
         indeces = set()
         for axis in axes:
-            for _ax in self.lattice.expand(axis):
+            if axis == "all":
+                return self.axes
+            for _ax in self.lattice.expand(self.index_to_axis(axis)):
                 if _ax in self.axes:
                     indeces.add(_ax)
         return tuple(indeces)
@@ -235,12 +237,14 @@ class BaseField:
         indeces = set()
         counts = dict(self.axes_counts)
         for axis in axes:
+            if axis == "all":
+                return self.indeces
             if axis in self.indeces:
                 indeces.add(axis)
-            else:
-                for _ax in self.lattice.expand(self.index_to_axis(axis)):
-                    if _ax in self.axes:
-                        indeces.update([_ax + "_" + str(i) for i in range(counts[_ax])])
+                continue
+            for _ax in self.lattice.expand(self.index_to_axis(axis)):
+                if _ax in self.axes:
+                    indeces.update([_ax + "_" + str(i) for i in range(counts[_ax])])
         return tuple(indeces)
 
     def get_range(self, key):
