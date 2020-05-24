@@ -10,12 +10,12 @@ __all__ = [
 ]
 
 from collections import defaultdict
-from functools import wraps
 import numpy as np
 from tunable import (
     TunableClass,
     tunable_property,
     derived_property,
+    Function,
     function,
     derived_method,
     Permutation,
@@ -25,7 +25,7 @@ from tunable import (
 )
 from .base import BaseField, wrap_method
 from .types.base import FieldType
-from ..utils import expand_indeces, single_true, add_kwargs_of, compute_property
+from ..utils import add_kwargs_of, compute_property, isiterable
 
 
 class ArrayField(BaseField, TunableClass):
@@ -106,10 +106,12 @@ class ArrayField(BaseField, TunableClass):
         if copy:
             self.value = self.backend.copy()
 
-        if {idx: val for idx, val in self.coords if idx in field.indeces} != {
-            idx: val for idx, val in field.coords if idx in self.indeces
-        }:
-            self.value = self.backend.getset(self.coords, field.coords)
+        same_indeces = set(self.indeces).intersection(field.indeces)
+        indeces = field.coords.extract(same_indeces).get_indeces(
+            self.coords.extract(same_indeces)
+        )
+        if indeces:
+            self.value = self.backend.getitem(field.indeces_order, indeces)
 
         if set(self.indeces) != set(field.indeces):
             if not self.size == field.size:
@@ -153,6 +155,14 @@ class ArrayField(BaseField, TunableClass):
         if kwargs:
             raise ValueError("Could not resolve the following kwargs.\n %s" % kwargs)
 
+    def __eq__(self, other):
+        return self is other or (
+            super().__eq__(other)
+            and self.dtype == other.dtype
+            and self.node.key == other.node.key
+            and self.indeces_order == other.indeces_order
+        )
+
     def copy(self, value=None, **kwargs):
         "Creates a shallow copy of the field"
         return super().copy(value=value, **kwargs)
@@ -169,7 +179,8 @@ class ArrayField(BaseField, TunableClass):
 
     @dtype.setter
     def dtype(self, value):
-        if np.dtype(value) != self.dtype:
+        if self.dtype != value:
+            self._dtype = np.dtype(value)
             self.value = self.backend.astype(self.dtype)
 
     def astype(self, dtype):
@@ -210,10 +221,10 @@ class ArrayField(BaseField, TunableClass):
             return function(select, field.indeces_order)
         return None
 
-    def reorder(self, *indeces_order, **kwargs):
+    def reorder(self, indeces_order=None, **kwargs):
         "Changes the indeces_order of the field."
         indeces_order = kwargs.pop("indeces_order", indeces_order)
-        if isinstance(indeces_order, tuple) and len(indeces_order) == 0:
+        if indeces_order is None:
             indeces_order = self.indeces_order.copy(uid=True)
         if not isinstance(indeces_order, Variable) and not set(indeces_order) == set(
             self.indeces
@@ -227,35 +238,40 @@ class ArrayField(BaseField, TunableClass):
         shape = dict(self.shape)
         return tuple(shape[key] for key in self.indeces_order.value)
 
-    @derived_method(indeces_order)
-    def get_indeces_index(self, *axes):
-        "Returns the position of indeces of the given axes/indeces/dimensions"
-        indeces = self.get_indeces(*axes)
-        return tuple(
-            (i for i, idx in enumerate(self.indeces_order.value) if idx in indeces)
-        )
+    # @derived_method(indeces_order)
+    # def get_indeces_index(self, *axes):
+    #     "Returns the position of indeces of the given axes/indeces/dimensions"
+    #     indeces = self.get_indeces(*axes)
+    #     return tuple(
+    #         (i for i, idx in enumerate(self.indeces_order.value) if idx in indeces)
+    #     )
 
-    @derived_method(indeces_order)
-    def get_indeces_order(self, *axes):
-        "Returns the ordered indeces of the given axes/indeces/dimensions"
-        indeces = self.get_indeces(*axes)
-        return tuple((idx for idx in self.indeces_order.value if idx in indeces))
+    # @derived_method(indeces_order)
+    # def get_indeces_order(self, *axes):
+    #     "Returns the ordered indeces of the given axes/indeces/dimensions"
+    #     indeces = self.get_indeces(*axes)
+    #     return tuple((idx for idx in self.indeces_order.value if idx in indeces))
 
     def __setitem__(self, coords, value):
         return self.set(value, coords)
 
     def set(self, value, *keys, **coords):
         "Sets the components at the given coordinates"
-        coords = self.lattice.coordinates.resolve(*keys, **coords)
-        self.value = self.backend.getset(coords, self.coords, value)
+        coords = self.lattice.coords.resolve(*keys, **coords, field=self)
+        indeces = self.coords.get_indeces(coords)
+        self.value = self.backend.setitem(self.indeces_order, indeces, value)
 
-    def zeros(self, dtype=None, **kwargs):
+    def zeros(self, dtype=None):
         "Returns the field with all components put to zero"
-        return self.copy(self.backend.zeros(dtype), **kwargs)
+        return self.copy(self.backend.zeros(dtype), dtype=dtype)
 
-    def ones(self, dtype=None, **kwargs):
+    def ones(self, dtype=None):
         "Returns the field with all components put to one"
-        return self.copy(self.backend.ones(dtype), **kwargs)
+        return self.copy(self.backend.ones(dtype), dtype=dtype)
+
+    def rand(self):
+        "Returns a real field with random numbers distributed uniformely between [0,1)"
+        return self.copy(self.backend.rand(), dtype="float64")
 
     @property
     def T(self):
@@ -283,7 +299,10 @@ class ArrayField(BaseField, TunableClass):
         counts = dict(self.axes_counts)
         for (axis, val) in axes_order.items():
             if not axis in counts:
-                raise ValueError("Axis %s not in field" % (axis))
+                raise KeyError("Axis %s not in field" % (axis))
+            if not isiterable(val):
+                raise TypeError("Type of value for axis %s not valid" % (axis))
+            val = tuple(val)
             if not len(val) == counts[axis]:
                 raise ValueError(
                     "%d indeces have been given for axis %s but it has count %d"
@@ -295,20 +314,34 @@ class ArrayField(BaseField, TunableClass):
                     % (val, axis, tuple(range(counts[axis])))
                 )
 
+        if not axes and not axes_order:
+            axes = ("dofs",)
+
         axes = [
             axis
-            for axis in self.get_axes(axes)
+            for axis in self.get_axes(*axes)
             if axis not in axes_order and counts[axis] > 1
         ]
 
+        for (axis, val) in tuple(axes_order.items()):
+            if val == tuple(range(counts[axis])):
+                del axes_order[axis]
+
         if not axes and not axes_order:
-            return self
+            return self.copy()
         return self.copy(
             self.backend.transpose(self.indeces_order, axes=axes, **axes_order)
         )
 
+    @property
+    def iscomplex(self):
+        "Returns if the field is complex"
+        return self.dtype in [np.csingle, np.cdouble, np.clongdouble]
+
     def conj(self):
         "Conjugates the field."
+        if not self.iscomplex:
+            return self.copy()
         return self.copy(self.backend.conj())
 
     @property
@@ -326,10 +359,14 @@ class ArrayField(BaseField, TunableClass):
     @classmethod
     def get_input_axes(cls, *axes, **kwargs):
         "Auxiliary function to uniform the axes input parameters"
-        if single_true((axes, "axes" in kwargs, "axis" in kwargs)):
+        if not (bool(axes), "axes" in kwargs, "axis" in kwargs).count(True) <= 1:
             raise ValueError("Only one between *axes, axes= or axis= can be used")
-        axes = kwargs.pop("axes", axes)
-        return kwargs.pop("axis", axes), kwargs
+        axes = kwargs.pop("axis", kwargs.pop("axes", axes))
+        if isinstance(axes, str):
+            axes = (axes,)
+        if not isiterable(axes, str):
+            raise TypeError("Type for axes not valid. %s" % (axes))
+        return axes, kwargs
 
     def roll(self, shift, *axes, **kwargs):
         """
@@ -345,21 +382,26 @@ class ArrayField(BaseField, TunableClass):
         axes, kwargs = self.get_input_axes(*axes, **kwargs)
         if kwargs:
             raise ValueError("Unknown parameter %s" % kwargs)
-        indeces = self.get_indeces(axes)
+        indeces = self.get_indeces(*axes) if axes else self.indeces
         return self.copy(self.backend.roll(shift, indeces, self.indeces_order))
 
 
 FieldType.Field = ArrayField
 
 
-def backend_method(fnc):
+class backend_method:
     "Decorator for backend methods"
 
-    @wraps(fnc)
-    def method(self, *args, **kwargs):
-        return function(fnc, self.field.value, *args, **kwargs)
+    def __init__(self, fnc):
+        self._fnc = fnc
 
-    return method
+    def __get__(self, obj, owner):
+        if obj is None:
+            return self._fnc
+        return Function(self._fnc, args=(obj.field.value,), label=self._fnc.__name__)
+
+    def __call__(self, *args, **kwargs):
+        return self._fnc(*args, **kwargs)
 
 
 class NumpyBackend:
@@ -372,7 +414,7 @@ class NumpyBackend:
     def init(cls, field, shape, dtype):
         "Initializes a new field"
         if field is None:
-            return function(np.ndarray, shape, dtype=dtype)
+            return function(np.zeros, shape, dtype=dtype)
 
         return function(np.array, field, dtype=dtype)
 
@@ -401,24 +443,10 @@ class NumpyBackend:
         "Fills the field with ones"
         return np.ones_like(self, dtype=dtype)
 
-    def getset(self, coords, old_coords=None, value=None):
-        "Implementation of get/set field items"
-        old_coords = {} if old_coords is None else dict(old_coords)
-        new_coords = dict(coords)
-        for key, vals in tuple(new_coords.items()):
-            vals = tuple(expand_indeces(vals))
-            if key in old_coords:
-                old_vals = tuple(expand_indeces(old_coords[key]))
-                if vals == old_vals:
-                    del new_coords[key]
-                else:
-                    vals = tuple(old_vals.index(val) for val in vals)
-            else:
-                new_coords[key] = vals
-
-        if value is None:
-            return self.getitem(self.field.indeces_order, coords)
-        return self.setitem(self.field.indeces_order, coords, value)
+    @backend_method
+    def rand(self):
+        "Fills the field with random numbers"
+        return np.random.rand(*self.shape)
 
     @backend_method
     def getitem(self, indeces_order, coords):
