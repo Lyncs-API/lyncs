@@ -12,7 +12,7 @@ import re
 from collections import Counter
 from functools import wraps
 from .types.base import FieldType
-from ..utils import default_repr, compute_property, count, add_kwargs_of
+from ..utils import default_repr, compute_property, count, add_kwargs_of, isiterable
 
 
 class BaseField:
@@ -223,6 +223,8 @@ class BaseField:
 
     def get_axes(self, *axes):
         "Returns the corresponding field axes to the given axes/dimensions"
+        if not isiterable(axes, str):
+            raise TypeError("The arguments need to be a list of strings")
         indeces = set()
         for axis in axes:
             if axis == "all":
@@ -234,6 +236,8 @@ class BaseField:
 
     def get_indeces(self, *axes):
         "Returns the corresponding indeces of the given axes/indeces/dimensions"
+        if not isiterable(axes, str):
+            raise TypeError("The arguments need to be a list of strings")
         indeces = set()
         counts = dict(self.axes_counts)
         for axis in axes:
