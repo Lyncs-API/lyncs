@@ -120,7 +120,9 @@ class ArrayField(BaseField, TunableClass):
                 self.ordered_shape, self.indeces_order, field.indeces_order
             )
 
-        if not finalize(self.value).depends_on(self.indeces_order):
+        if not self.indeces_order.fixed and not finalize(self.value).depends_on(
+            self.indeces_order
+        ):
             self.value = self.backend.reorder(self.indeces_order, field.indeces_order)
 
         if isinstance(field, ArrayField) and self.dtype != field.dtype:
@@ -381,7 +383,7 @@ class ArrayField(BaseField, TunableClass):
         """
         axes, kwargs = self.get_input_axes(*axes, **kwargs)
         if kwargs:
-            raise ValueError("Unknown parameter %s" % kwargs)
+            raise KeyError("Unknown parameter %s" % kwargs)
         indeces = self.get_indeces(*axes) if axes else self.indeces
         return self.copy(self.backend.roll(shift, indeces, self.indeces_order))
 
@@ -399,9 +401,6 @@ class backend_method:
         if obj is None:
             return self._fnc
         return Function(self._fnc, args=(obj.field.value,), label=self._fnc.__name__)
-
-    def __call__(self, *args, **kwargs):
-        return self._fnc(*args, **kwargs)
 
 
 class NumpyBackend:
@@ -451,18 +450,17 @@ class NumpyBackend:
     @backend_method
     def getitem(self, indeces_order, coords):
         "Direct implementation of getitem"
-        indeces = tuple(
-            coords[idx] if idx in coords else slice(None) for idx in indeces_order
-        )
+        indeces = tuple(coords.pop(idx, slice(None)) for idx in indeces_order)
+        assert not coords, "Coords didn't empty"
         return self.__getitem__(indeces)
 
     @backend_method
     def setitem(self, indeces_order, coords, value):
         "Direct implementation of setitem"
-        indeces = tuple(
-            coords[idx] if idx in coords else slice(None) for idx in indeces_order
-        )
-        return self.__setitem__(indeces, value)
+        indeces = tuple(coords.pop(idx, slice(None)) for idx in indeces_order)
+        assert not coords, "Coords didn't empty"
+        self.__setitem__(indeces, value)
+        return self
 
     @backend_method
     def reorder(self, new_order, old_order):
