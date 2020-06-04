@@ -37,7 +37,9 @@ class ArrayField(BaseField, TunableClass):
     default_dtype = "complex128"
 
     @add_kwargs_of(BaseField.__init__)
-    def __init_attributes__(self, field=None, dtype=None, indeces_order=None, **kwargs):
+    def __init_attributes__(
+        self, field=None, dtype=None, indeces_order=None, labels_order=None, **kwargs
+    ):
         """
         Initializes the field class.
         
@@ -62,6 +64,10 @@ class ArrayField(BaseField, TunableClass):
         )
         if indeces_order is not None:
             self.indeces_order = indeces_order
+
+        if labels_order is not None:
+            for key, val in labels_order:
+                self.labels_order[key].value = val
 
         self._dtype = np.dtype(
             dtype
@@ -111,7 +117,8 @@ class ArrayField(BaseField, TunableClass):
             self.coords.extract(same_indeces)
         )
         if indeces:
-            self.value = self.backend.getitem(field.indeces_order, indeces)
+            labels = {key: val for key, val in field.labels_order if key in indeces}
+            self.value = self.backend.getitem(field.indeces_order, indeces, **labels)
 
         if set(self.indeces) != set(field.indeces):
             if not self.size == field.size:
@@ -157,12 +164,22 @@ class ArrayField(BaseField, TunableClass):
         if kwargs:
             raise ValueError("Could not resolve the following kwargs.\n %s" % kwargs)
 
-    def __eq__(self, other):
+    def __is__(self, other):
+        "This is a direct implementation of __eq__, while the latter is an element wise comparison"
         return self is other or (
             super().__eq__(other)
             and self.dtype == other.dtype
             and self.node.key == other.node.key
             and self.indeces_order == other.indeces_order
+        )
+
+    __eq__ = __is__
+
+    def __bool__(self):
+        if self.dtype == "bool":
+            return self.all().result
+        raise ValueError(
+            "The truth value of an array with more than one element is ambiguous. Use a.any() or a.all()"
         )
 
     def copy(self, value=None, **kwargs):
@@ -215,19 +232,26 @@ class ArrayField(BaseField, TunableClass):
             return indeces_order
         if field is None:
             return None
+        if len(self.indeces) <= 1:
+            return self.indeces
         if set(self.indeces) == set(field.indeces):
             return field.indeces_order
         if set(self.indeces) <= set(field.indeces):
-            select = lambda indeces: (idx for idx in indeces if idx in self.indeces)
-            select.__name__ = "select"
-            return function(select, field.indeces_order)
+            return function(filter, self.indeces.__contains__, field.indeces_order)
         return None
+
+    @compute_property
+    def labels_order(self):
+        "Order of the field indeces"
+        return tuple(
+            (key, Permutation(self.get_range(key), label=key)) for key in self.labels
+        )
 
     def reorder(self, indeces_order=None, **kwargs):
         "Changes the indeces_order of the field."
         indeces_order = kwargs.pop("indeces_order", indeces_order)
         if indeces_order is None:
-            indeces_order = self.indeces_order.copy(uid=True)
+            indeces_order = self.indeces_order.copy(reset=True)
         if not isinstance(indeces_order, Variable) and not set(indeces_order) == set(
             self.indeces
         ):
@@ -239,20 +263,6 @@ class ArrayField(BaseField, TunableClass):
         "Shape of the field after fixing the indeces_order"
         shape = dict(self.shape)
         return tuple(shape[key] for key in self.indeces_order.value)
-
-    # @derived_method(indeces_order)
-    # def get_indeces_index(self, *axes):
-    #     "Returns the position of indeces of the given axes/indeces/dimensions"
-    #     indeces = self.get_indeces(*axes)
-    #     return tuple(
-    #         (i for i, idx in enumerate(self.indeces_order.value) if idx in indeces)
-    #     )
-
-    # @derived_method(indeces_order)
-    # def get_indeces_order(self, *axes):
-    #     "Returns the ordered indeces of the given axes/indeces/dimensions"
-    #     indeces = self.get_indeces(*axes)
-    #     return tuple((idx for idx in self.indeces_order.value if idx in indeces))
 
     def __setitem__(self, coords, value):
         return self.set(value, coords)
@@ -384,7 +394,9 @@ class ArrayField(BaseField, TunableClass):
         axes, kwargs = self.get_input_axes(*axes, **kwargs)
         if kwargs:
             raise KeyError("Unknown parameter %s" % kwargs)
-        indeces = self.get_indeces(*axes) if axes else self.indeces
+        indeces = self.get_indeces(*axes) if axes else self.get_indeces("all")
+        from pickle import dumps
+
         return self.copy(self.backend.roll(shift, indeces, self.indeces_order))
 
 
@@ -394,13 +406,21 @@ FieldType.Field = ArrayField
 class backend_method:
     "Decorator for backend methods"
 
-    def __init__(self, fnc):
-        self._fnc = fnc
+    def __init__(self, fnc, cls=None):
+        self.fnc = fnc
+        self.__name__ = self.fnc.__name__
+        if cls:
+            self.fnc.__qualname__ = cls.__name__ + "." + self.key
+            setattr(cls, self.key, self)
+
+    @property
+    def key(self):
+        return self.__name__
 
     def __get__(self, obj, owner):
         if obj is None:
-            return self._fnc
-        return Function(self._fnc, args=(obj.field.value,), label=self._fnc.__name__)
+            return self.fnc
+        return Function(self.fnc, args=(obj.field.value,), label=self.key)
 
 
 class NumpyBackend:
@@ -448,15 +468,19 @@ class NumpyBackend:
         return np.random.rand(*self.shape)
 
     @backend_method
-    def getitem(self, indeces_order, coords):
+    def getitem(self, indeces_order, coords, **labels):
         "Direct implementation of getitem"
+        for label, order in labels.items():
+            coords[label] = tuple(order.index(val) for val in coords[label])
         indeces = tuple(coords.pop(idx, slice(None)) for idx in indeces_order)
         assert not coords, "Coords didn't empty"
         return self.__getitem__(indeces)
 
     @backend_method
-    def setitem(self, indeces_order, coords, value):
+    def setitem(self, indeces_order, coords, value, **labels):
         "Direct implementation of setitem"
+        for label, order in labels.items():
+            coords[label] = tuple(order.index(val) for val in coords[label])
         indeces = tuple(coords.pop(idx, slice(None)) for idx in indeces_order)
         assert not coords, "Coords didn't empty"
         self.__setitem__(indeces, value)
