@@ -225,31 +225,21 @@ class BaseField:
         "Returns the corresponding field axes to the given axes/dimensions"
         if not isiterable(axes, str):
             raise TypeError("The arguments need to be a list of strings")
-        indeces = set()
-        for axis in axes:
-            if axis == "all":
-                return self.axes
-            for _ax in self.lattice.expand(self.index_to_axis(axis)):
-                if _ax in self.axes:
-                    indeces.add(_ax)
-        return tuple(indeces)
+        if "all" in axes:
+            return tuple(sorted(self.axes))
+        axes = (axis for axis in self.lattice.expand(*axes) if axis in self.axes)
+        return tuple(sorted(axes))
 
     def get_indeces(self, *axes):
         "Returns the corresponding indeces of the given axes/indeces/dimensions"
         if not isiterable(axes, str):
             raise TypeError("The arguments need to be a list of strings")
-        indeces = set()
-        counts = dict(self.axes_counts)
-        for axis in axes:
-            if axis == "all":
-                return self.indeces
-            if axis in self.indeces:
-                indeces.add(axis)
-                continue
-            for _ax in self.lattice.expand(self.index_to_axis(axis)):
-                if _ax in self.axes:
-                    indeces.update([_ax + "_" + str(i) for i in range(counts[_ax])])
-        return tuple(indeces)
+        if "all" in axes:
+            return tuple(sorted(self.indeces))
+        indeces = set(axis for axis in axes if axis in self.indeces)
+        axes = tuple(self.lattice.expand(set(axes).difference(indeces)))
+        indeces.update([idx for idx in self.indeces if self.index_to_axis(idx) in axes])
+        return tuple(sorted(indeces))
 
     def get_range(self, key):
         "Returns the range of the given index/axis."
