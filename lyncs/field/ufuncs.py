@@ -127,6 +127,18 @@ def ufunc_method(key, elemwise=True, fnc=None, doc=None):
     return method
 
 
+def comparison(key, eq=True):
+    "Additional wrapper for comparisons"
+    fnc = ufunc_method(key)
+
+    def method(self, other):
+        if self.__is__(other):
+            return eq
+        return fnc(self, other)
+
+    return method
+
+
 def backend_ufunc_method(key, fnc=None, doc=None):
     """
     Returns a method for the backend that calls 
@@ -144,23 +156,17 @@ def backend_ufunc_method(key, fnc=None, doc=None):
     elif fnc is not None:
         method.__doc__ = fnc.__doc__
 
-    return backend_method(method)
+    return method
 
 
 OPERATORS = (
     ("__abs__",),
     ("__add__",),
     ("__radd__",),
-    ("__eq__",),
-    ("__gt__",),
-    ("__ge__",),
-    ("__lt__",),
-    ("__le__",),
     ("__mod__",),
     ("__rmod__",),
     ("__mul__",),
     ("__rmul__",),
-    ("__ne__",),
     ("__neg__",),
     ("__pow__",),
     ("__rpow__",),
@@ -174,7 +180,20 @@ OPERATORS = (
 
 for (op,) in OPERATORS:
     setattr(ArrayField, op, ufunc_method(op))
-    setattr(NumpyBackend, op, backend_ufunc_method(op))
+    backend_method(backend_ufunc_method(op), NumpyBackend)
+
+COMPARISONS = (
+    ("__eq__", True),
+    ("__gt__", False),
+    ("__ge__", True),
+    ("__lt__", False),
+    ("__le__", True),
+    ("__ne__", False),
+)
+
+for (op, eq) in COMPARISONS:
+    setattr(ArrayField, op, comparison(op, eq))
+    backend_method(backend_ufunc_method(op), NumpyBackend)
 
 
 UFUNCS = (
@@ -193,7 +212,7 @@ UFUNCS = (
     ("remainder", True,),
     ("mod", True,),
     ("fmod", True,),
-    ("conj", True,),
+    ("conj", False,),
     ("exp", False,),
     ("exp2", False,),
     ("log", False,),
@@ -264,8 +283,8 @@ UFUNCS = (
     ("absolute", True,),
     # non-ufunc elementwise functions
     ("clip", True,),
-    ("isreal", True,),
-    ("iscomplex", True,),
+    ("isreal", False,),
+    ("iscomplex", False,),
     ("real", False,),
     ("imag", False,),
     ("fix", False,),
@@ -282,16 +301,10 @@ for (ufunc, is_member) in UFUNCS:
     if is_member:
         setattr(ArrayField, ufunc, globals()[ufunc])
     if hasattr(np.ndarray, ufunc):
-        setattr(
-            NumpyBackend,
-            ufunc,
-            backend_ufunc_method(ufunc, doc=getattr(np, ufunc).__doc__),
-        )
+        fnc = backend_ufunc_method(ufunc, doc=getattr(np, ufunc).__doc__)
     else:
-        setattr(
-            NumpyBackend, ufunc, backend_ufunc_method(ufunc, fnc=getattr(np, ufunc))
-        )
-
+        fnc = backend_ufunc_method(ufunc, fnc=getattr(np, ufunc))
+    backend_method(fnc, NumpyBackend)
 
 setattr(ArrayField, "real", property(globals()["real"]))
 setattr(ArrayField, "imag", property(globals()["imag"]))
