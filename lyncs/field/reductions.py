@@ -92,7 +92,7 @@ def reduction_method(key, fnc=None, doc=None):
             return fnc(self, *axes, **kwargs)
 
         axes, kwargs = self.get_input_axes(*axes, **kwargs)
-        indeces = self.get_indeces(axes)
+        indeces = self.get_indeces(*axes) if axes else self.indeces
         axes = tuple(
             self.index_to_axis(idx) for idx in self.indeces if idx not in indeces
         )
@@ -146,7 +146,7 @@ def backend_reduction_method(key, fnc=None, doc=None):
     elif fnc is not None:
         method.__doc__ = fnc.__doc__
 
-    return backend_method(method)
+    return method
 
 
 REDUCTIONS = (
@@ -168,14 +168,7 @@ for (reduction,) in REDUCTIONS:
     globals()[reduction] = reduction_method(reduction, fnc=getattr(np, reduction))
     setattr(ArrayField, reduction, globals()[reduction])
     if hasattr(np.ndarray, reduction):
-        setattr(
-            NumpyBackend,
-            reduction,
-            backend_reduction_method(reduction, doc=getattr(np, reduction).__doc__),
-        )
+        fnc = backend_reduction_method(reduction, doc=getattr(np, reduction).__doc__)
     else:
-        setattr(
-            NumpyBackend,
-            reduction,
-            backend_reduction_method(reduction, fnc=getattr(np, reduction)),
-        )
+        fnc = backend_reduction_method(reduction, fnc=getattr(np, reduction))
+    backend_method(fnc, NumpyBackend)
