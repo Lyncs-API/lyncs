@@ -177,7 +177,7 @@ class ArrayField(BaseField, TunableClass):
 
     def __bool__(self):
         if self.dtype == "bool":
-            return self.all().result
+            return bool(self.all().result)
         raise ValueError(
             "The truth value of an array with more than one element is ambiguous. Use a.any() or a.all()"
         )
@@ -438,9 +438,9 @@ class NumpyBackend:
         return function(np.array, field, dtype=dtype)
 
     @backend_method
-    def copy(self, dtype=None):
+    def copy(self):
         "Returns a copy of the field"
-        return self.copy(dtype=dtype)
+        return self.copy()
 
     @backend_method
     def astype(self, dtype):
