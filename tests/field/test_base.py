@@ -33,7 +33,13 @@ def test_init():
         field.lattice.expand("dofs", "dofs")
     )
     assert field.labels == ()
-    assert set(field.get_axes(field.axes)) == set(field.axes)
+    assert set(field.get_axes(*field.axes)) == set(field.axes)
+    assert set(field.get_axes("all")) == set(field.axes)
+    assert set(field.get_indeces("all")) == set(field.indeces)
+    with pytest.raises(TypeError):
+        field.get_axes(1)
+    with pytest.raises(TypeError):
+        field.get_indeces([1, 2])
 
     types = dict(field.types)
     assert field.type == "Propagator"
