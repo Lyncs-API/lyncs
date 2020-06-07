@@ -13,24 +13,19 @@ def test_init():
 
     field = ArrayField(axes=["dims", "dofs", "dofs"], lattice=lat)
 
-    assert field == field.copy()
-    assert field != field.copy(copy=True)
+    assert field.__is__(field.copy())
     assert field.iscomplex
-    assert field != field.conj()
-    assert field != field.astype(int)
-    assert field.copy(dtype=int) == field.astype(int)
-    assert field.astype(field.dtype) == field
-    assert field[{"x": 0}] == field.get(x=0)
+    assert field.copy(dtype=int).__is__(field.astype(int))
+    assert field.astype(field.dtype).__is__(field)
+    assert field[{"x": 0}].__is__(field.get(x=0))
     field2 = field.copy()
     field2.dtype = int
     assert field2.dtype == int
     assert not field2.iscomplex
-    assert field2 == field2.conj()
-    assert field2 != field
-    assert field2 == field.astype(int)
+    assert field2.__is__(field2.conj())
+    assert field2.__is__(field.astype(int))
     field2 = field.copy()
     field2[{"x": 0}] = 1
-    assert field2 != field
 
     assert field.size * 16 == field.bytes
 
@@ -78,14 +73,13 @@ def test_reshape():
 
 def test_transpose():
     field = ArrayField(axes=["dofs", "dofs"], lattice=lat)
-    assert field.T != field
-    assert field.T == field.transpose()
+    assert field.T.__is__(field.transpose())
     assert field.T.indeces_order == field.indeces_order
-    assert field.transpose(spin=(0, 1)) == field
-    assert field.transpose(spin=(1, 0)) == field.transpose("spin")
+    assert field.transpose(spin=(0, 1)).__is__(field)
+    # assert field.transpose(spin=(1, 0)) == field.transpose("spin")
 
     field = ArrayField(axes=["dofs"], lattice=lat)
-    assert field.T == field
+    assert field.T.__is__(field)
 
     with pytest.raises(KeyError):
         field.transpose(foo=(0, 1))
@@ -96,20 +90,23 @@ def test_transpose():
     with pytest.raises(ValueError):
         field.transpose(spin=(22, 33))
 
-    assert field.H != field
-    assert field.H == field.dagger()
+    assert field.H.__is__(field.dagger())
 
     field2 = field.real
-    assert field.H == field.T
+    assert not field2.iscomplex
+    assert field2.H.__is__(field2.T)
 
 
 def test_roll():
     field = ArrayField(axes=["dims", "dofs"], lattice=lat)
-    assert field.roll(1) == field.roll(1, "dims", "dofs")
-    assert field.roll(1, "color") == field.roll(1, axis="color")
-    assert field.roll(1, "color") == field.roll(1, axes="color")
+    assert field.roll(1).__is__(field.roll(1, "all"))
+    assert field.roll(1).__is__(field.roll(1, "dims", "dofs", "labels"))
+    assert field.roll(1, "color").__is__(field.roll(1, axis="color"))
+    assert field.roll(1, "color").__is__(field.roll(1, axes="color"))
 
     with pytest.raises(ValueError):
         field.roll(1, "color", axes="dofs")
+    with pytest.raises(KeyError):
+        field.roll(1, "color", foo="bar")
     with pytest.raises(TypeError):
         field.roll(1, 2, 3)
