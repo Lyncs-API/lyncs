@@ -10,6 +10,7 @@ __all__ = [
 ]
 
 from collections import defaultdict
+from functools import wraps
 import numpy as np
 from tunable import (
     TunableClass,
@@ -211,6 +212,20 @@ class ArrayField(BaseField, TunableClass):
     def copy(self, value=None, **kwargs):
         "Creates a shallow copy of the field"
         return super().copy(value=value, **kwargs)
+
+    @wraps(TunableClass.compute)
+    def compute(self, **kwargs):
+        "Adds consistency checks on the value"
+        super().compute(**kwargs)
+        array = self.node.value.obj
+        assert array.shape == self.ordered_shape, "Mistmatch in the shape %s != %s" % (
+            array.shape,
+            self.shape,
+        )
+        assert array.dtype == self.dtype, "Mistmatch in the dtype %s != %s" % (
+            array.dtype,
+            self.dtype,
+        )
 
     @property
     def backend(self):
