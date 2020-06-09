@@ -109,7 +109,11 @@ class ArrayField(BaseField, TunableClass):
             raise ValueError("Value has been given but indeces_order is not fixed.")
 
         for key, val in self.labels_order:
-            if not val.fixed and not finalize(self.value).depends_on(val):
+            if (
+                not val.fixed
+                and any((var.startswith(key) for var in self.variables))
+                and not finalize(self.value).depends_on(val)
+            ):
                 raise ValueError(
                     "Value has been given but %s order is not fixed." % key
                 )
@@ -139,14 +143,14 @@ class ArrayField(BaseField, TunableClass):
                 self.ordered_shape, self.indeces_order, field.indeces_order
             )
 
-        if self.indeces_order != field.indeces_order:
+        if self.indeces_order != field.indeces_order and self.indeces_order.size > 1:
             self.value = self.backend.reorder(self.indeces_order, field.indeces_order)
 
         labels = {}
         coords = {}
         old_order = dict(field.labels_order)
         for key, val in self.labels_order:
-            if key in old_order and val != old_order[key]:
+            if key in old_order and val != old_order[key] and val.size > 1:
                 coords[key] = val
                 labels[key] = old_order[key]
                 self.value = self.backend.reorder_label(
@@ -332,7 +336,7 @@ class ArrayField(BaseField, TunableClass):
                     "Not valid %s order. It has %s, while expected %s" % (key, val, rng)
                 )
             for _k in self.get_indeces(key):
-                if _k not in given_values:
+                if _k == key or _k not in given_values:
                     labels_order[_k] = val
 
         # Getting labels_order from the field
@@ -340,6 +344,8 @@ class ArrayField(BaseField, TunableClass):
             for key, val in field.labels_order:
                 if key in self.labels and key not in labels_order:
                     rng = self.get_range(key)
+                    if len(rng) <= 1:
+                        continue
                     if set(rng) == set(field.get_range(key)):
                         labels_order[key] = val
                     elif set(rng) <= set(field.get_range(key)):
@@ -353,8 +359,6 @@ class ArrayField(BaseField, TunableClass):
             var = Permutation(rng, label=key)
             if key in labels_order:
                 var.value = labels_order[key]
-            elif len(rng) <= 1:
-                var.value = rng
             labels_order[key] = var
 
         return tuple(labels_order.items()), kwargs

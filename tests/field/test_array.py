@@ -29,6 +29,9 @@ def test_init():
 
     assert field.size * 16 == field.bytes
 
+    with pytest.raises(ValueError):
+        bool(field)
+
 
 def test_init_value():
     unit = [(1, 0, 0), (0, 1, 0), (0, 0, 1)]
@@ -38,6 +41,8 @@ def test_init_value():
         ArrayField(unit, axes=["color"], lattice=lat)
     with pytest.raises(ValueError):
         ArrayField(value=unit, axes=["color", "color"], lattice=lat)
+    with pytest.raises(ValueError):
+        ArrayField([0, 1, 2, 3], axes=["dirs"], lattice=lat)
     field = ArrayField(
         unit, axes=["color", "color"], lattice=lat, indeces_order=("color_0", "color_1")
     )
@@ -61,6 +66,47 @@ def test_reorder():
     field2 = field.reorder()
     field2.indeces_order = reversed(field.indeces)
     assert field2.indeces_order == tuple(reversed(field.indeces))
+
+
+def test_reorder_label():
+    field = ArrayField(axes=["dirs", "dirs", "color"], lattice=lat)
+    field2 = field.copy()
+    assert field.labels_order == field2.labels_order
+    field2 = field.reorder_label("dirs", field.get_range("dirs"))
+    assert dict(field2.labels_order)["dirs_0"] == field.get_range("dirs")
+    assert dict(field2.labels_order)["dirs_1"] == field.get_range("dirs")
+    assert (
+        field2.labels_order
+        == field.copy(dirs_order=field.get_range("dirs")).labels_order
+    )
+    assert (
+        field2.labels_order
+        == field.copy(
+            dirs_0_order=field.get_range("dirs"), dirs_1_order=field.get_range("dirs")
+        ).labels_order
+    )
+    field2 = field.reorder_label("dirs_0")
+    assert dict(field2.labels_order)["dirs_0"] != dict(field.labels_order)["dirs_0"]
+    assert dict(field2.labels_order)["dirs_1"] == dict(field.labels_order)["dirs_1"]
+    with pytest.raises(KeyError):
+        field.reorder_label("color")
+    with pytest.raises(ValueError):
+        field.reorder_label("foo")
+    with pytest.raises(TypeError):
+        field.copy(labels_order="foo")
+    with pytest.raises(ValueError):
+        field2 = field.reorder_label("dirs_0", field.get_range("dirs")[:-1])
+    with pytest.raises(ValueError):
+        order = field2.labels_order[0][1].copy(reset=True)
+        field2.copy(field2.value, labels_order={"dirs_0": order})
+
+    field2 = field[{"dirs_0": "x"}]
+    assert field2.__is__(field2.reorder_label("dirs_0"))
+    with pytest.raises(ValueError):
+        field2.reorder_label("dirs")
+
+    field2 = field[{"dirs_0": ("x", "y")}]
+    assert dict(field2.labels_order)["dirs_0"].fixed
 
 
 def test_reshape():
