@@ -17,7 +17,6 @@ from tunable import (
     derived_property,
     Function,
     function,
-    derived_method,
     Permutation,
     Variable,
     Tunable,
@@ -65,8 +64,11 @@ class ArrayField(BaseField, TunableClass):
         if indeces_order is not None:
             self.indeces_order = indeces_order
 
+        labels_order, kwargs = self._get_labels_order(
+            field if isinstance(field, BaseField) else None, labels_order, **kwargs
+        )
         if labels_order is not None:
-            for key, val in labels_order:
+            for key, val in labels_order.items():
                 self.labels_order[key].value = val
 
         self._dtype = np.dtype(
@@ -87,8 +89,14 @@ class ArrayField(BaseField, TunableClass):
                 raise ValueError(
                     "Cannot initilize a field with an array without fixing the indeces_order"
                 )
+            for key, val in self.labels_order:
+                if not val.fixed:
+                    raise ValueError(
+                        "Cannot initilize a field with an array without fixing the %s order"
+                        % key
+                    )
             value = np.array(value)
-            if not value.shape == self.ordered_shape:
+            if value.shape != self.ordered_shape:
                 raise ValueError("Shape of field and given array do not match")
 
         self.value = self.backend.init(value, self.ordered_shape, self.dtype)
@@ -101,6 +109,12 @@ class ArrayField(BaseField, TunableClass):
             self.indeces_order
         ):
             raise ValueError("Value has been given but indeces_order is not fixed.")
+
+        for key, val in self.labels_order:
+            if not val.fixed and not finalize(self.value).depends_on(val):
+                raise ValueError(
+                    "Value has been given but %s order is not fixed." % key
+                )
 
         self.value = value
 
@@ -131,6 +145,15 @@ class ArrayField(BaseField, TunableClass):
             self.indeces_order
         ):
             self.value = self.backend.reorder(self.indeces_order, field.indeces_order)
+
+        for key, val in self.labels_order:
+            labels = {}
+            coords = {}
+            if not val.fixed and not finalize(self.value).depends_on(val):
+                coords[key] = val
+                labels[key] = field.labels_order[key]
+            if coords:
+                self.value = self.backend.getitem(self.indeces_order, coords, **labels)
 
         if isinstance(field, ArrayField) and self.dtype != field.dtype:
             self.value = self.backend.astype(self.dtype)
@@ -179,7 +202,10 @@ class ArrayField(BaseField, TunableClass):
         if self.dtype == "bool":
             return bool(self.all().result)
         raise ValueError(
-            "The truth value of an array with more than one element is ambiguous. Use a.any() or a.all()"
+            """
+            The truth value of an field with more than one element is ambiguous.
+            Use field.any() or field.all()
+            """
         )
 
     def copy(self, value=None, **kwargs):
@@ -218,6 +244,12 @@ class ArrayField(BaseField, TunableClass):
         "Order of the field indeces"
         return Permutation(self.indeces)
 
+    def reorder(self, indeces_order=None, **kwargs):
+        "Changes the indeces_order of the field."
+        if indeces_order is None:
+            indeces_order = self.indeces_order.copy(reset=True)
+        return self.copy(indeces_order=indeces_order, **kwargs)
+
     def _get_indeces_order(self, field=None, indeces_order=None):
         if indeces_order is not None:
             if (
@@ -247,16 +279,64 @@ class ArrayField(BaseField, TunableClass):
             (key, Permutation(self.get_range(key), label=key)) for key in self.labels
         )
 
-    def reorder(self, indeces_order=None, **kwargs):
-        "Changes the indeces_order of the field."
-        indeces_order = kwargs.pop("indeces_order", indeces_order)
-        if indeces_order is None:
-            indeces_order = self.indeces_order.copy(reset=True)
-        if not isinstance(indeces_order, Variable) and not set(indeces_order) == set(
-            self.indeces
-        ):
-            raise ValueError("All the indeces need to be specified in the reordering")
-        return self.copy(indeces_order=indeces_order, **kwargs)
+    def reorder_label(self, label, label_order=None, **kwargs):
+        "Changes the order of the label."
+        rng = self.get_range(label)
+        if not isiterable(self.get_range(label), str):
+            raise KeyError("%s is not a label of the field" % label)
+        if len(rng) <= 1:
+            return self.copy()
+        if label_order is None:
+            label_order = Permutation(rng, label=label)
+        labels_order = kwargs.pop("labels_order", {})
+        labels_order[label] = label_order
+        return self.copy(labels_order=labels_order, **kwargs)
+
+    def _get_labels_order(self, field=None, labels_order=None, **kwargs):
+        if labels_order is not None and not isinstance(labels_order, dict):
+            raise TypeError("labels_order must be a dict")
+        if labels_order is None:
+            labels_order = {}
+
+        # Checking to keys in kwargs
+        for key in self.labels:
+            if key + "_order" in kwargs:
+                labels_order[key] = kwargs.pop(key + "_order")
+                continue
+            key = self.index_to_axis(key)
+            if key + "_order" in kwargs:
+                labels_order[key] = kwargs.pop(key + "_order")
+
+        for key, val in tuple(labels_order.items()):
+            rng = self.get_range(key)  # This does also some quality control on the key
+            if (
+                not isinstance(val, Variable)
+                and not isinstance(val, Tunable)
+                and set(val) != set(rng)
+            ):
+                raise ValueError(
+                    "Not valid %s order. It has %s, while expected %s" % (key, val, rng)
+                )
+            _k = key
+            for _k in self.get_indeces(key):
+                labels_order[_k] = val
+            if _k != key:
+                del labels_order[key]
+
+        for key in self.labels:
+            if key not in labels_order:
+                rng = self.get_range(key)
+                if len(rng) <= 1:
+                    labels_order[key] = rng
+                elif field is not None:
+                    field_labels_order = dict(field.labels_order)
+                    if set(rng) == set(field.get_range(key)):
+                        labels_order[key] = field_labels_order[key]
+                    elif set(rng) <= set(field.get_range(key)):
+                        labels_order[key] = function(
+                            filter, rng.__contains__, field_labels_order[key]
+                        )
+        return labels_order, kwargs
 
     @derived_property(indeces_order)
     def ordered_shape(self):
@@ -395,8 +475,6 @@ class ArrayField(BaseField, TunableClass):
         if kwargs:
             raise KeyError("Unknown parameter %s" % kwargs)
         indeces = self.get_indeces(*axes) if axes else self.get_indeces("all")
-        from pickle import dumps
-
         return self.copy(self.backend.roll(shift, indeces, self.indeces_order))
 
 
@@ -415,6 +493,7 @@ class backend_method:
 
     @property
     def key(self):
+        "Name of the method"
         return self.__name__
 
     def __get__(self, obj, owner):
