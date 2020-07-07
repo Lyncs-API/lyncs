@@ -19,7 +19,7 @@ def test_init():
     field, indeces, shape = init_field()
 
     assert field == field.copy(copy=True)
-    
+
     assert field.zeros() == np.zeros(shape)
     assert field.ones() == np.ones(shape)
 
@@ -33,6 +33,7 @@ def test_init():
         vals, axes=["color", "color"], indeces_order=["color_0", "color_1"]
     )
     assert field == vals
+    assert field.astype("float") == vals.astype("float")
 
 
 def getitem(arr, indeces, **coords):
@@ -45,7 +46,9 @@ def test_getitem():
     random = field.result
 
     assert field[{"x": 0}] == getitem(random, indeces, x_0=0)
-    assert field[{"y": (0, 1, 2), "z": -1}] == getitem(random, indeces, y_0=range(3), z_0=-1)
+    assert field[{"y": (0, 1, 2), "z": -1}] == getitem(
+        random, indeces, y_0=range(3), z_0=-1
+    )
     assert field[{"color": 0}] == getitem(random, indeces, color_0=0, color_1=0)
     assert field[{"color_0": 0}] == getitem(random, indeces, color_0=0)
 
