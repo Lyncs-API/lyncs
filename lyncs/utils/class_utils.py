@@ -30,7 +30,7 @@ def single_true(iterable):
     return any(i) and not any(i)
 
 
-def default_repr(self):
+def default_repr(self, short=True):
     """
     Default repr used by lyncs
     """
@@ -54,9 +54,13 @@ def default_repr(self):
             val = getattr(self, key)
             if isinstance(val, MethodType):
                 continue
-            val = repr(getattr(self, key)).replace(
-                "\n", "\n" + pad + " " * (len(arg_eq))
-            )
+
+            val = repr(val)
+
+            if short and "\n" in val:
+                val = val.split("\n")[0] + " ... " + val[-1]
+            else:
+                val = val.replace("\n", "\n" + pad + " " * (len(arg_eq)))
 
             if found_first:
                 ret += ",\n" + pad
