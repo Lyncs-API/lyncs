@@ -12,7 +12,7 @@ __all__ = [
 from collections import defaultdict
 from functools import wraps
 import numpy as np
-from tunable import (
+from tuneit import (
     TunableClass,
     tunable_property,
     derived_property,
@@ -157,7 +157,7 @@ class ArrayField(BaseField, TunableClass):
                     key, val, old_order[key], self.indeces_order
                 )
 
-        if isinstance(field, ArrayField) and self.dtype != field.dtype:
+        if self.dtype != field.dtype:
             self.value = self.backend.astype(self.dtype)
 
         return kwargs
@@ -386,8 +386,24 @@ class ArrayField(BaseField, TunableClass):
         "Returns the field with all components put to one"
         return self.copy(self.backend.ones(dtype), dtype=dtype)
 
-    def rand(self):
+    def random(self, seed=None):
+        """
+        Returns a random field generator. If seed is given, reproducibility is ensured
+        independently on the field parameters, e.g. indeces_order, etc.
+        
+        Parameters
+        ----------
+        seed: int
+            The seed to use for starting the random number generator.
+            Note: There is a performance penality in initializing the field if seed is given. 
+        """
+        from .random import RandomFieldGenerator
+
+        return RandomFieldGenerator(self, seed)
+
+    def rand(self, seed=None):
         "Returns a real field with random numbers distributed uniformely between [0,1)"
+        # return self.random(seed).random()
         return self.copy(self.backend.rand(), dtype="float64")
 
     @property
