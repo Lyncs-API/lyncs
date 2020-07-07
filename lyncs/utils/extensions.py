@@ -119,7 +119,9 @@ class FrozenDict(dict):
             self[key] = val
 
     @wraps(dict.pop)
-    def pop(self, key):
+    def pop(self, key, val):
+        if key not in self:
+            return val
         val = self[key]
         del self[key]
         return val
