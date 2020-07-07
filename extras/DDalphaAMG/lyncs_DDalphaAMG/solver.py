@@ -127,7 +127,7 @@ class Solver:
 
         kwargs.setdefault("print", 1)
         if kwargs:
-            self.update_params(**kwargs)
+            self.update_parameters(**kwargs)
 
     def __del__(self):
         if Solver.initialized:
