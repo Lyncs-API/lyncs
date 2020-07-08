@@ -1,4 +1,9 @@
-from lyncs_setuptools import setup
+try:
+    from lyncs_setuptools import setup
+except ImportError:
+    from .extras.setuptools.lyncs_setuptools import setup
+
+from glob import glob
 
 install_requires = [
     "numpy",
@@ -22,4 +27,10 @@ setup(
     install_requires=install_requires,
     extras_require=extras_require,
     keywords=["Python", "API", "Lattice", "Field", "QCD",],
+    data_files=[
+        (
+            "extras/setuptools",
+            glob("extras/setuptools/lyncs_setuptools/**/*.py", recursive=True),
+        )
+    ],
 )
