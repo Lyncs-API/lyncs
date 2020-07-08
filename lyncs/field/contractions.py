@@ -10,7 +10,7 @@ __all__ = [
 
 from collections import defaultdict
 import numpy as np
-from tunable import Permutation
+from tuneit import Permutation
 from ..utils import count
 from .array import ArrayField, NumpyBackend, backend_method
 
@@ -132,7 +132,9 @@ def dot(
     axis=None,
     closed_indeces=None,
     open_indeces=None,
+    reduced_indeces=None,
     trace=False,
+    average=False,
     debug=False
 ):
     """
@@ -161,6 +163,10 @@ def dot(
         Same as axes.
     open_indeces: str, list
         Opposite of close indeces, i.e. the axes that are left open.
+    reduced_indeces: str, list
+        List of indeces to sum over and not available in the output field.
+    average: bool
+        If True, the reduced_indeces are averaged, i.e. result/prod(reduced_indeces.size).
     trace: bool
         If True, then the closed indeces are also traced
     debug: bool
@@ -225,6 +231,9 @@ def dot(
 
     if trace:
         field_indeces = trace_indeces(*field_indeces, axes=closed_indeces)
+
+    if average:
+        pass
 
     return einsum(*fields, indeces=field_indeces, debug=debug)
 
