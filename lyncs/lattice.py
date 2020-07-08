@@ -63,6 +63,10 @@ class LatticeDict(FrozenDict):
     def copy(self):
         return type(self)(self, lattice=self.lattice, check=False)
 
+    def rename(self, key, new_key):
+        "Renames a key of the dictionary"
+        self[new_key] = self.pop(key)
+
     def reset(self, val=None):
         "Resets the content of the dictionary"
         # TODO: in case of reset/delitem the it should check if all the other
@@ -138,6 +142,15 @@ class LatticeGroups(LatticeDict):
 
         super().__setitem__(key, val)
 
+    def replace(self, key, new_key):
+        "Replaces a key with a the new key"
+
+        for _key, val in self.items():
+            if key in val:
+                val = list(val)
+                val[val.index(key)] = new_key
+                self[_key] = val
+
 
 class Lattice:
     """
@@ -147,9 +160,7 @@ class Lattice:
 
     last_defined = None
     default_dims_labels = ["t", "x", "y", "z"]
-    theories = {
-        "QCD": {"spin": 4, "color": 3, "groups": {"gauge": ["color"],},},
-    }
+    theories = {"QCD": {"spin": 4, "color": 3, "groups": {"gauge": ["color"],},}}
 
     __slots__ = [
         "_dims",
@@ -157,6 +168,7 @@ class Lattice:
         "_labels",
         "_groups",
         "_coords",
+        "_maps",
         "_fields",
         "_frozen",
     ]
@@ -172,9 +184,12 @@ class Lattice:
         self.labels = None
         self.groups = None
         self.coords = None
+        self.maps = None
         return self
 
-    def __init__(self, dims=4, dofs="QCD", labels=None, groups=None, coords=None):
+    def __init__(
+        self, dims=4, dofs="QCD", labels=None, groups=None, coords=None, maps=None
+    ):
         """
         Lattice initializer.
 
@@ -217,6 +232,7 @@ class Lattice:
         self.labels.update(labels)
         self.groups.update(groups)
         self.coords.update(coords)
+        self.maps.update(maps)
 
         Lattice.last_defined = self
 
@@ -258,6 +274,8 @@ class Lattice:
 
     @dims.setter
     def dims(self, value):
+        if self.frozen:
+            raise RuntimeError("The lattice has been frozen and dims cannot be changed")
 
         if not value:
             self._dims = LatticeAxes(lattice=self)
@@ -302,6 +320,8 @@ class Lattice:
 
     @dofs.setter
     def dofs(self, value):
+        if self.frozen:
+            raise RuntimeError("The lattice has been frozen and dofs cannot be changed")
 
         if not value:
             self._dofs = LatticeAxes(lattice=self)
@@ -344,6 +364,11 @@ class Lattice:
 
     @labels.setter
     def labels(self, value):
+        if self.frozen:
+            raise RuntimeError(
+                "The lattice has been frozen and labels cannot be changed"
+            )
+
         if not value:
             self._labels = LatticeLabels(lattice=self)
             return
@@ -354,6 +379,10 @@ class Lattice:
 
         raise TypeError("Not allowed type %s for labels" % type(value))
 
+    def add_label(self, key, value):
+        "Adds a label to the lattice"
+        self.labels[key] = value
+
     @property
     def groups(self):
         "List of groups of the lattice"
@@ -361,6 +390,11 @@ class Lattice:
 
     @groups.setter
     def groups(self, value):
+        if self.frozen:
+            raise RuntimeError(
+                "The lattice has been frozen and groups cannot be changed"
+            )
+
         if not value:
             self._groups = LatticeGroups(lattice=self)
             return
@@ -371,6 +405,10 @@ class Lattice:
 
         raise TypeError("Not allowed type %s for groups" % type(value))
 
+    def add_group(self, key, value):
+        "Adds a group to the lattice"
+        self.groups[key] = value
+
     @property
     def coords(self):
         "List of coordinates of the lattice"
@@ -378,6 +416,11 @@ class Lattice:
 
     @coords.setter
     def coords(self, value):
+        if self.frozen:
+            raise RuntimeError(
+                "The lattice has been frozen and coords cannot be changed"
+            )
+
         if not value:
             self._coords = LatticeCoords(lattice=self)
             return
@@ -387,6 +430,31 @@ class Lattice:
             return
 
         raise TypeError("Not allowed type %s for coordinates" % type(value))
+
+    def add_coord(self, key, value):
+        "Adds a coord to the lattice"
+        self.coords[key] = value
+
+    @property
+    def maps(self):
+        "List of maps of the lattice"
+        return self._maps
+
+    @maps.setter
+    def maps(self, value):
+        if not value:
+            self._maps = LatticeMaps(lattice=self)
+            return
+
+        if isinstance(value, (dict, MappingProxyType)):
+            self.maps.reset(value)
+            return
+
+        raise TypeError("Not allowed type %s for maps" % type(value))
+
+    def add_map(self, key, value):
+        "Adds a map to the lattice"
+        self.maps[key] = value
 
     def __eq__(self, other):
         return self is other or (
@@ -414,6 +482,41 @@ class Lattice:
         yield from self.dofs.keys()
         yield from self.labels.keys()
         yield from self.groups.keys()
+
+    def rename(self, key, new_key):
+        "Renames a dimension within the lattice"
+
+        if key == new_key:
+            return
+
+        if self.frozen:
+            raise RuntimeError(
+                "The lattice has been frozen and dimensions cannot be renamed"
+            )
+
+        if new_key in dir(self):
+            raise KeyError("%s is already in use" % (new_key))
+
+        key_is_axis = key in self.axes
+        key_found = False
+        for dct in (
+            self.dims,
+            self.dofs,
+            self.labels,
+            self.groups,
+            self.coords,
+            self.maps,
+        ):
+            if key in dct:
+                dct.rename(key, new_key)
+                key_found = True
+
+        if not key_found:
+            raise KeyError("%s not found" % (key))
+
+        if key_is_axis:
+            for dct in self.groups, self.coords, self.maps:
+                dct.replace(key, new_key)
 
     def expand(self, *dimensions):
         "Expand the list of dimensions into the fundamental dimensions and degrees of freedom"
@@ -466,6 +569,7 @@ class Lattice:
         yield from dir(type(self))
         yield from self.keys()
         yield from self.coords
+        yield from self.maps
         yield from self.fields
 
     def __contains__(self, key):
@@ -503,18 +607,18 @@ class Lattice:
     #     from dask.base import normalize_token
     #     return normalize_token((type(self), self.__getstate__()))
 
-    def copy(self):
+    def copy(self, **kwargs):
         "Returns a copy of the lattice."
-        return self.__copy__()
+        kwargs.setdefault("dims", self.dims)
+        kwargs.setdefault("dofs", self.dofs)
+        kwargs.setdefault("groups", self.groups)
+        kwargs.setdefault("labels", self.labels)
+        kwargs.setdefault("coords", self.coords)
+        kwargs.setdefault("maps", self.maps)
+        return Lattice(**kwargs)
 
     def __copy__(self):
-        return Lattice(
-            dims=self.dims,
-            dofs=self.dofs,
-            groups=self.groups,
-            labels=self.labels,
-            coords=self.coords,
-        )
+        return self.copy()
 
     def __getstate__(self):
         return (
@@ -523,6 +627,7 @@ class Lattice:
             self.labels,
             self.groups,
             self.coords,
+            self.maps,
             self.frozen,
         )
 
@@ -533,6 +638,7 @@ class Lattice:
             self.labels,
             self.groups,
             self.coords,
+            self.maps,
             self.frozen,
         ) = state
 
@@ -744,6 +850,10 @@ class LatticeCoords(LatticeDict):
                 args.update(_args)
         return tuple(args), coords
 
+    def replace(self, key, new_key):
+        "Replaces a key with a the new key"
+        pass
+
     def random(self, *axes, label=None):
         "A random coordinate in the lattice dims and dofs"
         if not axes:
@@ -826,3 +936,59 @@ class LatticeCoords(LatticeDict):
 
         # TODO
         raise NotImplementedError
+
+
+class LatticeMaps(LatticeDict):
+    "LatticeMaps class"
+
+    def __getitem__(self, key):
+        if isinstance(key, Lattice):
+            key = self.lattice_to_key(key)
+        return super().__getitem__(key)
+
+    def __setitem__(self, key, value):
+        if key in self.lattice.labels.labels():
+            raise KeyError("%s is already used in lattice labels" % key)
+
+        super().__setitem__(key, self.resolve(value))
+
+    def replace(self, key, new_key):
+        "Replaces a key with a the new key"
+        pass
+
+    def rename(self, key1, key2):
+        "Returns a lattice with key1 renamed to key2"
+        lattice = self.lattice.copy()
+        lattice.rename(key1, key2)
+        map_lattice(self.lattice, lattice, {"%s -> %s" % (key1, key2): None})
+        return lattice
+
+    def evenodd(self, axis=None):
+        """
+        Returns a lattice with even-odd decomposition on the given axis.
+        Axis must be an even-sized dimension.
+        """
+        lattice = self.lattice.copy()
+
+        # Getting first dim with even size
+        if axis is None:
+            for key in lattice.dims():
+                if lattice[key] % 2 == 0:
+                    axis = key
+                    break
+        elif axis not in lattice.dims:
+            raise KeyError("Axis must be one of the dims")
+
+        if axis is None:
+            raise ValueError(
+                "Even-odd decomposition can be applied only if at least one dim is even"
+            )
+        if lattice[axis] % 2 != 0:
+            raise ValueError(
+                "Even-odd decomposition can be applied only on a even-sized dimension"
+            )
+
+        lattice[axis] //= 2
+        lattice.rename(key1, key2)
+        map_lattice(self.lattice, lattice, {"%s -> %s" % (key1, key2): None})
+        return lattice
