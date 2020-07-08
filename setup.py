@@ -1,14 +1,14 @@
 from lyncs_setuptools import setup
 
 install_requires = [
-    "dask",
     "numpy",
     "xmltodict",
-    "tunable",
+    "tuneit",
 ]
 
 extras_require = {
     # lyncs/extras
+    "dask": ["dask"],
     "clime": ["lyncs-clime"],
     "DDalphaAMG": ["lyncs-DDalphaAMG"],
     # Groups
