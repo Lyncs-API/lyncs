@@ -14,18 +14,16 @@ def find_description(readme=None):
     options = ["".join(parts) for parts in product(base, ext)]
 
     if readme:
-        assert os.path.isfile(readme), "Given readme does not exist"
+        if not os.path.isfile(readme):
+            raise IOError("Given readme does not exist")
     else:
         for filename in options:
             if os.path.isfile(filename):
                 readme = filename
                 break
 
-    assert readme, """
-    Couldn't find a compatible filename.
-    Options are %s""" % ", ".join(
-        options
-    )
+    if not readme:
+        return None, None, None
 
     if readme.endswith(".md"):
         dtype = "text/markdown"
