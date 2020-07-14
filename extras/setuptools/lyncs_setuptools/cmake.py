@@ -12,7 +12,7 @@ __all__ = [
 
 
 class CMakeExtension(Extension):
-    def __init__(self, name, source_dir=".", cmake_args=None):
+    def __init__(self, name, source_dir=".", cmake_args=None, post_build=None):
         source_dir = source_dir or "."
 
         sources = [source_dir + "/CMakeLists.txt"]
@@ -25,6 +25,7 @@ class CMakeExtension(Extension):
         self.cmake_args = (
             [cmake_args] if isinstance(cmake_args, str) else (cmake_args or [])
         )
+        self.post_build = post_build
 
 
 class CMakeBuild(build_ext):
@@ -36,6 +37,9 @@ class CMakeBuild(build_ext):
         if self.extensions:
             build_ext.run(self)
 
+    def get_install_dir(self, ext):
+        return os.path.dirname(self.get_ext_fullpath(ext.name))
+
     def build_extension(self, ext):
         try:
             out = subprocess.check_output(["cmake", "--version"])
@@ -44,8 +48,7 @@ class CMakeBuild(build_ext):
                 "CMake must be installed to build the following extensions: " + ext.name
             )
 
-        extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
-        cmake_args = ["-DEXTERNAL_INSTALL_LOCATION=" + extdir]
+        cmake_args = ["-DEXTERNAL_INSTALL_LOCATION=" + self.get_install_dir(ext)]
         cmake_args += ext.cmake_args
 
         cfg = "Debug" if self.debug else "Release"
@@ -68,3 +71,6 @@ class CMakeBuild(build_ext):
             ["cmake", "--build", "."] + build_args, cwd=self.build_temp,
         )
         print(out)
+
+        if ext.post_build:
+            ext.post_build(self, ext)
