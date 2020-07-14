@@ -23,6 +23,7 @@ class Lib:
         include=None,
         path=".",
         c_include=False,
+        namespace=None,
     ):
         """
         Initializes a library class that can be pickled.
@@ -50,6 +51,7 @@ class Lib:
         self.check = [check] if isinstance(check, str) else check
         self.include = [include] if isinstance(include, str) else include or []
         self.c_include = c_include
+        self.namespace = [namespace] if isinstance(namespace, str) else namespace or []
 
     @property
     def lib(self):
@@ -100,10 +102,16 @@ class Lib:
         assert all(
             (hasattr(cppyy.gbl, check) for check in self.check)
         ), "Given checks not found."
-        return cppyy.gbl
+        return self.lib
 
     def __getattr__(self, key):
         try:
+            if self.namespace:
+                for namespace in self.namespace:
+                    try:
+                        return getattr(getattr(self.lib, namespace), key)
+                    except AttributeError:
+                        pass
             return getattr(self.lib, key)
         except AttributeError:
             try:
