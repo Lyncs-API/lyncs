@@ -8,8 +8,6 @@ set(EXTERNAL_INSTALL_LOCATION "${CMAKE_BINARY_DIR}" CACHE STRING "Path where to 
 
 FILE(GLOB_RECURSE PATCHES "${CMAKE_CURRENT_SOURCE_DIR}/patches/*.patch")
 
-MESSAGE(STATUS ${QUDA_CMAKE_ARGS})
-
 ExternalProject_Add(quda
   GIT_REPOSITORY https://github.com/lattice/quda
   GIT_TAG v1.0.0

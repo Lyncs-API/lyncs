@@ -13,10 +13,12 @@ new file mode 100644
 index 0000000..2f4bfb5
 --- /dev/null
 +++ b/config.py.in
-@@ -0,0 +1,6 @@
+@@ -0,0 +1,8 @@
 +"""
 +This file is automitically generated during the setup.
 +Please do not edit config.py, but edit config.py.in in the patches directory.
 +"""
 +
 +QUDA_MPI = "${QUDA_MPI}" == "ON"
++GITVERSION = "${GITVERSION}"
++CUDA_INCLUDE = "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
