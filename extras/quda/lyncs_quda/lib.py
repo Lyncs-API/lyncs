@@ -79,4 +79,5 @@ lib = QudaLib(
     library=["libquda.so", libmpi],
     check="initQuda",
     include=CUDA_INCLUDE.split(";"),
+    namespace="quda",
 )
