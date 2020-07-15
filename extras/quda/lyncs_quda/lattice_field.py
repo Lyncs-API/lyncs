@@ -27,6 +27,8 @@ class LatticeField:
     def field(self, field):
         if not isinstance(field, (numpy.ndarray, cupy.ndarray)):
             raise TypeError("Supporting only numpy or cupy for field")
+        if isinstance(field, cupy.ndarray) and field.device.id != lib.device_id:
+            raise TypeError("Field is stored on a different device than the quda lib")
         if len(field.shape) < 4:
             raise ValueError("A lattice field should not have shape smaller than 4")
         self._field = field
@@ -55,6 +57,11 @@ class LatticeField:
     def dims(self):
         "Shape of the lattice dimensions"
         return self.shape[-self.ndims :]
+
+    @property
+    def quda_dims(self):
+        "Memory array with lattice dimensions"
+        return array("i", self.dims)
 
     @property
     def dofs(self):
@@ -88,8 +95,15 @@ class LatticeField:
         return 0
 
     @property
+    def ptr(self):
+        "Memory pointer"
+        if isinstance(self.field, numpy.ndarray):
+            return self.field.__array_interface__["data"][0]
+        return self.field.data.ptr
+
+    @property
     def quda_params(self):
         "Returns and instance of quda::LatticeFieldParam"
         return lib.LatticeFieldParam(
-            self.ndims, array("i", self.dims), self.pad, self.quda_precision
+            self.ndims, self.quda_dims, self.pad, self.quda_precision
         )
