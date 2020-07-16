@@ -9,9 +9,12 @@ from cppyy.ll import cast
 from cppyy import cppdef, gbl
 
 __all__ = __all__ + [
+    "to_pointer",
     "assign",
 ]
 
+def to_pointer(ptr:int):
+    return cast["void *"](ptr)
 
 def assign(ptr, val):
     try:
