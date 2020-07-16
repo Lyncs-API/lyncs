@@ -32,7 +32,7 @@ QUDA_CMAKE_ARGS = [
 
 def patch_include(builder, ext):
     'Replaces #include instances in header files that use <> with "" for relative includes'
-    install_dir = builder.get_install_dir(ext + "/include")
+    install_dir = builder.get_install_dir(ext) + "/include"
     for path in Path(install_dir).rglob("*.h"):
         with fileinput.FileInput(str(path), inplace=True, backup=".bak") as fp:
             for fline in fp:
