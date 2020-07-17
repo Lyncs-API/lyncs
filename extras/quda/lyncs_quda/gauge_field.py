@@ -8,7 +8,9 @@ __all__ = [
 
 from functools import reduce
 from time import time
-from lyncs_cppyy.ll import to_pointer
+import numpy
+import cupy
+from lyncs_cppyy.ll import to_pointer, array_to_pointers
 from .lib import lib
 from .lattice_field import LatticeField
 
@@ -197,3 +199,65 @@ class GaugeField(LatticeField):
                 f"link_dir can be either -1 (all) or must be between 0 and {self.ndims}"
             )
         return self.quda_field.abs_min(link_dir)
+
+    def compute_paths(self, paths, coeffs=None, add_to=None, add_coeff=1):
+        """
+        Computes the gauge paths on the lattice.
+        
+        The same paths are computed for every direction.
+
+        - The paths are given with respect to direction "1" and 
+          this must be the first number of every path list.
+        - Directions go from 1 to self.ndims
+        - Negative value (-1,...) means backward movement in the direction
+        - Paths are then rotated for every direction.
+        """
+
+        if coeffs is None:
+            coeffs = [1] * len(paths)
+        if not len(paths) == len(coeffs):
+            raise ValueError("Paths and coeffs must have the same length")
+
+        num_paths = len(paths)
+        coeffs = numpy.array(coeffs, dtype="float64")
+        lengths = numpy.array(list(map(len, paths)), dtype="int32") - 1
+        max_length = int(lengths.max())
+        paths_array = numpy.zeros((self.ndims, num_paths, max_length), dtype="int32")
+
+        for i, path in enumerate(paths):
+            if min(path) < -self.ndims:
+                raise ValueError(
+                    f"Path {i} = {path} has direction smaller than {-self.ndims}"
+                )
+            if max(path) > self.ndims:
+                raise ValueError(
+                    f"Path {i} = {path} has direction larger than {self.ndims}"
+                )
+            if path[0] != 1:
+                raise ValueError(f"Path {i} = {path} does not start with 1")
+            if 0 in path:
+                raise ValueError(f"Path {i} = {path} has zeros")
+
+            for dim in range(self.ndims):
+                for j, step in enumerate(path[1:]):
+                    if step > 0:
+                        paths_array[dim, i, j] = (step - 1 + dim) % 4
+                    else:
+                        paths_array[dim, i, j] = 7 - (-step - 1 + dim) % 4
+
+        if add_to is None:
+            shape = (self.ndims, 10,) + self.dims
+            add_to = GaugeField(cupy.zeros(shape, dtype=self.dtype))
+
+        quda_paths_array = array_to_pointers(paths_array)
+        lib.gaugeForce(
+            add_to.quda_field,
+            self.quda_field,
+            add_coeff,
+            quda_paths_array.view,
+            lengths,
+            coeffs,
+            num_paths,
+            max_length,
+        )
+        return add_to
