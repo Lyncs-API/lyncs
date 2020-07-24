@@ -13,6 +13,7 @@ class Lib:
         "library",
         "check",
         "c_include",
+        "namespace",
     ]
 
     def __init__(
