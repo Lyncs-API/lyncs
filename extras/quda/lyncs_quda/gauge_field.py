@@ -138,6 +138,14 @@ class GaugeField(LatticeField):
         "Set all field elements to zero"
         self.quda_field.zero()
 
+    def unity(self):
+        "Set all field elements to unity"
+        if self.reconstruct != "NO":
+            raise NotImplementedError
+        tmp = self.field.reshape((2,4,9,-1,2))
+        tmp[:,:,[0,4,8],:,0] = 1
+        self.field = tmp.reshape(self.shape)
+
     def gaussian(self, epsilon=1, seed=None):
         """
         Generates Gaussian distributed su(N) or SU(N) fields.  
@@ -215,6 +223,8 @@ class GaugeField(LatticeField):
 
         if coeffs is None:
             coeffs = [1] * len(paths)
+        elif isinstance(coeffs,(int,float)):
+            coeffs = [coeffs] * len(paths)
         if not len(paths) == len(coeffs):
             raise ValueError("Paths and coeffs must have the same length")
 
@@ -246,7 +256,7 @@ class GaugeField(LatticeField):
                         paths_array[dim, i, j] = 7 - (-step - 1 + dim) % 4
 
         if add_to is None:
-            shape = (self.ndims, 10,) + self.dims
+            shape = (self.ndims, 18,) + self.dims
             add_to = GaugeField(cupy.zeros(shape, dtype=self.dtype))
 
         quda_paths_array = array_to_pointers(paths_array)
@@ -261,3 +271,22 @@ class GaugeField(LatticeField):
             max_length,
         )
         return add_to
+
+    def plaquette_field(self):
+        "Computes the plaquette field"
+        return self.compute_path([[1,2,-1,-2],[1,3,-1,-3],[1,4,-1,-4]], coeff=1/3)
+    
+    def rectangle_field(self):
+        "Computes the rectangle field"
+        return self.compute_path([[1,2,2,-1,-2,-2],[1,3,3,-1,-3,-3],[1,4,4,-1,-4,-4],[1,1,2,-1,-1,-2],[1,1,3,-1,-1,-3],[1,1,4,-1,-1,-4]], coeff=1/6)
+    
+    def exponentiate(self, coeff = 1, mul_to = None, conj=False, exact=False):
+        shape = (self.ndims, 18,) + self.dims
+        out = GaugeField(cupy.zeros(shape, dtype=self.dtype))
+        if mul_to is None:
+            shape = (self.ndims, 18,) + self.dims
+            mul_to = GaugeField(cupy.zeros(shape, dtype=self.dtype))
+            mul_to.unity()
+            
+        lib.updateGaugeField(out.quda_field, coeff, mul_to.quda_field, self.quda_field, conj, exact)
+        return out

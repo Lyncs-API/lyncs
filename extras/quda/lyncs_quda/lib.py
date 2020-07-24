@@ -101,6 +101,7 @@ headers = [
     "gauge_field.h",
     "gauge_tools.h",
     "gauge_force_quda.h",
+    "gauge_update_quda.h",
 ]
 
 

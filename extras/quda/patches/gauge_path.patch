@@ -1,0 +1,163 @@
+diff --git a/lib/gauge_force.cu b/lib/gauge_force.cu
+index ce2a740..870bb86 100644
+--- a/lib/gauge_force.cu
++++ b/lib/gauge_force.cu
+@@ -60,7 +60,7 @@ namespace quda {
+ #endif
+   }
+ 
+-  template<typename Float, typename Arg, int dir>
++  template<typename Float, typename Arg, bool is_mom, int dir>
+   __device__ __host__ inline void GaugeForceKernel(Arg &arg, int idx, int parity)
+   {
+     typedef Matrix<complex<Float>,3> Link;
+@@ -133,29 +133,33 @@ namespace quda {
+ 
+     // update mom(x)
+     Link mom = arg.mom(dir, idx, parity);
+-    mom = mom - arg.coeff * linkA;
+-    makeAntiHerm(mom);
++    if(is_mom){
++      mom = mom - arg.coeff * linkA;
++      makeAntiHerm(mom);
++    } else {
++      mom = mom + arg.coeff * linkA;
++    }      
+     arg.mom(dir, idx, parity) = mom;
+     return;
+   }
+ 
+-  template <typename Float, typename Arg>
++  template <typename Float, typename Arg, bool is_mom>
+   void GaugeForceCPU(Arg &arg) {
+     for (int dir=0; dir<4; dir++) {
+       for (int parity=0; parity<2; parity++) {
+         for (int idx=0; idx<arg.threads; idx++) {
+ 	  switch(dir) {
+ 	  case 0:
+-	    GaugeForceKernel<Float,Arg,0>(arg, idx, parity);
++	    GaugeForceKernel<Float,Arg,is_mom,0>(arg, idx, parity);
+ 	    break;
+ 	  case 1:
+-	    GaugeForceKernel<Float,Arg,1>(arg, idx, parity);
++	    GaugeForceKernel<Float,Arg,is_mom,1>(arg, idx, parity);
+ 	    break;
+ 	  case 2:
+-	    GaugeForceKernel<Float,Arg,2>(arg, idx, parity);
++	    GaugeForceKernel<Float,Arg,is_mom,2>(arg, idx, parity);
+ 	    break;
+ 	  case 3:
+-	    GaugeForceKernel<Float,Arg,3>(arg, idx, parity);
++	    GaugeForceKernel<Float,Arg,is_mom,3>(arg, idx, parity);
+ 	    break;
+ 	  }
+         }
+@@ -164,7 +168,7 @@ namespace quda {
+     return;
+   }
+ 
+-  template <typename Float, typename Arg>
++  template <typename Float, typename Arg, bool is_mom>
+   __global__ void GaugeForceGPU(Arg arg) {
+     int idx = blockIdx.x * blockDim.x + threadIdx.x;
+     if (idx >= arg.threads) return;
+@@ -172,22 +176,22 @@ namespace quda {
+     int dir = blockIdx.z * blockDim.z + threadIdx.z;
+     switch(dir) {
+     case 0:
+-      GaugeForceKernel<Float,Arg,0>(arg, idx, parity);
++      GaugeForceKernel<Float,Arg,is_mom,0>(arg, idx, parity);
+       break;
+     case 1:
+-      GaugeForceKernel<Float,Arg,1>(arg, idx, parity);
++      GaugeForceKernel<Float,Arg,is_mom,1>(arg, idx, parity);
+       break;
+     case 2:
+-      GaugeForceKernel<Float,Arg,2>(arg, idx, parity);
++      GaugeForceKernel<Float,Arg,is_mom,2>(arg, idx, parity);
+       break;
+     case 3:
+-      GaugeForceKernel<Float,Arg,3>(arg, idx, parity);
++      GaugeForceKernel<Float,Arg,is_mom,3>(arg, idx, parity);
+       break;
+     }
+     return;
+   }
+ 
+-  template <typename Float, typename Arg>
++  template <typename Float, typename Arg, bool is_mom>
+   class GaugeForce : public TunableVectorY {
+ 
+   private:
+@@ -206,9 +210,9 @@ namespace quda {
+     void apply(const cudaStream_t &stream) {
+       if (location == QUDA_CUDA_FIELD_LOCATION) {
+ 	TuneParam tp = tuneLaunch(*this, getTuning(), getVerbosity());
+-	GaugeForceGPU<Float,Arg><<<tp.grid,tp.block,tp.shared_bytes>>>(arg);
++	GaugeForceGPU<Float,Arg,is_mom><<<tp.grid,tp.block,tp.shared_bytes>>>(arg);
+       } else {
+-	GaugeForceCPU<Float,Arg>(arg);
++	GaugeForceCPU<Float,Arg,is_mom>(arg);
+       }
+     }
+   
+@@ -264,7 +268,7 @@ namespace quda {
+     }
+   };
+   
+-  template <typename Float, typename Mom, typename Gauge>
++  template <typename Float, typename Mom, typename Gauge, bool is_mom>
+   void gaugeForce(Mom mom, const Gauge &u, GaugeField& meta_mom, const GaugeField& meta_u, const double coeff,
+ 		  int ***input_path, const int* length_h, const double* path_coeff_h, const int num_paths, const int path_max_length)
+   {
+@@ -301,7 +305,7 @@ namespace quda {
+ 
+     GaugeForceArg<Mom,Gauge> arg(mom, u, num_paths, path_max_length, coeff, input_path_d,
+ 				 length_d, path_coeff_d, count, meta_mom, meta_u);
+-    GaugeForce<Float,GaugeForceArg<Mom,Gauge> > gauge_force(arg, meta_mom, meta_u);
++    GaugeForce<Float,GaugeForceArg<Mom,Gauge>,is_mom> gauge_force(arg, meta_mom, meta_u);
+     gauge_force.apply(0);
+     checkCudaError();
+ 
+@@ -315,19 +319,32 @@ namespace quda {
+   void gaugeForce(GaugeField& mom, const GaugeField& u, const double coeff, int ***input_path,
+ 		  const int* length, const double* path_coeff, const int num_paths, const int max_length)
+   {
+-    if (mom.Reconstruct() != QUDA_RECONSTRUCT_10)
++    if (mom.Reconstruct() != QUDA_RECONSTRUCT_10 and mom.Reconstruct() != QUDA_RECONSTRUCT_NO)
+       errorQuda("Reconstruction type %d not supported", mom.Reconstruct());
+ 
+     if (mom.Order() == QUDA_FLOAT2_GAUGE_ORDER) {
+-      typedef typename gauge::FloatNOrder<Float,18,2,11> M;
+-      if (u.Reconstruct() == QUDA_RECONSTRUCT_NO) {
+-	typedef typename gauge_mapper<Float,QUDA_RECONSTRUCT_NO>::type G;
+-	gaugeForce<Float,M,G>(M(mom), G(u), mom, u, coeff, input_path, length, path_coeff, num_paths, max_length);
+-      } else if (u.Reconstruct() == QUDA_RECONSTRUCT_12) {
+-	typedef typename gauge_mapper<Float,QUDA_RECONSTRUCT_12>::type G;
+-	gaugeForce<Float,M,G>(M(mom), G(u), mom, u, coeff, input_path, length, path_coeff, num_paths, max_length);	
++      if(mom.Reconstruct() == QUDA_RECONSTRUCT_10) {
++	typedef typename gauge::FloatNOrder<Float,18,2,11> M;
++	if (u.Reconstruct() == QUDA_RECONSTRUCT_NO) {
++	  typedef typename gauge_mapper<Float,QUDA_RECONSTRUCT_NO>::type G;
++	  gaugeForce<Float,M,G,true>(M(mom), G(u), mom, u, coeff, input_path, length, path_coeff, num_paths, max_length);
++	} else if (u.Reconstruct() == QUDA_RECONSTRUCT_12) {
++	  typedef typename gauge_mapper<Float,QUDA_RECONSTRUCT_12>::type G;
++	  gaugeForce<Float,M,G,true>(M(mom), G(u), mom, u, coeff, input_path, length, path_coeff, num_paths, max_length);	
++	} else {
++	  errorQuda("Reconstruction type %d not supported", u.Reconstruct());
++	}
+       } else {
+-	errorQuda("Reconstruction type %d not supported", u.Reconstruct());
++	typedef typename gauge_mapper<Float,QUDA_RECONSTRUCT_NO>::type M;
++	if (u.Reconstruct() == QUDA_RECONSTRUCT_NO) {
++	  typedef typename gauge_mapper<Float,QUDA_RECONSTRUCT_NO>::type G;
++	  gaugeForce<Float,M,G,false>(M(mom), G(u), mom, u, coeff, input_path, length, path_coeff, num_paths, max_length);
++	} else if (u.Reconstruct() == QUDA_RECONSTRUCT_12) {
++	  typedef typename gauge_mapper<Float,QUDA_RECONSTRUCT_12>::type G;
++	  gaugeForce<Float,M,G,false>(M(mom), G(u), mom, u, coeff, input_path, length, path_coeff, num_paths, max_length);	
++	} else {
++	  errorQuda("Reconstruction type %d not supported", u.Reconstruct());
++	}
+       }
+     } else {
+       errorQuda("Gauge Field order %d not supported", mom.Order());
