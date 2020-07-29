@@ -14,6 +14,7 @@ class Lib:
         "check",
         "c_include",
         "namespace",
+        "redefined",
     ]
 
     def __init__(
@@ -25,6 +26,7 @@ class Lib:
         path=".",
         c_include=False,
         namespace=None,
+        redefined=None,
     ):
         """
         Initializes a library class that can be pickled.
@@ -42,6 +44,11 @@ class Lib:
           Check function(s) to look for in the library to test if it has been loaded.
         c_include: bool
           Whether the library is a c library (False means it is a c++ library).
+        namespace: str
+          Namespace used across the library. Directly access object inside namespace.
+          Similar to `using namespace ...` in c++.
+        redefined: dict
+          List of symbols that have been redefined
         """
         assert check, "No checks given."
         assert header, "No header given."
@@ -53,6 +60,10 @@ class Lib:
         self.include = [include] if isinstance(include, str) else include or []
         self.c_include = c_include
         self.namespace = [namespace] if isinstance(namespace, str) else namespace or []
+        self.redefined = redefined or {}
+
+        if self.redefined:
+            self.check = [self.redefined.get(check, check) for check in self.check]
 
     @property
     def lib(self):
@@ -69,6 +80,7 @@ class Lib:
             if isinstance(library, Lib):
                 library.lib
 
+        self.define()
         for header in self.header:
             for path in self.path:
                 if not path.startswith(os.sep):
@@ -80,6 +92,7 @@ class Lib:
                 cppyy.c_include(header)
             else:
                 cppyy.include(header)
+        self.undef()
 
         for library in self.library:
             if not isinstance(library, str):
@@ -87,26 +100,42 @@ class Lib:
             tmp = library
             if not tmp.startswith(os.sep):
                 tmp = self._cwd + "/" + tmp
-            if os.path.isfile(tmp):
-                cppyy.load_library(tmp)
-            else:
-                found = False
+            if not os.path.isfile(tmp):
                 for path in self.path:
                     if not path.startswith(os.sep):
                         path = self._cwd + "/" + path
-                    if os.path.isfile(path + "/lib/" + library):
-                        cppyy.load_library(path + "/lib/" + library)
-                        found = True
+                    tmp = path + "/lib/" + library
+                    if os.path.isfile(tmp):
                         break
-                assert found, "Library %s not found in paths %s" % (library, self.path)
+            if not os.path.isfile(tmp):
+                raise ImportError(
+                    "Library %s not found in paths %s" % (library, self.path)
+                )
+            cppyy.load_library(tmp)
 
         assert all(
             (hasattr(cppyy.gbl, check) for check in self.check)
         ), "Given checks not found."
         return self.lib
 
+    def define(self):
+        cpp = ""
+        for key, val in self.redefined.items():
+            cpp += f"#define {key} {val}\n"
+        if cpp:
+            cppyy.cppdef(cpp)
+
+    def undef(self):
+        cpp = ""
+        for key in self.redefined:
+            cpp += f"#undef {key}\n"
+        if cpp:
+            cppyy.cppdef(cpp)
+
     def __getattr__(self, key):
         try:
+            if self.redefined:
+                key = self.redefined.get(key, key)
             if self.namespace:
                 for namespace in self.namespace:
                     try:
@@ -120,6 +149,23 @@ class Lib:
             except BaseException:
                 pass
             raise
+
+    def __setattr__(self, key, value):
+        try:
+            return getattr(type(self), key).__set__(self, value)
+        except AttributeError:
+            pass
+
+        if self.redefined:
+            key = self.redefined.get(key, key)
+        if self.namespace:
+            for namespace in self.namespace:
+                try:
+                    getattr(getattr(self.lib, namespace), key)
+                    return setattr(getattr(self.lib, namespace), key, value)
+                except AttributeError:
+                    pass
+        setattr(self.lib, key, value)
 
     @property
     def fopen(self):
@@ -152,4 +198,4 @@ class Lib:
             """
                 % (key, key)
             ), ("%s is not a defined macro" % key)
-            self.get_macro(key)
+            return self.get_macro(key)
