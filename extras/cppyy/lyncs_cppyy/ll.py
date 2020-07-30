@@ -3,13 +3,14 @@ Additional low-level functions to the one provided by cppyy
 """
 
 from itertools import product
-import numpy
 
 from cppyy.ll import __all__
 
 # from cppyy.ll import *
 from cppyy.ll import cast, malloc, free, array_new, array_delete, addressof
 from cppyy import cppdef, gbl, sizeof
+
+from .numpy import char_map
 
 __all__ = __all__ + [
     "to_pointer",
@@ -19,6 +20,7 @@ __all__ = __all__ + [
 
 class PointersArray:
     "Auxiliary class for managing arrays of pointers"
+
     def __init__(self, ptr, shape, dtype, delete=False):
         self.ptr = ptr
         self.shape = shape
@@ -49,7 +51,7 @@ def array_to_pointers(arr):
     size = 0
     shape = arr.shape
     itemsize = arr.dtype.itemsize
-    ctype = numpy.ctypeslib.as_ctypes_type(arr.dtype).__name__[2:]
+    ctype = char_map[arr.dtype.char]
     ptr = arr.__array_interface__["data"][0]
     for i in range(len(shape) - 1):
         if i == 0:
@@ -79,9 +81,9 @@ def array_to_pointers(arr):
     return res
 
 
-def to_pointer(ptr: int):
+def to_pointer(ptr: int, ctype: str = "void *"):
     "Casts integer to void pointer"
-    return cast["void *"](ptr)
+    return cast[ctype](ptr)
 
 
 def assign(ptr, val):
