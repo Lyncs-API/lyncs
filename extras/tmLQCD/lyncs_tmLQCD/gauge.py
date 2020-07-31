@@ -15,8 +15,8 @@ from .lib import lib
 class Gauge:
     "Interface for gauge fields"
 
-    def __init__(self, arr):
-        arr = array(arr)
+    def __init__(self, arr, copy=False):
+        arr = array(arr, copy=copy)
         if len(arr.shape) != 4 + 1 + 2 or arr.shape[-3:] != (4, 3, 3):
             raise ValueError("Array must have shape (X,Y,Z,T,4,3,3)")
         if arr.dtype != "complex128":
@@ -71,6 +71,29 @@ class Gauge:
     def rectangles(self):
         "Returns the averaged rectangles"
         return self.volume_rectangles() / self.volume / 12
+
+    def gauge_action(self, plaq_coeff=0, rect_coeff=0):
+        """
+        Returns the gauge action.
+
+        The coefficients are use as follows
+
+            (1-8*c1) ((1+c0) P_time + (1-c0) P_space) + c1*R
+
+        where P is the sum over plaquettes, R over the rectangles,
+        c0 is the plaq_coeff (see volume_plaquette) and c1 the rect_coeff
+        """
+        return (1 - 8 * rect_coeff) * self.volume_plaquette(plaq_coeff) + (
+            rect_coeff * self.rectangles() if rect_coeff != 0 else 0
+        )
+
+    def symanzik_gauge_action(self, plaq_coeff=0):
+        "Returns the tree-level Symanzik improved gauge action"
+        return self.gauge_action(plaq_coeff, -1 / 12)
+
+    def iwasaki_gauge_action(self, plaq_coeff=0):
+        "Returns the Iwasaki gauge action"
+        return self.gauge_action(plaq_coeff, -0.331)
 
     def unity(self):
         "Creates a unity field"
