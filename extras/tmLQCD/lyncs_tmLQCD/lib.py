@@ -30,7 +30,7 @@ class tmLQCDLib(Lib):
 
     def initialize(self, x, y, z, t, seed=None):
         "Initializes the global structure of tmLQCD"
-        
+
         if self.initialized:
             if not (x, y, z, t) == (self.LX, self.LY, self.LZ, self.T):
                 raise RuntimeError(
@@ -62,6 +62,7 @@ headers = [
     "init/init_gauge_field.h",
     "rational/elliptic.h",
     "measure_gauge_action.h",
+    "measure_rectangles.h",
 ]
 
 redefined = {}
