@@ -7,6 +7,7 @@ __all__ = [
     "PATHS",
 ]
 
+from time import time
 from lyncs_cppyy import Lib, nullptr
 from lyncs_clime import lib as libclime
 
@@ -24,9 +25,12 @@ class tmLQCDLib(Lib):
 
     @property
     def initialized(self):
+        "Whether the glibal structure of tmLQCD has been initialized"
         return self._initialized
 
-    def initialize(self, x, y, z, t):
+    def initialize(self, x, y, z, t, seed=None):
+        "Initializes the global structure of tmLQCD"
+        
         if self.initialized:
             if not (x, y, z, t) == (self.LX, self.LY, self.LZ, self.T):
                 raise RuntimeError(
@@ -38,7 +42,9 @@ class tmLQCDLib(Lib):
                 )
             return
         self.LX, self.LY, self.LZ, self.T_global = x, y, z, t
+        self.g_proc_id = 0
         self.tmlqcd_mpi_init(0, nullptr)
+        self.start_ranlux(1, seed or int(time()))
         self.init_geometry_indices(self.VOLUMEPLUSRAND)
         self.geometry()
         self.init_gauge_field(self.VOLUMEPLUSRAND, 0)
