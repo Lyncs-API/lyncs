@@ -1,0 +1,84 @@
+diff --git a/.gitignore b/.gitignore
+index 87cffc4..2ec974b 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -5,6 +5,7 @@ git_hash.h
+ read_input.c
+ *.d
+ *.o
++*.so
+ *~
+ Makefile
+ config.log
+diff --git a/Makefile.in b/Makefile.in
+index ae226df..115654e 100644
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -7,6 +7,8 @@ builddir = @builddir@
+ prefix = @prefix@
+ exec_prefix = @exec_prefix@
+ bindir = @bindir@
++includedir = @includedir@
++libdir = @libdir@
+ program_transform_name = @program_transform_name@
+ subdir = .
+ 
+@@ -84,7 +86,7 @@ SUBDIRS = ${USESUBDIRS}
+ .SUFFIXES:
+ 
+ # need to build modules before subdirs!
+-all: Makefile dep $(SUBDIRS) hmc_tm invert benchmark offline_measurement @QPHIX_PROGRAMS@
++all: Makefile dep $(SUBDIRS) hmc_tm invert benchmark offline_measurement @QPHIX_PROGRAMS@ libtmLQCD.so
+ 
+ $(SUBDIRS):
+ 	$(MAKE) --directory=$@
+@@ -125,7 +127,7 @@ ${addsuffix .o, ${SMODULES}}: %.o: ${srcdir}/%.c %.d Makefile $(abs_top_builddir
+ # C++ modules
+ $(addsuffix .o,${CXXMODULES}): %.o: ${srcdir}/%.cpp %.d Makefile $(abs_top_builddir)/include/tmlqcd_config.h
+ 	${CXXCOMPILE} -c $<
+-	
++
+ ${addsuffix .o, ${PROGRAMS}}: %.o: ${srcdir}/%.c %.d Makefile $(abs_top_builddir)/include/tmlqcd_config.h ${top_srcdir}/git_hash.h
+ 	${COMPILE} ${OPTARGS} -c $<
+ 
+@@ -139,7 +141,20 @@ include ${top_srcdir}/Makefile.tests
+ dep: $(addsuffix .d,$(ALLOBJ)) $(addsuffix .d,$(CXXMODULES))
+ 	@ echo "...dependency files built"
+ 
++libtmLQCD.so: libhmc.a $(SUBDIRS)
++	rm -f ${top_builddir}/lib/$@
++	${CC} -shared -o ${top_builddir}/lib/$@ -Wl,--whole-archive,--allow-multiple-definition ${top_builddir}/lib/*.a -Wl,--no-whole-archive
++	nm ${top_builddir}/lib/$@ | awk '{if ($$3) {print $$3}}' | grep -v '\.\|tmLQCD\|tmlqcd\|^__' | awk '!visited[$$0]++' | awk '{print $$1, "tmLQCD_"$$1}' > ${top_builddir}/lib/redefine-syms.txt
++	ls ${top_builddir}/lib/*.a | xargs -n 1 -I @ objcopy --redefine-syms ${top_builddir}/lib/redefine-syms.txt @ @~
++	${CC} -shared -o ${top_builddir}/lib/$@ -Wl,--whole-archive,--allow-multiple-definition ${top_builddir}/lib/*.a~ -Wl,--no-whole-archive
++	rm -f ${top_builddir}/lib/*.a~
++
+ install: Makefile
++	mkdir -p $(libdir); \
++	cp ${top_builddir}/lib/libtmLQCD.so $(libdir)
++	cp ${top_builddir}/lib/redefine-syms.txt $(libdir)
++	mkdir -p $(includedir); \
++	cp --parents `find -name \*.h*` $(includedir)
+ 	@mkdir -p $(bindir); \
+ 	for p in hmc_tm invert; do \
+ 	  progname=`echo $$p | sed '$(program_transform_name)'`; \
+@@ -149,6 +164,7 @@ install: Makefile
+ 	echo "done";
+ 
+ uninstall: Makefile
++	rm $(libdir)/libtmLQCD.so
+ 	for p in hmc_tm invert; do \
+ 	  progname=`echo $$p | sed '$(program_transform_name)'`; \
+ 	  echo "Un-Installing $$progname in $(bindir)..."; \
+diff --git a/configure.in b/configure.in
+index 05affed..9783c57 100644
+--- a/configure.in
++++ b/configure.in
+@@ -937,6 +937,7 @@ else
+   NVCC=""
+ fi
+ 
++CFLAGS="$CFLAGS -fPIC"
+ 
+ AC_SUBST(USESUBDIRS)
+ AC_SUBST(NVCC)
