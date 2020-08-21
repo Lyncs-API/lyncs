@@ -41,8 +41,19 @@ class tmLQCDLib(Lib):
                 """
                 )
             return
+        if not x == y == z:
+            raise ValueError(
+                """
+                tmLQCD supports only Lx == Ly == Lz.
+                This limitation is due to the usage in the library
+                of the variable L. TODO: fix it (good_first_issue).
+                """
+            )
+        self.L = x
         self.LX, self.LY, self.LZ, self.T_global = x, y, z, t
+        self.g_nproc_x, self.g_nproc_y, self.g_nproc_z, self.g_nproc_t = 1, 1, 1, 1
         self.g_proc_id = 0
+        self.g_mu, self.g_kappa = 0, 1
         self.tmlqcd_mpi_init(0, nullptr)
         self.start_ranlux(1, seed or int(time()))
         self.init_geometry_indices(self.VOLUMEPLUSRAND)
@@ -58,6 +69,8 @@ headers = [
     "start.h",
     "mpi_init.h",
     "geometry_eo.h",
+    "io/gauge.h",
+    "io/params.h",
     "init/init_geometry_indices.h",
     "init/init_gauge_field.h",
     "rational/elliptic.h",

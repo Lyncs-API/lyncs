@@ -8,7 +8,7 @@ __all__ = [
 ]
 
 from numpy import array, prod, frombuffer
-from lyncs_cppyy.ll import array_to_pointers, to_pointer, addressof
+from lyncs_cppyy.ll import array_to_pointers, to_pointer, addressof, free
 from .lib import lib
 
 
@@ -103,6 +103,21 @@ class Gauge:
     def random(self, repro=False):
         "Creates a random field"
         lib.random_gauge_field(repro, self.su3_field)
+
+    def copy_to_global(self):
+        "Copies the field to the global gauge field"
+        get_g_gauge_field().field[:] = self.field
+
+    def copy_from_global(self):
+        "Copies the global gauge field to the local field"
+        self.field[:] = get_g_gauge_field().field
+
+    def write(self, filename, number=0):
+        "Writes to file in lime format"
+        self.copy_to_global()
+        xlfInfo = lib.construct_paramsXlfInfo(self.plaquette(), number)
+        lib.write_gauge_field(filename, 64, xlfInfo)
+        free(xlfInfo)
 
 
 def get_g_gauge_field():
