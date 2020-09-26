@@ -1,0 +1,121 @@
+# This workflow builds and tests PRs
+
+name: PR build & test
+
+on:
+  pull_request:
+    branches:
+      - 'master'
+    paths-ignore:
+      - 'docs/**'
+
+jobs:
+  build-n-publish:  
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        ref: ${{ github.head_ref }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v1
+      with:
+        python-version: '3.x'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        
+    - name: Applying black formatting
+      run: |
+        pip install black
+        black --diff .
+        black .
+
+    - name: Pushing changes if any
+      uses: stefanzweifel/git-auto-commit-action@v4
+      with:
+        commit_message: Applying black formatting (from Github Action)
+        commit_user_name: sbacchio
+        commit_user_email: s.bacchio@gmail.com
+        commit_author: Simone Bacchio <s.bacchio@gmail.com>
+
+    - name: Install from source
+      run: |
+        pip install -e .
+
+    - name: Pylint output
+      run: |
+        pip install lyncs_setuptools[pylint]
+        badge=$(lyncs_pylint_badge --fail-under 8 . | sed "s/\&/\\\&/g")
+        badge_line=$(awk '/!\[pylint\]/ {print FNR}' README.md)
+        sed -i "${badge_line}s#.*#${badge}#" README.md
+
+    - name: Pushing changes if any
+      uses: stefanzweifel/git-auto-commit-action@v4
+      with:
+        commit_message: Updating pylint score (from Github Action)
+        commit_user_name: sbacchio
+        commit_user_email: s.bacchio@gmail.com
+        commit_author: Simone Bacchio <s.bacchio@gmail.com>
+
+    - name: Run tests
+      run: |
+        pip install -e .[test]
+        pytest -v
+
+    - name: Run tests for all
+      run: |
+        pip install -e .[all]
+        pytest -v
+
+    - name: Run lyncs_setuptools
+      run: |
+        lyncs_setuptools
+
+    - name: Upload if not up to date
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.test_pypi_password }}
+      run: |
+        pip uninstall -y lyncs
+        pip install --extra-index-url https://test.pypi.org/simple/ lyncs==$(lyncs_setuptools version) || (
+          pip install twine
+          python setup.py sdist
+          twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+          count=0
+          while ! pip install --extra-index-url https://test.pypi.org/simple/ lyncs==$(lyncs_setuptools version) && [ $count -lt 20 ]; do
+            sleep 1
+            count=$((count+1))
+          done
+        )
+
+  clean-run:
+    
+    needs: build-n-publish
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.6, 3.7, 3.8]
+
+    steps:
+    - uses: actions/checkout@v2
+      
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        sudo apt-get install -y libopenmpi-dev openmpi-bin
+
+    - name: Install via pip
+      run: |
+        pip install --extra-index-url https://test.pypi.org/simple/ lyncs[all]
+        
+    - name: Run tests
+      run: |
+        pytest -v --import-mode=importlib
