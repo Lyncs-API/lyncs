@@ -20,7 +20,7 @@ class BaseField:
     Base class of the Field type that implements
     the interface to the Lattice class and deduce
     the list of Field types from the field axes.
-    
+
     The list of types are accessible via field.types
     """
 
@@ -49,7 +49,7 @@ class BaseField:
     ):
         """
         Initializes the field class.
-        
+
         Parameters
         ----------
         axes: list(str)
@@ -118,7 +118,7 @@ class BaseField:
     def __init__(self, field=None, **kwargs):
         """
         Initializes the field class.
-        
+
         Parameters
         ----------
         field: Field

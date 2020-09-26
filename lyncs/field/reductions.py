@@ -16,7 +16,7 @@ from ..utils import count
 def trace(self, *axes, **kwargs):
     """
     Performs the trace over repeated axes contracting the outer-most index with the inner-most.
-    
+
     Parameters
     ----------
     axes: str
@@ -72,7 +72,7 @@ NumpyBackend.trace = _
 def reduction_method(key, fnc=None, doc=None):
     """
     Default implementation for field reductions
-    
+
     Parameters
     ----------
     key: str
@@ -129,7 +129,7 @@ def reduction_method(key, fnc=None, doc=None):
 
 def backend_reduction_method(key, fnc=None, doc=None):
     """
-    Returns a method for the backend that calls 
+    Returns a method for the backend that calls
     the given reduction (key) of the field value.
     """
 

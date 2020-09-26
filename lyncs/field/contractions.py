@@ -99,7 +99,7 @@ def dot_prepare(*fields, axes=None, axis=None, closed_indeces=None, open_indeces
                         Axes that are neither closes or open indeces,
                         must have the same count between all fields.
                         """
-                        % (key, num, counts[key],)
+                        % (key, num, counts[key])
                     )
 
     return axes, closed_indeces, open_indeces
@@ -139,14 +139,14 @@ def dot(
 ):
     """
     Performs the dot product between fields.
-    
+
     Default behaviors:
     ------------------
-    
+
     Contractions are performed between only degree of freedoms of the fields, e.g. field.dofs.
     For each field, indeces are always contracted in pairs combining the outer-most free index
     of the left with the inner-most of the right.
-    
+
     I.e. dot(*fields) = dot(*fields, axes="dofs")
 
     Parameters:
@@ -154,7 +154,7 @@ def dot(
     fields: Field
         List of fields to perform dot product between.
     axes: str, list
-        Axes where the contraction is performed on. 
+        Axes where the contraction is performed on.
         Indeces are contracted in pairs combining the outer-most free index
         of the left with the inner-most of the right.
     axis: str, list
@@ -171,7 +171,7 @@ def dot(
         If True, then the closed indeces are also traced
     debug: bool
         If True, then the output are the contraction indeces
-    
+
     Examples:
     ---------
     dot(vector, vector, axes="color")
@@ -245,7 +245,7 @@ ArrayField.__matmul__ = dot
 def einsum(*fields, indeces=None, debug=False):
     """
     Performs the einsum product between fields.
-    
+
     Parameters:
     -----------
     fields: Field

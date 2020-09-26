@@ -42,7 +42,7 @@ class ArrayField(BaseField, TunableClass):
     ):
         """
         Initializes the field class.
-        
+
         Parameters
         ----------
         dtype: str or numpy dtype compatible
@@ -52,7 +52,7 @@ class ArrayField(BaseField, TunableClass):
             This also fixes the field shape (field.ordered_shape).
             It is a tunable parameter and the decision can be postpone.
         copy: bool
-            Whether the input field should be copied. 
+            Whether the input field should be copied.
             If False the field is copied only if needed
             otherwise the input field will be used;
             if True, the field is copied.
@@ -166,7 +166,7 @@ class ArrayField(BaseField, TunableClass):
     def __init__(self, field=None, value=None, **kwargs):
         """
         Initializes the field class.
-        
+
         Parameters
         ----------
         value: Tunable
@@ -390,12 +390,12 @@ class ArrayField(BaseField, TunableClass):
         """
         Returns a random field generator. If seed is given, reproducibility is ensured
         independently on the field parameters, e.g. indeces_order, etc.
-        
+
         Parameters
         ----------
         seed: int
             The seed to use for starting the random number generator.
-            Note: There is a performance penality in initializing the field if seed is given. 
+            Note: There is a performance penality in initializing the field if seed is given.
         """
         from .random import RandomFieldGenerator
 
@@ -421,7 +421,7 @@ class ArrayField(BaseField, TunableClass):
         Parameters
         ----------
         axes: str
-            If given, only the listed axes are transposed, 
+            If given, only the listed axes are transposed,
             otherwise all the tensorial axes are changed.
             By default the order of the indeces is inverted.
         axes_order: dict
@@ -504,7 +504,7 @@ class ArrayField(BaseField, TunableClass):
     def roll(self, shift, *axes, **kwargs):
         """
         Rolls axis of shift.
-        
+
         Parameters:
         -----------
         shift: int or list of int
