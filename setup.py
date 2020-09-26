@@ -1,9 +1,6 @@
-try:
-    from lyncs_setuptools import setup
-except ImportError:
-    from .extras.setuptools.lyncs_setuptools import setup
+from lyncs_setuptools import setup
 
-from glob import glob
+import os
 
 install_requires = [
     "numpy",
@@ -13,9 +10,10 @@ install_requires = [
 
 extras_require = {
     # lyncs/extras
-    "dask": ["dask"],
+    "dask": ["dask", "dask[array]"],
     "clime": ["lyncs-clime"],
     "DDalphaAMG": ["lyncs-DDalphaAMG"],
+    "test": ["pytest", "pytest-cov", "pytest-benchmark"],
     # Groups
     "cpu": ["lyncs[DDalphaAMG]",],
     "gpu": [],
@@ -26,11 +24,4 @@ setup(
     "lyncs",
     install_requires=install_requires,
     extras_require=extras_require,
-    keywords=["Python", "API", "Lattice", "Field", "QCD",],
-    data_files=[
-        (
-            "extras/setuptools",
-            glob("extras/setuptools/lyncs_setuptools/**/*.py", recursive=True),
-        )
-    ],
 )
