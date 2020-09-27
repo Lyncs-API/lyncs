@@ -1,5 +1,13 @@
 # A python API for Lattice QCD applications
 
+[![python](https://img.shields.io/pypi/pyversions/lyncs.svg?logo=python&logoColor=white)](https://pypi.org/project/lyncs/)
+[![pypi](https://img.shields.io/pypi/v/lyncs.svg?logo=python&logoColor=white)](https://pypi.org/project/lyncs/)
+[![license](https://img.shields.io/github/license/Lyncs-API/lyncs?logo=github&logoColor=white)](https://github.com/Lyncs-API/lyncs/blob/master/LICENSE)
+[![build & test](https://img.shields.io/github/workflow/status/Lyncs-API/lyncs/build%20&%20test?logo=github&logoColor=white)](https://github.com/Lyncs-API/lyncs/actions)
+[![codecov](https://img.shields.io/codecov/c/github/Lyncs-API/lyncs?logo=codecov&logoColor=white)](https://codecov.io/gh/Lyncs-API/lyncs)
+[![pylint](https://img.shields.io/badge/pylint%20score-9.6%2F10-green?logo=python&logoColor=white)](http://pylint.pycqa.org/)
+[![black](https://img.shields.io/badge/code%20style-black-000000.svg?logo=codefactor&logoColor=white)](https://github.com/ambv/black)
+
 ![alt text](https://github.com/sbacchio/lyncs/blob/master/docs/source/_static/logo.png "Lyncs")
 
 Lyncs is a Python API for Lattice QCD applications currently under development with a first
@@ -22,20 +30,43 @@ focus on a set of targeted packages that include tmLQCD, DDalphaAMG, PLEGMA and 
 
 ## Installation:
 
-For a default installation use either `conda install lyncs` or `pip install lyncs`.
-
-### Advance setup:
-
-For a development setup or for advanced options, build the package using cmake.
-It can be done either by editing and running build.sh or by running the following commands
-from the lyncs direction.
+The package can be installed via `pip`:
 
 ```
-mkdir -p build && \
-( cd build && ccmake ../ && make -j && make install ) && \
-python3 setup.py develop --user
+pip install [--user] lyncs
 ```
 
+### Sub-modules and plugins
+
+Sub-modules and plugins can also be installed via `pip` with:
+
+```
+pip install [--user] lyncs[NAME]
+```
+
+where NAME is the name of the sub-module. Hereafter the list of the available sub-modules.
+
+#### Groups
+
+- `all`: installs all the plugins enabling all Lyncs' functionalities (e.g. hmc, visualization, etc..).
+  Note it does not install libraries with strong dependencies like MPI, GPUs, etc.
+  Simple CPUs libraries may be installed.
+
+- `mpi`: installs all MPI libraries.
+
+- `cuda`: installs all NVIDIA GPUs libraries.
+
+- `io`: installs all IO libraries for full support of IO formats (clime, HDF5, etc..).
+
+#### LQCD libraires
+
+- `DDalphaAMG`: multigrid solver library for Wilson and Twisted mass fermions.
+
+- `QUDA`: NVIDIA GPUs library for LQCD.
+
+- `clime`: IO library for c-lime format.
+
+- `tmLQCD`: legacy code of the Extended Twisted Mass collaboration.
 
 ## Goals:
 
