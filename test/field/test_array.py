@@ -44,7 +44,7 @@ def test_init_value():
     with pytest.raises(ValueError):
         ArrayField([0, 1, 2, 3], axes=["dirs"], lattice=lat)
     field = ArrayField(
-        unit, axes=["color", "color"], lattice=lat, indeces_order=("color_0", "color_1")
+        unit, axes=["color", "color"], lattice=lat, indexes_order=("color_0", "color_1")
     )
     field = ArrayField(unit[0], axes=["color"], lattice=lat)
 
@@ -52,20 +52,20 @@ def test_init_value():
 def test_reorder():
     field = ArrayField(axes=["dims", "dofs"], lattice=lat)
     field2 = field.copy()
-    assert field.indeces_order == field2.indeces_order
-    field2 = field.reorder(field.indeces)
-    assert field2.indeces_order.value == field.indeces
+    assert field.indexes_order == field2.indexes_order
+    field2 = field.reorder(field.indexes)
+    assert field2.indexes_order.value == field.indexes
     with pytest.raises(ValueError):
-        field.reorder(field.indeces[:-1])
+        field.reorder(field.indexes[:-1])
     field2 = field.reorder()
-    assert field2.indeces_order != field.indeces_order
+    assert field2.indexes_order != field.indexes_order
     with pytest.raises(ValueError):
-        field2.indeces_order = field.indeces[:-1]
-    field2.indeces_order = field.indeces
-    assert field2.indeces_order == field.indeces
+        field2.indexes_order = field.indexes[:-1]
+    field2.indexes_order = field.indexes
+    assert field2.indexes_order == field.indexes
     field2 = field.reorder()
-    field2.indeces_order = reversed(field.indeces)
-    assert field2.indeces_order == tuple(reversed(field.indeces))
+    field2.indexes_order = reversed(field.indexes)
+    assert field2.indexes_order == tuple(reversed(field.indexes))
 
 
 def test_reorder_label():
@@ -114,13 +114,13 @@ def test_reshape():
     field2 = field.extend("dofs")
     assert field.type == "Vector"
     assert field2.type == "Propagator"
-    assert field2.squeeze().indeces == field.indeces
+    assert field2.squeeze().indexes == field.indexes
 
 
 def test_transpose():
     field = ArrayField(axes=["dofs", "dofs"], lattice=lat)
     assert field.T.__is__(field.transpose())
-    assert field.T.indeces_order == field.indeces_order
+    assert field.T.indexes_order == field.indexes_order
     assert field.transpose(spin=(0, 1)).__is__(field)
     # assert field.transpose(spin=(1, 0)) == field.transpose("spin")
 

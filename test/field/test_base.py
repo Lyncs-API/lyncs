@@ -25,21 +25,21 @@ def test_init():
 
     assert field.size == 4 * 4 * 4 * 8 * 3 * 3 * 4 * 4
     assert len(field.axes) == 8
-    assert len(field.axes) == len(field.indeces)
-    assert field.indeces_to_axes(*field.indeces) == field.axes
-    assert field.axes_to_indeces(*field.axes) == field.indeces
-    assert field.indeces_to_axes(*field.dims) == tuple(field.lattice.expand("dims"))
-    assert field.indeces_to_axes(*field.dofs) == tuple(
+    assert len(field.axes) == len(field.indexes)
+    assert field.indexes_to_axes(*field.indexes) == field.axes
+    assert field.axes_to_indexes(*field.axes) == field.indexes
+    assert field.indexes_to_axes(*field.dims) == tuple(field.lattice.expand("dims"))
+    assert field.indexes_to_axes(*field.dofs) == tuple(
         field.lattice.expand("dofs", "dofs")
     )
     assert field.labels == ()
     assert set(field.get_axes(*field.axes)) == set(field.axes)
     assert set(field.get_axes("all")) == set(field.axes)
-    assert set(field.get_indeces("all")) == set(field.indeces)
+    assert set(field.get_indexes("all")) == set(field.indexes)
     with pytest.raises(TypeError):
         field.get_axes(1)
     with pytest.raises(TypeError):
-        field.get_indeces([1, 2])
+        field.get_indexes([1, 2])
 
     types = dict(field.types)
     assert field.type == "Propagator"
@@ -59,7 +59,7 @@ def test_init():
     assert point.size == dofs.size
     assert dofs == squeeze(dofs)
     assert not dofs.dims
-    assert dofs.dofs == dofs.indeces
+    assert dofs.dofs == dofs.indexes
     assert point.reshape(dofs.axes) == dofs
     with pytest.raises(ValueError):
         point.reshape(point.axes[:-1])

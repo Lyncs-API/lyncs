@@ -9,14 +9,14 @@ def init_field():
     lat.space = 4
     lat.time = 8
     field = ArrayField(axes=["dims", "color", "color"], lattice=lat)
-    indeces = field.indeces
-    field.indeces_order = indeces
+    indexes = field.indexes
+    field.indexes_order = indexes
     shape = field.ordered_shape
-    return field, indeces, shape
+    return field, indexes, shape
 
 
 def test_init():
-    field, indeces, shape = init_field()
+    field, indexes, shape = init_field()
 
     assert field == field.copy(copy=True)
 
@@ -30,41 +30,41 @@ def test_init():
 
     vals = np.arange(9).reshape(3, 3)
     field = ArrayField(
-        vals, axes=["color", "color"], indeces_order=["color_0", "color_1"]
+        vals, axes=["color", "color"], indexes_order=["color_0", "color_1"]
     )
     assert field == vals
     assert field.astype("float") == vals.astype("float")
 
 
-def getitem(arr, indeces, **coords):
-    return arr.__getitem__(tuple(coords.pop(idx, slice(None)) for idx in indeces))
+def getitem(arr, indexes, **coords):
+    return arr.__getitem__(tuple(coords.pop(idx, slice(None)) for idx in indexes))
 
 
 def test_getitem():
-    field, indeces, shape = init_field()
+    field, indexes, shape = init_field()
     field = field.rand()
     random = field.result
 
-    assert field[{"x": 0}] == getitem(random, indeces, x_0=0)
+    assert field[{"x": 0}] == getitem(random, indexes, x_0=0)
     assert field[{"y": (0, 1, 2), "z": -1}] == getitem(
-        random, indeces, y_0=range(3), z_0=-1
+        random, indexes, y_0=range(3), z_0=-1
     )
-    assert field[{"color": 0}] == getitem(random, indeces, color_0=0, color_1=0)
-    assert field[{"color_0": 0}] == getitem(random, indeces, color_0=0)
+    assert field[{"color": 0}] == getitem(random, indexes, color_0=0, color_1=0)
+    assert field[{"color_0": 0}] == getitem(random, indexes, color_0=0)
 
 
-def setitem(arr, value, indeces, **coords):
-    arr.__setitem__(tuple(coords.pop(idx, slice(None)) for idx in indeces), value)
+def setitem(arr, value, indexes, **coords):
+    arr.__setitem__(tuple(coords.pop(idx, slice(None)) for idx in indexes), value)
     return arr
 
 
 def test_setitem():
-    field, indeces, shape = init_field()
+    field, indexes, shape = init_field()
     field = field.rand()
     random = field.result
 
     field[{"x": 0}] = 0
-    assert field == setitem(random, 0, indeces, x_0=0)
+    assert field == setitem(random, 0, indexes, x_0=0)
 
     field[{"x": (0, 1)}] = 0
-    assert field == setitem(random, 0, indeces, x_0=(0, 1))
+    assert field == setitem(random, 0, indexes, x_0=(0, 1))

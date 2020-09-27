@@ -22,7 +22,7 @@ class RandomFieldGenerator:
         "Returns the list of field variables to be passed to the backend function"
         if self.seed is None:
             return {}
-        kwargs = dict(seed=self.seed, indeces_order=self.field.indeces_order)
+        kwargs = dict(seed=self.seed, indexes_order=self.field.indexes_order)
         kwargs.update(dict(self.field.labels_order))
         return kwargs
 
@@ -93,7 +93,7 @@ def random_method(fnc):
 class RandomBackend:
     field: BaseField
 
-    def generate(self, fnc, *args, seed=None, indeces_order=None, **kwargs):
+    def generate(self, fnc, *args, seed=None, indexes_order=None, **kwargs):
         if seed is None:
             return getattr(random.default_rng(), fnc)(*args, **kwargs, size=field.shape)
         raise NotImplementedError("Reproducible random number not implemented")

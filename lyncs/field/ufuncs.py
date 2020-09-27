@@ -29,7 +29,7 @@ def prepare(self, *fields, elemwise=True, **kwargs):
         Whether the calculation is performed element-wise,
         i.e. all the fields must have the same axes and in the same order.
     kwargs: dict
-        List of field parameters fixed in the calculation (e.g. specific indeces_order)
+        List of field parameters fixed in the calculation (e.g. specific indexes_order)
     """
     if not isinstance(self, ArrayField):
         raise ValueError("First field is not of ArrayField type")

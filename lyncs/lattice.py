@@ -679,9 +679,9 @@ class Coordinates(FreezableDict):
                 self[_k] = _v
 
     @classmethod
-    def expand(cls, *indeces):
-        "Expands all the indeces in the list."
-        for idx in indeces:
+    def expand(cls, *indexes):
+        "Expands all the indexes in the list."
+        for idx in indexes:
             if isinstance(idx, (int, str, slice, range, type(None))):
                 yield idx
             elif isiterable(idx):
@@ -788,12 +788,12 @@ class Coordinates(FreezableDict):
         "Returns a copy of self including the given keys"
         return type(self)({key: self[key] for key in keys})
 
-    def get_indeces(self, coords):
-        "Returns the indeces of the values of coords"
+    def get_indexes(self, coords):
+        "Returns the indexes of the values of coords"
         if self == coords:
             return {}
 
-        indeces = coords.copy()
+        indexes = coords.copy()
         for key, val in coords.items():
             if self[key] == val:
                 continue
@@ -804,7 +804,7 @@ class Coordinates(FreezableDict):
             if self[key] == slice(None):
                 continue
             if self[key] is None:
-                indeces[key] = None
+                indexes[key] = None
                 continue
             if isinstance(self[key], (str, int)):
                 raise ValueError(
@@ -815,7 +815,7 @@ class Coordinates(FreezableDict):
                 if val not in self[key]:
                     raise ValueError("%s not in field coordinates" % (val))
                 if isinstance(val, int):
-                    indeces[key] = self[key].index(val)
+                    indexes[key] = self[key].index(val)
                 continue
             if isiterable(self[key], str):
                 if set(val) <= set(self[key]):
@@ -825,12 +825,12 @@ class Coordinates(FreezableDict):
                 )
             assert isiterable(self[key], int), "Unexpected value %s" % self[key]
             if set(val) <= set(self[key]):
-                indeces[key] = tuple(self[key].index(idx) for idx in val)
+                indexes[key] = tuple(self[key].index(idx) for idx in val)
                 continue
             raise ValueError(
                 "%s not in field coordinates" % (set(val).difference(self[key]))
             )
-        return indeces.cleaned()
+        return indexes.cleaned()
 
 
 class LatticeCoords(LatticeDict):
@@ -913,12 +913,12 @@ class LatticeCoords(LatticeDict):
         resolved = Coordinates()
         for axis, val in coords.items():
             if field is not None:
-                indeces = field.get_indeces(axis)
-                if not indeces:
+                indexes = field.get_indexes(axis)
+                if not indexes:
                     raise KeyError("Index '%s' not in field" % axis)
             else:
-                indeces = self.lattice.expand(axis)
-            resolved.update({idx: val for idx in indeces})
+                indexes = self.lattice.expand(axis)
+            resolved.update({idx: val for idx in indexes})
 
         for key in keys:
             coords = self.deduce(key)
@@ -926,7 +926,7 @@ class LatticeCoords(LatticeDict):
                 coords = {
                     index: val
                     for axis, val in coords.items()
-                    for index in field.get_indeces(axis)
+                    for index in field.get_indexes(axis)
                 }
                 if not coords:
                     raise KeyError("Coord '%s' not in field" % key)
