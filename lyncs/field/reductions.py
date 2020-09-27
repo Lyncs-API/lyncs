@@ -8,9 +8,9 @@ __all__ = [
 ]
 
 import numpy as np
+from lyncs_utils import count
 from .array import ArrayField, NumpyBackend, backend_method
 from .contractions import einsum, trace_indeces, dot_prepare
-from ..utils import count
 
 
 def trace(self, *axes, **kwargs):

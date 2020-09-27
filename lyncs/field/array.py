@@ -23,9 +23,9 @@ from tuneit import (
     Tunable,
     finalize,
 )
+from lyncs_utils import add_kwargs_of, compute_property, isiterable
 from .base import BaseField, wrap_method
 from .types.base import FieldType
-from ..utils import add_kwargs_of, compute_property, isiterable
 
 
 class ArrayField(BaseField, TunableClass):

@@ -12,7 +12,9 @@ import re
 import random
 from types import MappingProxyType
 from functools import partial, wraps
-from .utils import default_repr, isiterable, FrozenDict, compact_indeces
+from typing import Callable
+from inspect import signature
+from lyncs_utils import default_repr_pretty, isiterable, FreezableDict, compact_indexes
 from .field.base import BaseField
 from .field.types.base import Axes, FieldType
 
@@ -23,7 +25,7 @@ def default_lattice():
     return Lattice.last_defined
 
 
-class LatticeDict(FrozenDict):
+class LatticeDict(FreezableDict):
     "Dictionary for lattice attributes. Checks the given keys."
     regex = re.compile(Axes._get_label.pattern + "$")
 
@@ -160,7 +162,15 @@ class Lattice:
 
     last_defined = None
     default_dims_labels = ["t", "x", "y", "z"]
-    theories = {"QCD": {"spin": 4, "color": 3, "groups": {"gauge": ["color"],},}}
+    theories = {
+        "QCD": {
+            "spin": 4,
+            "color": 3,
+            "groups": {
+                "gauge": ["color"],
+            },
+        }
+    }
 
     __slots__ = [
         "_dims",
@@ -172,7 +182,7 @@ class Lattice:
         "_fields",
         "_frozen",
     ]
-    __repr__ = default_repr
+    _repr_pretty_ = default_repr_pretty
 
     def __new__(cls, *args, **kwargs):
         # pylint: disable=W0613
@@ -452,9 +462,23 @@ class Lattice:
 
         raise TypeError("Not allowed type %s for maps" % type(value))
 
-    def add_map(self, key, value):
+    def add_map(self, new_lattice, mapping, unmapping=None, label=None, unlabel=None):
         "Adds a map to the lattice"
-        self.maps[key] = value
+
+        if not isinstance(new_lattice, Lattice):
+            raise TypeError(
+                f"Given new_lattice of type {type(new_lattice)} is not a Lattice"
+            )
+        new_lattice = new_lattice.copy()
+
+        key = 1
+        while "map%d" % key in self:
+            key += 1
+        key = label or getattr(mapping, "__name__", "map%d" % key)
+        self.maps[key] = LatticeMap(self, new_lattice, mapping)
+
+        if unmapping:
+            new_lattice.add_map(self, unmapping, label=unlabel)
 
     def __eq__(self, other):
         return self is other or (
@@ -482,6 +506,8 @@ class Lattice:
         yield from self.dofs.keys()
         yield from self.labels.keys()
         yield from self.groups.keys()
+        yield from self.coords.keys()
+        yield from self.maps.keys()
 
     def rename(self, key, new_key):
         "Renames a dimension within the lattice"
@@ -582,7 +608,7 @@ class Lattice:
         try:
             return getattr(type(self), key).__get__(self)
         except AttributeError:
-            for attr in ["dims", "dofs", "labels", "groups", "coords"]:
+            for attr in ["dims", "dofs", "labels", "groups", "coords", "maps"]:
                 if key in getattr(self, attr):
                     return getattr(self, attr)[key]
             if key in self.fields:
@@ -643,7 +669,7 @@ class Lattice:
         ) = state
 
 
-class Coordinates(FrozenDict):
+class Coordinates(FreezableDict):
     "Dictionary for coordinates"
 
     def __init__(self, val=None):
@@ -717,7 +743,7 @@ class Coordinates(FrozenDict):
         elif isiterable(values, str):
             values = tuple(sorted(values, key=interval.index))
         else:
-            tmp = tuple(compact_indeces(sorted(values)))
+            tmp = tuple(compact_indexes(sorted(values)))
             if len(tmp) == 1:
                 values = tmp[0]
         self[key] = values
@@ -919,7 +945,7 @@ class LatticeCoords(LatticeDict):
     def deduce(self, key):
         """
         Deduces the coordinates from the key.
-        
+
         E.g.
         ----
         "random source"
@@ -938,19 +964,72 @@ class LatticeCoords(LatticeDict):
         raise NotImplementedError
 
 
+class LatticeMap:
+    def __init__(self, lat_from: Lattice, lat_to: Lattice, mapping: Callable):
+
+        self.lat_from = lat_from
+        self.lat_to = lat_to
+        self.mapping = mapping
+
+        annotations = self.mapping.__annotations__
+        params = signature(self.mapping).parameters
+        if len(params) > 1 or "return" not in annotations:
+            raise TypeError(
+                """
+            Mapping uses annotations to deduce the input/output coordinates
+            E.g. map(**kwargs: ["dims"]) -> ["dims"]
+            """
+            )
+        if annotations["return"] not in self.lat_to:
+            raise ValueError(
+                f"Output dimentions {annotation['return']} not in second lattice"
+            )
+        self.out = tuple(self.lat_to.expand(annotations["return"]))
+
+        self.args = []
+        for key in params:
+            if key in annotations:
+                key = annotations[key]
+            if key not in self.lat_from:
+                raise ValueError(f"Input dimentions {key} not in first lattice")
+            self.args.append(key)
+        self.args = tuple(self.lat_from.expand(self.args))
+
+    def get(self, **coords):
+        to_transform = dict()
+        for key in tuple(coords):
+            if key in self.args:
+                to_transform[key] = coords.pop(key)
+        coords.update(self.mapping(**to_transform))
+        return coords
+
+    def __repr__(self):
+        return f"{self.args} -> {self.out}"
+
+    def __call__(self):
+        for key, coords in self.lat_from.coords.items():
+            new_coords = self.get(**coords)
+            if key not in self.lat_to:
+                self.lat_to.add_coord(key, new_coords)
+            else:
+                assert new_coords == self.lat_to[key]
+
+        return self.lat_to
+
+
 class LatticeMaps(LatticeDict):
     "LatticeMaps class"
 
     def __getitem__(self, key):
-        if isinstance(key, Lattice):
-            key = self.lattice_to_key(key)
         return super().__getitem__(key)
 
     def __setitem__(self, key, value):
         if key in self.lattice.labels.labels():
             raise KeyError("%s is already used in lattice labels" % key)
+        if not isinstance(value, LatticeMap):
+            raise TypeError("Expected a LatticeMap for map")
 
-        super().__setitem__(key, self.resolve(value))
+        super().__setitem__(key, value)
 
     def replace(self, key, new_key):
         "Replaces a key with a the new key"

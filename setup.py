@@ -15,9 +15,13 @@ extras_require = {
     "DDalphaAMG": ["lyncs-DDalphaAMG"],
     "test": ["pytest", "pytest-cov", "pytest-benchmark"],
     # Groups
-    "cpu": ["lyncs[DDalphaAMG]",],
+    "cpu": [
+        "lyncs[DDalphaAMG]",
+    ],
     "gpu": [],
-    "io": ["lyncs[clime]",],
+    "io": [
+        "lyncs[clime]",
+    ],
 }
 
 setup(

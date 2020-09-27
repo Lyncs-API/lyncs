@@ -12,7 +12,13 @@ import re
 from collections import Counter
 from functools import wraps
 from .types.base import FieldType
-from ..utils import default_repr, compute_property, count, add_kwargs_of, isiterable
+from lyncs_utils import (
+    default_repr_pretty,
+    compute_property,
+    count,
+    add_kwargs_of,
+    isiterable,
+)
 
 
 class BaseField:
@@ -24,7 +30,7 @@ class BaseField:
     The list of types are accessible via field.types
     """
 
-    __repr__ = default_repr
+    _repr_pretty_ = default_repr_pretty
 
     _index_to_axis = re.compile("_[0-9]+$")
 

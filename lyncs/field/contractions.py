@@ -11,7 +11,7 @@ __all__ = [
 from collections import defaultdict
 import numpy as np
 from tuneit import Permutation
-from ..utils import count
+from lyncs_utils import count
 from .array import ArrayField, NumpyBackend, backend_method
 
 

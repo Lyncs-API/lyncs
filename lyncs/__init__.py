@@ -10,6 +10,8 @@ from . import io
 
 import lyncs_utils as utils
 
+from importlib import import_module
+
 for pkg in [
     "mpi",
     "cppyy",
@@ -19,6 +21,8 @@ for pkg in [
 ]:
     assert pkg not in globals(), f"{pkg} already defined"
     try:
-        exec(f"import lyncs_{pkg} as {pkg}")
+        globals()[pkg] = import_module(f"lyncs_{pkg}")
     except ModuleNotFoundError:
         pass
+
+del import_module
