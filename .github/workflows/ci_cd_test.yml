@@ -60,6 +60,23 @@ jobs:
         commit_user_email: s.bacchio@gmail.com
         commit_author: Simone Bacchio <s.bacchio@gmail.com>
 
+    - name: Clean notebooks
+      run: |
+        pip install lyncs[notebook]
+        jupyter-nbconvert --clear-output notebooks/*.ipynb
+
+    - name: Pushing changes if any
+      uses: stefanzweifel/git-auto-commit-action@v4
+      with:
+        commit_message: Cleaning notebooks, no output wanted (from Github Action)
+        commit_user_name: sbacchio
+        commit_user_email: s.bacchio@gmail.com
+        commit_author: Simone Bacchio <s.bacchio@gmail.com>
+
+    - name: Testing notebooks
+      run: |
+        jupyter-nbconvert --execute notebooks/*.ipynb
+
     - name: Run tests
       run: |
         pip install -e .[test]

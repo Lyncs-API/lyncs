@@ -13,7 +13,7 @@ extras_require = {
     "dask": ["dask", "dask[array]"],
     "clime": ["lyncs-clime"],
     "DDalphaAMG": ["lyncs-DDalphaAMG"],
-    "test": ["pytest", "pytest-cov", "pytest-benchmark"],
+    "test": ["pytest", "pytest-cov"],
     # Groups
     "cpu": [
         "lyncs[DDalphaAMG]",
@@ -21,6 +21,14 @@ extras_require = {
     "gpu": [],
     "io": [
         "lyncs[clime]",
+    ],
+    "notebook": [
+        "jupyterlab",
+        "tuneit[graph]",
+        "perfplot",
+    ],
+    "all": [
+        "lyncs[notebook]",
     ],
 }
 
