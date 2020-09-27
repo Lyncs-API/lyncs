@@ -11,8 +11,8 @@ install_requires = [
 extras_require = {
     # lyncs/extras
     "dask": ["dask", "dask[array]"],
-    "clime": ["lyncs-clime"],
-    "DDalphaAMG": ["lyncs-DDalphaAMG"],
+    "clime": ["lyncs_clime"],
+    "DDalphaAMG": ["lyncs_DDalphaAMG"],
     "test": ["pytest", "pytest-cov"],
     # Groups
     "cpu": [
@@ -22,10 +22,14 @@ extras_require = {
     "io": [
         "lyncs[clime]",
     ],
+    "mpi": [
+        "lyncs_mpi",
+    ],
     "notebook": [
         "jupyterlab",
         "tuneit[graph]",
         "perfplot",
+        "lyncs[mpi]",
     ],
     "all": [
         "lyncs[notebook]",
