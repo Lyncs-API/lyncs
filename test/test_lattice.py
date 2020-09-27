@@ -127,11 +127,21 @@ def test_freeze():
 
     lat.frozen = False
     lat2.frozen = True
+    assert lat.fields == lat2.fields
     with pytest.raises(ValueError):
         lat2.frozen = False
     with pytest.raises(RuntimeError):
         lat2.x = 5
-    assert lat.fields == lat2.fields
+    with pytest.raises(RuntimeError):
+        lat2.dims = None
+    with pytest.raises(RuntimeError):
+        lat2.dofs = None
+    with pytest.raises(RuntimeError):
+        lat2.labels = None
+    with pytest.raises(RuntimeError):
+        lat2.groups = None
+    with pytest.raises(RuntimeError):
+        lat2.coords = None
 
 
 def test_init_dims():
@@ -186,6 +196,9 @@ def test_init_labels():
     assert lattice.trial == lattice.get_axis_range("trial")
     assert len(lattice.trial) == lattice.get_axis_size("trial")
 
+    lattice.add_label("another", ["one", "two"])
+    assert lattice["another"] == ("one", "two")
+
     with pytest.raises(TypeError):
         lattice.labels = 3.5
 
@@ -202,6 +215,9 @@ def test_init_groups():
     lattice = Lattice(groups={"trial": "x"})
     assert "trial" in lattice.groups
     assert lattice.trial == ("x",)
+
+    lattice.add_group("another", ["x", "y"])
+    assert lattice["another"] == ("x", "y")
 
     with pytest.raises(TypeError):
         lattice.groups = 3.5
@@ -232,6 +248,9 @@ def test_init_coords():
     lattice.coords = {"trial": {"x": 0, "y": 0}}
     assert "source" not in lattice.coords
     lattice.trial = {"x": 0, "y": 0}
+
+    lattice.add_coord("another", {"x": 0, "y": 0})
+    assert lattice["another"] == lattice["trial"]
 
     with pytest.raises(TypeError):
         lattice.coords = 3.5
@@ -273,9 +292,31 @@ def test_coordinates():
     coords = Coordinates()
     with pytest.raises(TypeError):
         coords["x"] = 3.5
-    for val in None, (None,), (None, None), [None, [None,]]:
+    for val in (
+        None,
+        (None,),
+        (None, None),
+        [
+            None,
+            [
+                None,
+            ],
+        ],
+    ):
         coords["x"] = val
         assert coords["x"] == None
         coords.update({"x": val})
         assert coords["x"] == None
     assert coords["y"] == slice(None)
+
+
+def test_rename():
+    lat = Lattice()
+    lat.rename("t", "t")
+    lat.rename("t", "T")
+    assert "T" in lat
+    assert "t" not in lat
+    assert lat["time"] == ("T",)
+
+    with pytest.raises(RuntimeError):
+        lat.freeze().rename("T", "t")
