@@ -8,36 +8,31 @@ install_requires = [
     "tuneit",
 ]
 
-extras_require = {
-    # lyncs/extras
+# Extras
+lyncs = {
     "dask": ["dask", "dask[array]"],
     "clime": ["lyncs_clime"],
     "DDalphaAMG": ["lyncs_DDalphaAMG"],
     "test": ["pytest", "pytest-cov"],
-    # Groups
-    "cpu": [
-        "lyncs[DDalphaAMG]",
-    ],
-    "gpu": [],
-    "io": [
-        "lyncs[clime]",
-    ],
-    "mpi": [
-        "lyncs_mpi",
-    ],
-    "notebook": [
-        "jupyterlab",
-        "tuneit[graph]",
-        "perfplot",
-        "lyncs[mpi]",
-    ],
-    "all": [
-        "lyncs[notebook]",
-    ],
 }
+
+# Groups
+lyncs["io"] = lyncs["clime"]
+
+lyncs["mpi"] = [
+    "lyncs_mpi",
+] + lyncs["DDalphaAMG"]
+
+lyncs["notebook"] = [
+    "jupyterlab",
+    "tuneit[graph]",
+    "perfplot",
+] + lyncs["mpi"]
+
+lyncs["all"] = lyncs["notebook"]
 
 setup(
     "lyncs",
     install_requires=install_requires,
-    extras_require=extras_require,
+    extras_require=lyncs,
 )
