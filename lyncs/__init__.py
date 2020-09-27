@@ -3,15 +3,17 @@ Lyncs, a python API for LQCD applications
 """
 __version__ = "0.0.0"
 
-from .lattice import *
+from importlib import import_module
 
+import lyncs_utils as utils
+from .lattice import *
+from .field import *
+
+# Local sub-modules
 from . import field
 from . import io
 
-import lyncs_utils as utils
-
-from importlib import import_module
-
+# Importing available Lyncs packages
 for pkg in [
     "mpi",
     "cppyy",

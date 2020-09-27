@@ -155,7 +155,7 @@ def dot(
         List of fields to perform dot product between.
     axes: str, list
         Axes where the contraction is performed on.
-        Indeces are contracted in pairs combining the outer-most free index
+        Indexes are contracted in pairs combining the outer-most free index
         of the left with the inner-most of the right.
     axis: str, list
         Same as axes.
@@ -254,7 +254,7 @@ def einsum(*fields, indexes=None, debug=False):
         List of dictionaries for each field plus one for output field if not scalar.
         Each dictionary should have a key per axis of the field.
         Every key should have a list of indexes for every repetition of the axis in the field.
-        Indeces must be integers.
+        Indexes must be integers.
 
     Examples:
     ---------
@@ -294,7 +294,7 @@ def einsum(*fields, indexes=None, debug=False):
         if not set(indexes[i].keys()) == set(field.indexes):
             raise ValueError(
                 """
-                Indeces must be specified for all the field axes/indexes.
+                Indexes must be specified for all the field axes/indexes.
                 For field %d,
                 Got indexes: %s
                 Field indexes: %s

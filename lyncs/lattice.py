@@ -1,7 +1,6 @@
 """
 Definition of the Lattice class and related routines
 """
-# pylint: disable=C0303,C0330
 
 __all__ = [
     "default_lattice",
@@ -210,7 +209,7 @@ class Lattice:
             of dims. Dims are usually the axes where one can parallelize on.
         Degrees of Freedoms: (dofs) are local axes with fixed size (commonly small).
         Labels: (labels) are labelled axes of the lattice. Similar to dofs but instead
-            of having a size they have a list of unique labels (str, int, hashable)
+            of having a size they have a list of unique labels (str, int, hash-able)
         Axes: Any of the above, i.e. list of axes of the field.
 
         Parameters
@@ -227,7 +226,7 @@ class Lattice:
             - list: size per dimension of the degrees of freedom
             - dict: names of the degree of freedom (keys) and sizes (value)
         labels: dict
-            Labeled dimensions of the lattice. A dictionary with keys the names of the
+            Labelled dimensions of the lattice. A dictionary with keys the names of the
             dimensions and with values the list of labels. The labels must be unique.
             The size of the dimension is the number of labels.
         groups: dict
@@ -629,10 +628,6 @@ class Lattice:
 
     __setattr__ = __setitem__
 
-    # def __dask_tokenize__(self):
-    #     from dask.base import normalize_token
-    #     return normalize_token((type(self), self.__getstate__()))
-
     def copy(self, **kwargs):
         "Returns a copy of the lattice."
         kwargs.setdefault("dims", self.dims)
@@ -878,7 +873,7 @@ class LatticeCoords(LatticeDict):
 
     def replace(self, key, new_key):
         "Replaces a key with a the new key"
-        pass
+        raise NotImplementedError("TODO")
 
     def random(self, *axes, label=None):
         "A random coordinate in the lattice dims and dofs"
@@ -965,6 +960,8 @@ class LatticeCoords(LatticeDict):
 
 
 class LatticeMap:
+    "Class for defining maps between a lattice and another"
+
     def __init__(self, lat_from: Lattice, lat_to: Lattice, mapping: Callable):
 
         self.lat_from = lat_from
@@ -982,7 +979,7 @@ class LatticeMap:
             )
         if annotations["return"] not in self.lat_to:
             raise ValueError(
-                f"Output dimentions {annotation['return']} not in second lattice"
+                f"Output dimentions {annotations['return']} not in second lattice"
             )
         self.out = tuple(self.lat_to.expand(annotations["return"]))
 
@@ -996,6 +993,7 @@ class LatticeMap:
         self.args = tuple(self.lat_from.expand(self.args))
 
     def get(self, **coords):
+        "Returns the coords after applying the map"
         to_transform = dict()
         for key in tuple(coords):
             if key in self.args:
@@ -1020,9 +1018,6 @@ class LatticeMap:
 class LatticeMaps(LatticeDict):
     "LatticeMaps class"
 
-    def __getitem__(self, key):
-        return super().__getitem__(key)
-
     def __setitem__(self, key, value):
         if key in self.lattice.labels.labels():
             raise KeyError("%s is already used in lattice labels" % key)
@@ -1033,7 +1028,7 @@ class LatticeMaps(LatticeDict):
 
     def replace(self, key, new_key):
         "Replaces a key with a the new key"
-        pass
+        raise NotImplementedError("TODO")
 
     def rename(self, key1, key2):
         "Returns a lattice with key1 renamed to key2"
@@ -1068,6 +1063,4 @@ class LatticeMaps(LatticeDict):
             )
 
         lattice[axis] //= 2
-        lattice.rename(key1, key2)
-        map_lattice(self.lattice, lattice, {"%s -> %s" % (key1, key2): None})
         return lattice

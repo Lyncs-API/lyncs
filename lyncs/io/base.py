@@ -1,7 +1,6 @@
 """
 Base tools for saving and loading data
 """
-# pylint: disable=C0303,C0330
 
 __all__ = [
     "load",

@@ -1,7 +1,6 @@
 """
 Universal functions for the fields
 """
-# pylint: disable=C0303,C0330
 
 __all__ = [
     "prepare",
