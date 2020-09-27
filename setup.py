@@ -27,7 +27,7 @@ lyncs["notebook"] = [
     "jupyterlab",
     "tuneit[graph]",
     "perfplot",
-] + lyncs["mpi"]
+]
 
 lyncs["all"] = lyncs["notebook"]
 
