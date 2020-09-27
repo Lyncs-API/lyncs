@@ -75,7 +75,7 @@ jobs:
 
     - name: Testing notebooks
       run: |
-        jupyter-nbconvert --execute notebooks/*.ipynb
+        jupyter-nbconvert --to html --execute notebooks/*.ipynb
 
     - name: Run tests
       run: |
