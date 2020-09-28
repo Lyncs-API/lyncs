@@ -6,6 +6,7 @@ install_requires = [
     "numpy",
     "xmltodict",
     "tuneit",
+    "lyncs_utils",
 ]
 
 # Extras
