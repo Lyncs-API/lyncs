@@ -1,7 +1,7 @@
 """
 Lyncs, a python API for LQCD applications
 """
-__version__ = "0.0.0"
+__version__ = "0.0.1"
 
 from importlib import import_module
 
