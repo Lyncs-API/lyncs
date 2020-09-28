@@ -30,7 +30,7 @@ lyncs["notebook"] = [
     "perfplot",
 ]
 
-lyncs["all"] = lyncs["notebook"]
+lyncs["all"] = lyncs["notebook"] + lyncs["test"]
 
 setup(
     "lyncs",
