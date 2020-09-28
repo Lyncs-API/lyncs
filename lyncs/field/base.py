@@ -12,7 +12,13 @@ import re
 from collections import Counter
 from functools import wraps
 from .types.base import FieldType
-from ..utils import default_repr, compute_property, count, add_kwargs_of, isiterable
+from lyncs_utils import (
+    default_repr_pretty,
+    compute_property,
+    count,
+    add_kwargs_of,
+    isiterable,
+)
 
 
 class BaseField:
@@ -20,26 +26,26 @@ class BaseField:
     Base class of the Field type that implements
     the interface to the Lattice class and deduce
     the list of Field types from the field axes.
-    
+
     The list of types are accessible via field.types
     """
 
-    __repr__ = default_repr
+    _repr_pretty_ = default_repr_pretty
 
     _index_to_axis = re.compile("_[0-9]+$")
 
     @classmethod
-    def indeces_to_axes(cls, *indeces):
-        "Converts field indeces to lattice axes"
-        return tuple(re.sub(BaseField._index_to_axis, "", index) for index in indeces)
+    def indexes_to_axes(cls, *indexes):
+        "Converts field indexes to lattice axes"
+        return tuple(re.sub(BaseField._index_to_axis, "", index) for index in indexes)
 
     @classmethod
     def index_to_axis(cls, index):
         "Converts a field index to a lattice axis"
         return re.sub(BaseField._index_to_axis, "", index)
 
-    def axes_to_indeces(self, *axes):
-        "Converts lattice axes to field indeces"
+    def axes_to_indexes(self, *axes):
+        "Converts lattice axes to field indexes"
         axes = tuple(self.lattice.expand(*axes))
         counters = {axis: count() for axis in set(axes)}
         return tuple(axis + "_" + str(next(counters[axis])) for axis in axes)
@@ -49,7 +55,7 @@ class BaseField:
     ):
         """
         Initializes the field class.
-        
+
         Parameters
         ----------
         axes: list(str)
@@ -84,8 +90,8 @@ class BaseField:
         )
 
         if isinstance(field, BaseField):
-            same_indeces = set(self.indeces).intersection(field.indeces)
-            self._coords = field.coords.extract(same_indeces)
+            same_indexes = set(self.indexes).intersection(field.indexes)
+            self._coords = field.coords.extract(same_indexes)
         else:
             self._coords = {}
         self._coords = self.lattice.coords.resolve(coords, field=self)
@@ -118,7 +124,7 @@ class BaseField:
     def __init__(self, field=None, **kwargs):
         """
         Initializes the field class.
-        
+
         Parameters
         ----------
         field: Field
@@ -137,7 +143,7 @@ class BaseField:
 
     @property
     def axes(self):
-        "List of axes of the field. Order is not significant. See indeces_order."
+        "List of axes of the field. Order is not significant. See indexes_order."
         return self._axes
 
     @compute_property
@@ -149,14 +155,14 @@ class BaseField:
     def dims(self):
         "List of dims in the field axes"
         return tuple(
-            key for key in self.indeces if self.index_to_axis(key) in self.lattice.dims
+            key for key in self.indexes if self.index_to_axis(key) in self.lattice.dims
         )
 
     @compute_property
     def dofs(self):
         "List of dofs in the field axes"
         return tuple(
-            key for key in self.indeces if self.index_to_axis(key) in self.lattice.dofs
+            key for key in self.indexes if self.index_to_axis(key) in self.lattice.dofs
         )
 
     @compute_property
@@ -164,17 +170,17 @@ class BaseField:
         "List of labels in the field axes"
         return tuple(
             key
-            for key in self.indeces
+            for key in self.indexes
             if self.index_to_axis(key) in self.lattice.labels
         )
 
     @compute_property
-    def indeces(self):
+    def indexes(self):
         """
-        List of indeces of the field. Similar to .axes but axis are enumerated.
-        Order is not significant. See field.indeces_order.
+        List of indexes of the field. Similar to .axes but axis are enumerated.
+        Order is not significant. See field.indexes_order.
         """
-        return self.axes_to_indeces(self.axes)
+        return self.axes_to_indexes(self.axes)
 
     def reshape(self, *axes, **kwargs):
         """
@@ -183,13 +189,13 @@ class BaseField:
             new axes are added with size 1 and coord=None
         """
         axes = kwargs.pop("axes", axes)
-        indeces = self.axes_to_indeces(axes)
+        indexes = self.axes_to_indexes(axes)
         shape = dict(self.shape)
-        _squeeze = (index for index in self.indeces if index not in indeces)
+        _squeeze = (index for index in self.indexes if index not in indexes)
         for index in _squeeze:
             if not shape[index] == 1:
                 raise ValueError("Can only remove axes which size is 1")
-        _extend = (index for index in indeces if index not in self.indeces)
+        _extend = (index for index in indexes if index not in self.indexes)
         coords = kwargs.pop("coords", {})
         for index in _extend:
             coords.setdefault(index, None)
@@ -198,21 +204,21 @@ class BaseField:
     def squeeze(self, *axes, **kwargs):
         "Removes axes with size one."
         axes = kwargs.pop("axes", axes)
-        indeces = self.get_indeces(*axes) if axes else self.indeces
+        indexes = self.get_indexes(*axes) if axes else self.indexes
         axes = tuple(
             self.index_to_axis(key)
             for key, val in self.shape
-            if key not in indeces or val > 1
+            if key not in indexes or val > 1
         )
         return self.copy(axes=axes, **kwargs)
 
     def unsqueeze(self, *axes, **kwargs):
         "Sets coordinate to None for the axes with size one."
         axes = kwargs.pop("axes", axes)
-        indeces = self.get_indeces(*axes) if axes else self.indeces
+        indexes = self.get_indexes(*axes) if axes else self.indexes
         coords = kwargs.pop("coords", {})
         coords.update(
-            {key: None for key, val in self.shape if key in indeces and val == 1}
+            {key: None for key, val in self.shape if key in indexes and val == 1}
         )
         return self.copy(coords=coords, **kwargs)
 
@@ -230,20 +236,20 @@ class BaseField:
         axes = (axis for axis in self.lattice.expand(*axes) if axis in self.axes)
         return tuple(sorted(axes))
 
-    def get_indeces(self, *axes):
-        "Returns the corresponding indeces of the given axes/indeces/dimensions"
+    def get_indexes(self, *axes):
+        "Returns the corresponding indexes of the given axes/indexes/dimensions"
         if not isiterable(axes, str):
             raise TypeError("The arguments need to be a list of strings")
         if "all" in axes:
-            return tuple(sorted(self.indeces))
-        indeces = set(axis for axis in axes if axis in self.indeces)
-        axes = tuple(self.lattice.expand(set(axes).difference(indeces)))
-        indeces.update([idx for idx in self.indeces if self.index_to_axis(idx) in axes])
-        return tuple(sorted(indeces))
+            return tuple(sorted(self.indexes))
+        indexes = set(axis for axis in axes if axis in self.indexes)
+        axes = tuple(self.lattice.expand(set(axes).difference(indexes)))
+        indexes.update([idx for idx in self.indexes if self.index_to_axis(idx) in axes])
+        return tuple(sorted(indexes))
 
     def get_range(self, key):
         "Returns the range of the given index/axis."
-        tmp = self.get_indeces(key)
+        tmp = self.get_indexes(key)
         if len(tmp) > 1:
             tmp = set(self.get_range(_k) for _k in tmp)
             if len(tmp) == 1:
@@ -270,8 +276,8 @@ class BaseField:
 
     @compute_property
     def shape(self):
-        "Returns the list of indeces with size. Order is not significant."
-        return tuple((key, self.get_size(key)) for key in self.indeces)
+        "Returns the list of indexes with size. Order is not significant."
+        return tuple((key, self.get_size(key)) for key in self.indexes)
 
     @compute_property
     def size(self):
@@ -345,7 +351,7 @@ class BaseField:
         return self is other or (
             isinstance(other, type(self))
             and self.lattice == other.lattice
-            and set(self.indeces) == set(other.indeces)
+            and set(self.indexes) == set(other.indexes)
             and self.coords == other.coords
         )
 

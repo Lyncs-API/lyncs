@@ -8,20 +8,20 @@ __all__ = [
 ]
 
 import numpy as np
+from lyncs_utils import count
 from .array import ArrayField, NumpyBackend, backend_method
-from .contractions import einsum, trace_indeces, dot_prepare
-from ..utils import count
+from .contractions import einsum, trace_indexes, dot_prepare
 
 
 def trace(self, *axes, **kwargs):
     """
     Performs the trace over repeated axes contracting the outer-most index with the inner-most.
-    
+
     Parameters
     ----------
     axes: str
         If given, only the listed axes are traced.
-        If the axes are two indeces of the field, then those two indeces are traced.
+        If the axes are two indexes of the field, then those two indexes are traced.
     """
     tmp, kwargs = ArrayField.get_input_axes(*axes, **kwargs)
     if kwargs:
@@ -37,32 +37,32 @@ def trace(self, *axes, **kwargs):
     if len(axes) == 1:
         if (
             len(tmp) == 2
-            and set(tmp) <= set(self.indeces)
+            and set(tmp) <= set(self.indexes)
             and self.index_to_axis(tmp[0]) == self.index_to_axis(tmp[1])
         ):
-            indeces = tmp
+            indexes = tmp
         else:
-            indeces = sorted(self.get_indeces())
-            indeces = (indeces[0], indeces[-1])
+            indexes = sorted(self.get_indexes())
+            indexes = (indexes[0], indexes[-1])
         axes = tuple(
-            self.index_to_axis(idx) for idx in self.indeces if idx not in indeces
+            self.index_to_axis(idx) for idx in self.indexes if idx not in indexes
         )
-        return self.copy(self.backend.trace(indeces, self.indeces_order), axes=axes)
+        return self.copy(self.backend.trace(indexes, self.indexes_order), axes=axes)
 
     counter = count()
-    indeces = {}
+    indexes = {}
     for axis, num in counts.items():
-        indeces[axis] = tuple(counter(num))
+        indexes[axis] = tuple(counter(num))
 
-    indeces = trace_indeces(indeces, indeces, axes=axes)
-    return einsum(self, indeces=indeces)
+    indexes = trace_indexes(indexes, indexes, axes=axes)
+    return einsum(self, indexes=indexes)
 
 
 ArrayField.trace = trace
 
 _ = backend_method(
-    lambda self, indeces, indeces_order: self.trace(
-        axis1=indeces_order.index(indeces[0]), axis2=indeces_order.index(indeces[1])
+    lambda self, indexes, indexes_order: self.trace(
+        axis1=indexes_order.index(indexes[0]), axis2=indexes_order.index(indexes[1])
     )
 )
 _.__name__ = "trace"
@@ -72,7 +72,7 @@ NumpyBackend.trace = _
 def reduction_method(key, fnc=None, doc=None):
     """
     Default implementation for field reductions
-    
+
     Parameters
     ----------
     key: str
@@ -92,9 +92,9 @@ def reduction_method(key, fnc=None, doc=None):
             return fnc(self, *axes, **kwargs)
 
         axes, kwargs = self.get_input_axes(*axes, **kwargs)
-        indeces = self.get_indeces(*axes) if axes else self.indeces
+        indexes = self.get_indexes(*axes) if axes else self.indexes
         axes = tuple(
-            self.index_to_axis(idx) for idx in self.indeces if idx not in indeces
+            self.index_to_axis(idx) for idx in self.indexes if idx not in indexes
         )
 
         # Deducing the dtype of the output
@@ -104,7 +104,7 @@ def reduction_method(key, fnc=None, doc=None):
             trial = getattr(np.ones((1), dtype=self.dtype), key)(**kwargs)
 
         if axes:
-            result = getattr(self.backend, key)(indeces, self.indeces_order, **kwargs)
+            result = getattr(self.backend, key)(indexes, self.indexes_order, **kwargs)
         else:
             result = getattr(self.backend, key)(**kwargs)
 
@@ -129,13 +129,13 @@ def reduction_method(key, fnc=None, doc=None):
 
 def backend_reduction_method(key, fnc=None, doc=None):
     """
-    Returns a method for the backend that calls 
+    Returns a method for the backend that calls
     the given reduction (key) of the field value.
     """
 
-    def method(self, indeces=None, indeces_order=None, **kwargs):
-        if indeces is not None:
-            kwargs["axis"] = tuple(indeces_order.index(idx) for idx in indeces)
+    def method(self, indexes=None, indexes_order=None, **kwargs):
+        if indexes is not None:
+            kwargs["axis"] = tuple(indexes_order.index(idx) for idx in indexes)
         if fnc is None:
             return getattr(self, key)(**kwargs)
         return fnc(self, **kwargs)

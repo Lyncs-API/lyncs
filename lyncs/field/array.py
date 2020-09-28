@@ -23,9 +23,9 @@ from tuneit import (
     Tunable,
     finalize,
 )
+from lyncs_utils import add_kwargs_of, compute_property, isiterable
 from .base import BaseField, wrap_method
 from .types.base import FieldType
-from ..utils import add_kwargs_of, compute_property, isiterable
 
 
 class ArrayField(BaseField, TunableClass):
@@ -38,32 +38,32 @@ class ArrayField(BaseField, TunableClass):
 
     @add_kwargs_of(BaseField.__init__)
     def __init_attributes__(
-        self, field=None, dtype=None, indeces_order=None, labels_order=None, **kwargs
+        self, field=None, dtype=None, indexes_order=None, labels_order=None, **kwargs
     ):
         """
         Initializes the field class.
-        
+
         Parameters
         ----------
         dtype: str or numpy dtype compatible
             Data type of the field.
-        indeces_order: tuple
-            The order of the field indeces (field.indeces).
+        indexes_order: tuple
+            The order of the field indexes (field.indexes).
             This also fixes the field shape (field.ordered_shape).
             It is a tunable parameter and the decision can be postpone.
         copy: bool
-            Whether the input field should be copied. 
+            Whether the input field should be copied.
             If False the field is copied only if needed
             otherwise the input field will be used;
             if True, the field is copied.
         """
         kwargs = super().__init_attributes__(field, **kwargs)
 
-        indeces_order = self._get_indeces_order(
-            field if isinstance(field, BaseField) else None, indeces_order
+        indexes_order = self._get_indexes_order(
+            field if isinstance(field, BaseField) else None, indexes_order
         )
-        if indeces_order is not None:
-            self.indeces_order = indeces_order
+        if indexes_order is not None:
+            self.indexes_order = indexes_order
 
         self._labels_order, kwargs = self._get_labels_order(
             field if isinstance(field, BaseField) else None, labels_order, **kwargs
@@ -83,9 +83,9 @@ class ArrayField(BaseField, TunableClass):
         "Initializes the value of the field"
 
         if value is not None:
-            if not self.indeces_order.fixed:
+            if not self.indexes_order.fixed:
                 raise ValueError(
-                    "Cannot initilize a field with an array without fixing the indeces_order"
+                    "Cannot initilize a field with an array without fixing the indexes_order"
                 )
             for key, val in self.labels_order:
                 if not val.fixed:
@@ -103,10 +103,10 @@ class ArrayField(BaseField, TunableClass):
     def __validate_value__(self, value, **kwargs):
         "Checks if the field is well defined to have a value"
 
-        if not self.indeces_order.fixed and not finalize(self.value).depends_on(
-            self.indeces_order
+        if not self.indexes_order.fixed and not finalize(self.value).depends_on(
+            self.indexes_order
         ):
-            raise ValueError("Value has been given but indeces_order is not fixed.")
+            raise ValueError("Value has been given but indexes_order is not fixed.")
 
         for key, val in self.labels_order:
             if (
@@ -128,23 +128,23 @@ class ArrayField(BaseField, TunableClass):
         if copy:
             self.value = self.backend.copy()
 
-        same_indeces = set(self.indeces).intersection(field.indeces)
-        indeces = field.coords.extract(same_indeces).get_indeces(
-            self.coords.extract(same_indeces)
+        same_indexes = set(self.indexes).intersection(field.indexes)
+        indexes = field.coords.extract(same_indexes).get_indexes(
+            self.coords.extract(same_indexes)
         )
-        if indeces:
-            labels = {key: val for key, val in field.labels_order if key in indeces}
-            self.value = self.backend.getitem(field.indeces_order, indeces, **labels)
+        if indexes:
+            labels = {key: val for key, val in field.labels_order if key in indexes}
+            self.value = self.backend.getitem(field.indexes_order, indexes, **labels)
 
-        if set(self.indeces) != set(field.indeces):
+        if set(self.indexes) != set(field.indexes):
             if not self.size == field.size:
                 raise ValueError("When reshaping, the size of the field cannot change")
             self.value = self.backend.reshape(
-                self.ordered_shape, self.indeces_order, field.indeces_order
+                self.ordered_shape, self.indexes_order, field.indexes_order
             )
 
-        if self.indeces_order != field.indeces_order and self.indeces_order.size > 1:
-            self.value = self.backend.reorder(self.indeces_order, field.indeces_order)
+        if self.indexes_order != field.indexes_order and self.indexes_order.size > 1:
+            self.value = self.backend.reorder(self.indexes_order, field.indexes_order)
 
         labels = {}
         coords = {}
@@ -154,7 +154,7 @@ class ArrayField(BaseField, TunableClass):
                 coords[key] = val
                 labels[key] = old_order[key]
                 self.value = self.backend.reorder_label(
-                    key, val, old_order[key], self.indeces_order
+                    key, val, old_order[key], self.indexes_order
                 )
 
         if self.dtype != field.dtype:
@@ -166,7 +166,7 @@ class ArrayField(BaseField, TunableClass):
     def __init__(self, field=None, value=None, **kwargs):
         """
         Initializes the field class.
-        
+
         Parameters
         ----------
         value: Tunable
@@ -195,7 +195,7 @@ class ArrayField(BaseField, TunableClass):
             super().__eq__(other)
             and self.dtype == other.dtype
             and self.node.key == other.node.key
-            and self.indeces_order == other.indeces_order
+            and self.indexes_order == other.indexes_order
         )
 
     __eq__ = __is__
@@ -256,41 +256,41 @@ class ArrayField(BaseField, TunableClass):
         return self.size * self.dtype.itemsize
 
     @tunable_property
-    def indeces_order(self):
-        "Order of the field indeces"
-        return Permutation(self.indeces)
+    def indexes_order(self):
+        "Order of the field indexes"
+        return Permutation(self.indexes)
 
-    def reorder(self, indeces_order=None, **kwargs):
-        "Changes the indeces_order of the field."
-        if indeces_order is None:
-            indeces_order = self.indeces_order.copy(reset=True)
-        return self.copy(indeces_order=indeces_order, **kwargs)
+    def reorder(self, indexes_order=None, **kwargs):
+        "Changes the indexes_order of the field."
+        if indexes_order is None:
+            indexes_order = self.indexes_order.copy(reset=True)
+        return self.copy(indexes_order=indexes_order, **kwargs)
 
-    def _get_indeces_order(self, field=None, indeces_order=None):
-        if indeces_order is not None:
+    def _get_indexes_order(self, field=None, indexes_order=None):
+        if indexes_order is not None:
             if (
-                not isinstance(indeces_order, Variable)
-                and not isinstance(indeces_order, Tunable)
-                and set(indeces_order) != set(self.indeces)
+                not isinstance(indexes_order, Variable)
+                and not isinstance(indexes_order, Tunable)
+                and set(indexes_order) != set(self.indexes)
             ):
                 raise ValueError(
-                    "Not valid indeces_order. It has %s, while expected %s"
-                    % (indeces_order, self.indeces)
+                    "Not valid indexes_order. It has %s, while expected %s"
+                    % (indexes_order, self.indexes)
                 )
-            return indeces_order
+            return indexes_order
         if field is None:
             return None
-        if len(self.indeces) <= 1:
-            return self.indeces
-        if set(self.indeces) == set(field.indeces):
-            return field.indeces_order
-        if set(self.indeces) <= set(field.indeces):
-            return function(filter, self.indeces.__contains__, field.indeces_order)
+        if len(self.indexes) <= 1:
+            return self.indexes
+        if set(self.indexes) == set(field.indexes):
+            return field.indexes_order
+        if set(self.indexes) <= set(field.indexes):
+            return function(filter, self.indexes.__contains__, field.indexes_order)
         return None
 
     @property
     def labels_order(self):
-        "Order of the field indeces"
+        "Order of the field indexes"
         return self._labels_order
 
     def reorder_label(self, label, label_order=None, **kwargs):
@@ -322,7 +322,7 @@ class ArrayField(BaseField, TunableClass):
                 labels_order[key] = kwargs.pop(key + "_order")
                 continue
 
-        # Here we check the given values and unpack axes into indeces
+        # Here we check the given values and unpack axes into indexes
         given_values = labels_order
         labels_order = {}
         for key, val in given_values.items():
@@ -335,7 +335,7 @@ class ArrayField(BaseField, TunableClass):
                 raise ValueError(
                     "Not valid %s order. It has %s, while expected %s" % (key, val, rng)
                 )
-            for _k in self.get_indeces(key):
+            for _k in self.get_indexes(key):
                 if _k == key or _k not in given_values:
                     labels_order[_k] = val
 
@@ -363,11 +363,11 @@ class ArrayField(BaseField, TunableClass):
 
         return tuple(labels_order.items()), kwargs
 
-    @derived_property(indeces_order)
+    @derived_property(indexes_order)
     def ordered_shape(self):
-        "Shape of the field after fixing the indeces_order"
+        "Shape of the field after fixing the indexes_order"
         shape = dict(self.shape)
-        return tuple(shape[key] for key in self.indeces_order.value)
+        return tuple(shape[key] for key in self.indexes_order.value)
 
     def __setitem__(self, coords, value):
         return self.set(value, coords)
@@ -375,8 +375,8 @@ class ArrayField(BaseField, TunableClass):
     def set(self, value, *keys, **coords):
         "Sets the components at the given coordinates"
         coords = self.lattice.coords.resolve(*keys, **coords, field=self)
-        indeces = self.coords.get_indeces(coords)
-        self.value = self.backend.setitem(self.indeces_order, indeces, value)
+        indexes = self.coords.get_indexes(coords)
+        self.value = self.backend.setitem(self.indexes_order, indexes, value)
 
     def zeros(self, dtype=None):
         "Returns the field with all components put to zero"
@@ -389,13 +389,13 @@ class ArrayField(BaseField, TunableClass):
     def random(self, seed=None):
         """
         Returns a random field generator. If seed is given, reproducibility is ensured
-        independently on the field parameters, e.g. indeces_order, etc.
-        
+        independently on the field parameters, e.g. indexes_order, etc.
+
         Parameters
         ----------
         seed: int
             The seed to use for starting the random number generator.
-            Note: There is a performance penality in initializing the field if seed is given. 
+            Note: There is a performance penality in initializing the field if seed is given.
         """
         from .random import RandomFieldGenerator
 
@@ -413,7 +413,7 @@ class ArrayField(BaseField, TunableClass):
 
     def transpose(self, *axes, **axes_order):
         """
-        Transposes the matrix/tensor indeces of the field.
+        Transposes the matrix/tensor indexes of the field.
 
         *NOTE*: this is conceptually different from numpy.transpose
                 where all the axes are transposed.
@@ -421,11 +421,11 @@ class ArrayField(BaseField, TunableClass):
         Parameters
         ----------
         axes: str
-            If given, only the listed axes are transposed, 
+            If given, only the listed axes are transposed,
             otherwise all the tensorial axes are changed.
-            By default the order of the indeces is inverted.
+            By default the order of the indexes is inverted.
         axes_order: dict
-            Same as axes, but specifying the reordering of the indeces.
+            Same as axes, but specifying the reordering of the indexes.
             The key must be one of the axis and the value the order using
             an index per repetition of the axis numbering from 0,1,...
         """
@@ -438,7 +438,7 @@ class ArrayField(BaseField, TunableClass):
             val = tuple(val)
             if not len(val) == counts[axis]:
                 raise ValueError(
-                    "%d indeces have been given for axis %s but it has count %d"
+                    "%d indexes have been given for axis %s but it has count %d"
                     % (len(val), axis, counts[axis])
                 )
             if not set(val) == set(range(counts[axis])):
@@ -463,7 +463,7 @@ class ArrayField(BaseField, TunableClass):
         if not axes and not axes_order:
             return self.copy()
         return self.copy(
-            self.backend.transpose(self.indeces_order, axes=axes, **axes_order)
+            self.backend.transpose(self.indexes_order, axes=axes, **axes_order)
         )
 
     @property
@@ -484,7 +484,7 @@ class ArrayField(BaseField, TunableClass):
 
     def dagger(self, *axes, **axes_order):
         """
-        Conjugate and transposes the matrix/tensor indeces.
+        Conjugate and transposes the matrix/tensor indexes.
         See help(transpose) for more details.
         """
         return self.conj().transpose(*axes, **axes_order)
@@ -504,7 +504,7 @@ class ArrayField(BaseField, TunableClass):
     def roll(self, shift, *axes, **kwargs):
         """
         Rolls axis of shift.
-        
+
         Parameters:
         -----------
         shift: int or list of int
@@ -515,8 +515,8 @@ class ArrayField(BaseField, TunableClass):
         axes, kwargs = self.get_input_axes(*axes, **kwargs)
         if kwargs:
             raise KeyError("Unknown parameter %s" % kwargs)
-        indeces = self.get_indeces(*axes) if axes else self.get_indeces("all")
-        return self.copy(self.backend.roll(shift, indeces, self.indeces_order))
+        indexes = self.get_indexes(*axes) if axes else self.get_indexes("all")
+        return self.copy(self.backend.roll(shift, indexes, self.indexes_order))
 
 
 FieldType.Field = ArrayField
@@ -588,35 +588,35 @@ class NumpyBackend:
         return np.random.rand(*self.shape)
 
     @backend_method
-    def getitem(self, indeces_order, coords, **labels):
+    def getitem(self, indexes_order, coords, **labels):
         "Direct implementation of getitem"
         for label, order in labels.items():
             coords[label] = tuple(order.index(val) for val in coords[label])
-        indeces = tuple(coords.pop(idx, slice(None)) for idx in indeces_order)
+        indexes = tuple(coords.pop(idx, slice(None)) for idx in indexes_order)
         assert not coords, "Coords didn't empty"
-        return self.__getitem__(indeces)
+        return self.__getitem__(indexes)
 
     @backend_method
-    def setitem(self, indeces_order, coords, value, **labels):
+    def setitem(self, indexes_order, coords, value, **labels):
         "Direct implementation of setitem"
         for label, order in labels.items():
             coords[label] = tuple(order.index(val) for val in coords[label])
-        indeces = tuple(coords.pop(idx, slice(None)) for idx in indeces_order)
+        indexes = tuple(coords.pop(idx, slice(None)) for idx in indexes_order)
         assert not coords, "Coords didn't empty"
-        self.__setitem__(indeces, value)
+        self.__setitem__(indexes, value)
         return self
 
     @backend_method
     def reorder(self, new_order, old_order):
         "Direct implementation of reordering"
-        indeces = tuple(old_order.index(idx) for idx in new_order)
-        return self.transpose(axes=indeces)
+        indexes = tuple(old_order.index(idx) for idx in new_order)
+        return self.transpose(axes=indexes)
 
     @backend_method
-    def reorder_label(self, key, new_order, old_order, indeces_order):
+    def reorder_label(self, key, new_order, old_order, indexes_order):
         "Direct implementation of label reordering"
-        indeces = tuple(old_order.index(idx) for idx in new_order)
-        return self.take(indeces, axis=indeces_order.index(key))
+        indexes = tuple(old_order.index(idx) for idx in new_order)
+        return self.take(indexes, axis=indexes_order.index(key))
 
     @backend_method
     def reshape(self, shape, new_order=None, old_order=None):
@@ -634,30 +634,30 @@ class NumpyBackend:
         return self.reshape(shape)
 
     @backend_method
-    def transpose(self, indeces_order=None, axes=None, **axes_order):
+    def transpose(self, indexes_order=None, axes=None, **axes_order):
         "Direct implementation of transposing"
-        indeces = defaultdict(list)
+        indexes = defaultdict(list)
         axes_order = {key: list(val) for key, val in axes_order.items()}
-        for idx in indeces_order:
+        for idx in indexes_order:
             axis = BaseField.index_to_axis(idx)
-            indeces[axis].append(idx)
+            indexes[axis].append(idx)
         new_order = []
-        for idx in indeces_order:
+        for idx in indexes_order:
             axis = BaseField.index_to_axis(idx)
             if axis in axes:
-                idx = indeces[axis].pop()
+                idx = indexes[axis].pop()
             elif axis in axes_order:
-                idx = indeces[axis][axes_order[axis].pop(0)]
+                idx = indexes[axis][axes_order[axis].pop(0)]
             else:
-                idx = indeces[axis].pop(0)
-        indeces = tuple(new_order.index(idx) for idx in indeces_order)
-        return self.transpose(axes=indeces)
+                idx = indexes[axis].pop(0)
+        indexes = tuple(new_order.index(idx) for idx in indexes_order)
+        return self.transpose(axes=indexes)
 
     @backend_method
-    def roll(self, shift, indeces=None, indeces_order=None):
+    def roll(self, shift, indexes=None, indexes_order=None):
         "Direct implementation of rolling"
-        indeces = tuple(indeces_order.index(idx) for idx in indeces)
-        return self.roll(shift, indeces)
+        indexes = tuple(indexes_order.index(idx) for idx in indexes)
+        return self.roll(shift, indexes)
 
     def __getattr__(self, key):
         raise AttributeError("Unknown %s" % key)

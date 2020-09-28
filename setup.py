@@ -1,36 +1,40 @@
-try:
-    from lyncs_setuptools import setup
-except ImportError:
-    from .extras.setuptools.lyncs_setuptools import setup
+from lyncs_setuptools import setup
 
-from glob import glob
+import os
 
 install_requires = [
     "numpy",
     "xmltodict",
     "tuneit",
+    "lyncs_utils",
 ]
 
-extras_require = {
-    # lyncs/extras
-    "dask": ["dask"],
-    "clime": ["lyncs-clime"],
-    "DDalphaAMG": ["lyncs-DDalphaAMG"],
-    # Groups
-    "cpu": ["lyncs[DDalphaAMG]",],
-    "gpu": [],
-    "io": ["lyncs[clime]",],
+# Extras
+lyncs = {
+    "dask": ["dask", "dask[array]"],
+    "clime": ["lyncs_clime"],
+    "DDalphaAMG": ["lyncs_DDalphaAMG"],
+    "test": ["pytest", "pytest-cov"],
 }
+
+# Groups
+lyncs["io"] = lyncs["clime"]
+
+lyncs["mpi"] = [
+    "lyncs_mpi",
+] + lyncs["DDalphaAMG"]
+
+lyncs["notebook"] = [
+    "jupyterlab",
+    "tuneit[graph]",
+    "graphviz",
+    "perfplot",
+]
+
+lyncs["all"] = lyncs["notebook"] + lyncs["test"]
 
 setup(
     "lyncs",
     install_requires=install_requires,
-    extras_require=extras_require,
-    keywords=["Python", "API", "Lattice", "Field", "QCD",],
-    data_files=[
-        (
-            "extras/setuptools",
-            glob("extras/setuptools/lyncs_setuptools/**/*.py", recursive=True),
-        )
-    ],
+    extras_require=lyncs,
 )

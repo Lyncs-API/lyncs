@@ -1,7 +1,6 @@
 """
 Base tools for saving and loading data
 """
-# pylint: disable=C0303,C0330
 
 __all__ = [
     "load",
@@ -28,7 +27,9 @@ DOC = """
 
 
 def load(
-    filein, dformat=None, **kwargs,
+    filein,
+    dformat=None,
+    **kwargs,
 ):
     """
     Loads data from a file and returns it as a lyncs object.
@@ -42,7 +43,9 @@ def load(
 
 
 def loads(
-    data, dformat=None, **kwargs,
+    data,
+    dformat=None,
+    **kwargs,
 ):
     """
     Loads data from a raw string of bytes and returns it as a lyncs object.
@@ -94,16 +97,23 @@ def fopen(filename, *args, **kwargs):
 
 class Format(str):
     """
-    Holder for file formats. 
+    Holder for file formats.
     Deduces the format from the input and returns functions from the respective module.
-    See Format.s for the file formats available. 
+    See Format.s for the file formats available.
     The key is the module name and the value is a tuple of the aliases (lower case).
     """
 
     # module: (aliases,)  !!NOTE!! use only lower cases for aliases
     s = {
-        "pickle": ("pkl", "pickle",),
-        "lyncs.io.json": ("json", "txt", "ascii",),
+        "pickle": (
+            "pkl",
+            "pickle",
+        ),
+        "lyncs.io.json": (
+            "json",
+            "txt",
+            "ascii",
+        ),
         "lyncs.io.hdf5": ("hdf5", "h5"),
         "lyncs.io.lime": ("lime",),
     }

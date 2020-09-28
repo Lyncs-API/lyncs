@@ -16,7 +16,7 @@ class FieldType(type):
     """
     Metaclass for the field types.
     Field types are special classes used to define properties of fields
-    depending on the axes. 
+    depending on the axes.
 
     Field types have the following restrictions
     - The name of the class must be **unique**. All the field
@@ -24,7 +24,7 @@ class FieldType(type):
       looked up for searching properties of the field.
     - The FieldType needs to define an attribute __axes__ to specify
       which axes are needed for the properties of the type.
-      
+
 
     Behaviour of field type special attributes:
     __axes__: list of axes that identify the field type.
@@ -33,7 +33,7 @@ class FieldType(type):
         be defined on the lattice. If the current lattice does not
         have dimensions with these names, the field type will be simply
         ignored.
-        Special characters may follow the name of the dimension as 
+        Special characters may follow the name of the dimension as
          "+", "!"...
         The "+" means that the dimension can appear more than once.
         If a dimension is not followed by any special character then
@@ -47,8 +47,8 @@ class FieldType(type):
         means that all the dofs must appear and only once. Then
         ["dofs!", "dofs"] = "dofs!+" means that all the dofs must appear
         but repetitions are allowed.
-        
-    - __init__ = 
+
+    - __init__ =
     """
 
     __types__ = OrderedDict()

@@ -1,7 +1,6 @@
 """
 Universal functions for the fields
 """
-# pylint: disable=C0303,C0330
 
 __all__ = [
     "prepare",
@@ -29,7 +28,7 @@ def prepare(self, *fields, elemwise=True, **kwargs):
         Whether the calculation is performed element-wise,
         i.e. all the fields must have the same axes and in the same order.
     kwargs: dict
-        List of field parameters fixed in the calculation (e.g. specific indeces_order)
+        List of field parameters fixed in the calculation (e.g. specific indexes_order)
     """
     if not isinstance(self, ArrayField):
         raise ValueError("First field is not of ArrayField type")
@@ -63,7 +62,7 @@ ArrayField.prepare = prepare
 def ufunc_method(key, elemwise=True, fnc=None, doc=None):
     """
     Implementation of a field ufunc
-    
+
     Parameters
     ----------
     key: str
@@ -141,7 +140,7 @@ def comparison(key, eq=True):
 
 def backend_ufunc_method(key, fnc=None, doc=None):
     """
-    Returns a method for the backend that calls 
+    Returns a method for the backend that calls
     the given method (key) of the field value.
     """
 
@@ -198,101 +197,101 @@ for (op, eq) in COMPARISONS:
 
 UFUNCS = (
     # math operations
-    ("add", True,),
-    ("subtract", True,),
-    ("multiply", True,),
-    ("divide", True,),
-    ("logaddexp", False,),
-    ("logaddexp2", False,),
-    ("true_divide", True,),
-    ("floor_divide", True,),
-    ("negative", True,),
-    ("power", True,),
-    ("float_power", True,),
-    ("remainder", True,),
-    ("mod", True,),
-    ("fmod", True,),
-    ("conj", False,),
-    ("exp", False,),
-    ("exp2", False,),
-    ("log", False,),
-    ("log2", False,),
-    ("log10", False,),
-    ("log1p", False,),
-    ("expm1", False,),
-    ("sqrt", True,),
-    ("square", True,),
-    ("cbrt", False,),
-    ("reciprocal", True,),
+    ("add", True),
+    ("subtract", True),
+    ("multiply", True),
+    ("divide", True),
+    ("logaddexp", False),
+    ("logaddexp2", False),
+    ("true_divide", True),
+    ("floor_divide", True),
+    ("negative", True),
+    ("power", True),
+    ("float_power", True),
+    ("remainder", True),
+    ("mod", True),
+    ("fmod", True),
+    ("conj", False),
+    ("exp", False),
+    ("exp2", False),
+    ("log", False),
+    ("log2", False),
+    ("log10", False),
+    ("log1p", False),
+    ("expm1", False),
+    ("sqrt", True),
+    ("square", True),
+    ("cbrt", False),
+    ("reciprocal", True),
     # trigonometric functions
-    ("sin", False,),
-    ("cos", False,),
-    ("tan", False,),
-    ("arcsin", False,),
-    ("arccos", False,),
-    ("arctan", False,),
-    ("arctan2", False,),
-    ("hypot", False,),
-    ("sinh", False,),
-    ("cosh", False,),
-    ("tanh", False,),
-    ("arcsinh", False,),
-    ("arccosh", False,),
-    ("arctanh", False,),
-    ("deg2rad", False,),
-    ("rad2deg", False,),
+    ("sin", False),
+    ("cos", False),
+    ("tan", False),
+    ("arcsin", False),
+    ("arccos", False),
+    ("arctan", False),
+    ("arctan2", False),
+    ("hypot", False),
+    ("sinh", False),
+    ("cosh", False),
+    ("tanh", False),
+    ("arcsinh", False),
+    ("arccosh", False),
+    ("arctanh", False),
+    ("deg2rad", False),
+    ("rad2deg", False),
     # comparison functions
-    ("greater", True,),
-    ("greater_equal", True,),
-    ("less", True,),
-    ("less_equal", True,),
-    ("not_equal", True,),
-    ("equal", True,),
-    ("isneginf", False,),
-    ("isposinf", False,),
-    ("logical_and", False,),
-    ("logical_or", False,),
-    ("logical_xor", False,),
-    ("logical_not", False,),
-    ("maximum", False,),
-    ("minimum", False,),
-    ("fmax", False,),
-    ("fmin", False,),
+    ("greater", True),
+    ("greater_equal", True),
+    ("less", True),
+    ("less_equal", True),
+    ("not_equal", True),
+    ("equal", True),
+    ("isneginf", False),
+    ("isposinf", False),
+    ("logical_and", False),
+    ("logical_or", False),
+    ("logical_xor", False),
+    ("logical_not", False),
+    ("maximum", False),
+    ("minimum", False),
+    ("fmax", False),
+    ("fmin", False),
     # floating functions
-    ("isfinite", True,),
-    ("isinf", True,),
-    ("isnan", True,),
-    ("signbit", False,),
-    ("copysign", False,),
-    ("nextafter", False,),
-    ("spacing", False,),
-    ("modf", False,),
-    ("ldexp", False,),
-    ("frexp", False,),
-    ("fmod", False,),
-    ("floor", True,),
-    ("ceil", True,),
-    ("trunc", False,),
-    ("round", True,),
+    ("isfinite", True),
+    ("isinf", True),
+    ("isnan", True),
+    ("signbit", False),
+    ("copysign", False),
+    ("nextafter", False),
+    ("spacing", False),
+    ("modf", False),
+    ("ldexp", False),
+    ("frexp", False),
+    ("fmod", False),
+    ("floor", True),
+    ("ceil", True),
+    ("trunc", False),
+    ("round", True),
     # more math routines
-    ("degrees", False,),
-    ("radians", False,),
-    ("rint", True,),
-    ("fabs", True,),
-    ("sign", True,),
-    ("absolute", True,),
+    ("degrees", False),
+    ("radians", False),
+    ("rint", True),
+    ("fabs", True),
+    ("sign", True),
+    ("absolute", True),
     # non-ufunc elementwise functions
-    ("clip", True,),
-    ("isreal", False,),
-    ("iscomplex", False,),
-    ("real", False,),
-    ("imag", False,),
-    ("fix", False,),
-    ("i0", False,),
-    ("sinc", False,),
-    ("nan_to_num", True,),
-    ("isclose", True,),
-    ("allclose", True,),
+    ("clip", True),
+    ("isreal", False),
+    ("iscomplex", False),
+    ("real", False),
+    ("imag", False),
+    ("fix", False),
+    ("i0", False),
+    ("sinc", False),
+    ("nan_to_num", True),
+    ("isclose", True),
+    ("allclose", True),
 )
 
 for (ufunc, is_member) in UFUNCS:

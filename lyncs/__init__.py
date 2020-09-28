@@ -1,22 +1,30 @@
 """
 Lyncs, a python API for LQCD applications
 """
-__version__ = "0.0.0"
+__version__ = "0.0.3"
 
-from . import io
+from importlib import import_module
 
+import lyncs_utils as utils
 from .lattice import *
 from .field import *
-from .io import *
-from . import utils
 
-for extra in [
-    "lyncs_mpi",
-    "lyncs_cppyy",
-    "lyncs_clime",
-    "lyncs_DDalphaAMG",
+# Local sub-modules
+from . import field
+from . import io
+
+# Importing available Lyncs packages
+for pkg in [
+    "mpi",
+    "cppyy",
+    "clime",
+    "DDalphaAMG",
+    "tmLQCD",
 ]:
+    assert pkg not in globals(), f"{pkg} already defined"
     try:
-        exec("import %s as %s" % (extra, extra[6:]))
+        globals()[pkg] = import_module(f"lyncs_{pkg}")
     except ModuleNotFoundError:
         pass
+
+del import_module
