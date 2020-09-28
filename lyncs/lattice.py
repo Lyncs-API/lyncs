@@ -873,7 +873,7 @@ class LatticeCoords(LatticeDict):
 
     def replace(self, key, new_key):
         "Replaces a key with a the new key"
-        raise NotImplementedError("TODO")
+        # TODO
 
     def random(self, *axes, label=None):
         "A random coordinate in the lattice dims and dofs"
@@ -1028,7 +1028,7 @@ class LatticeMaps(LatticeDict):
 
     def replace(self, key, new_key):
         "Replaces a key with a the new key"
-        raise NotImplementedError("TODO")
+        # TODO
 
     def rename(self, key1, key2):
         "Returns a lattice with key1 renamed to key2"
