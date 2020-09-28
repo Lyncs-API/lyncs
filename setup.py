@@ -26,6 +26,7 @@ lyncs["mpi"] = [
 lyncs["notebook"] = [
     "jupyterlab",
     "tuneit[graph]",
+    "graphviz",
     "perfplot",
 ]
 
